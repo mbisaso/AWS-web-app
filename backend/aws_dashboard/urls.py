@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth import views as auth_views
-from stations.views import LandingView
+from backend.stations.views import LandingView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
