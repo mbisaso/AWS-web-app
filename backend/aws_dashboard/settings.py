@@ -25,8 +25,17 @@ SECRET_KEY = 'django-insecure-1j9^g8g7l!+!moagn4zvs)^+$kx2$aau7@bo*!n+14r%ro4jqt
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+     'localhost',
+    '127.0.0.1',
+     '.ngrok-free.dev',    # ← add this
+    '.ngrok-free.app',
+]
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.ngrok-free.dev',
+    'https://*.ngrok-free.app',
+]
 
 # Application definition
 
@@ -40,11 +49,32 @@ INSTALLED_APPS = [
     'rest_framework',
     'accounts',
     'stations',
-    
+    'rest_framework_simplejwt',
 ] 
+
+# ── REST Framework config ─────────────────────────────
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
+
+# ── JWT config ────────────────────────────────────────
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME':  timedelta(minutes=60),  # token expires in 60 min
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),       # refresh token lasts 7 days
+    'ROTATE_REFRESH_TOKENS':  True,
+    'AUTH_HEADER_TYPES':      ('Bearer',),
+}
 
 AUTH_USER_MODEL = "accounts.User"
 LOGIN_URL = "login"
+
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
