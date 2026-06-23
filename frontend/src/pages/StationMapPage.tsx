@@ -5,7 +5,8 @@ import {
   Map,
   InfoWindow,
   useApiIsLoaded,
-  type MapMouseEvent,
+  useApiLoadingStatus,
+  useMap,
 } from '@vis.gl/react-google-maps'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { type StationReading, formatRelativeTime } from '../services/api'
@@ -35,17 +36,14 @@ export function StationMapPage() {
 
   const [filter, setFilter] = useState<StationFilter>('all')
   const [selectedStation, setSelectedStation] = useState<StationReading | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
   const [isListOpen, setIsListOpen] = useState(true)
-  const [mapInstance, setMapInstance] = useState<google.maps.Map | null>(null)
+  const [recenterCount, setRecenterCount] = useState(0)
 
   /* ── Determine which stations have alerts ── */
   const alertStationIds = useMemo(() => {
     if (!data) return new Set<number>()
     return new Set(
-      data.stations
-        .filter((s) => data.alerts.some((a) => hasActiveAlerts(s, data.alerts)))
-        .map((s) => s.id),
+      data.stations.filter((s) => hasActiveAlerts(s, data.alerts)).map((s) => s.id),
     )
   }, [data])
 
@@ -58,15 +56,8 @@ export function StationMapPage() {
     else if (filter === 'offline') result = result.filter((s) => s.status !== 'online')
     else if (filter === 'fault') result = result.filter((s) => alertStationIds.has(s.id))
 
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase()
-      result = result.filter(
-        (s) =>
-          s.name.toLowerCase().includes(q) || s.station_code.toLowerCase().includes(q),
-      )
-    }
     return result
-  }, [data, filter, searchQuery, alertStationIds])
+  }, [data, filter, alertStationIds])
 
   /* ── Filter counts ── */
   const filterCounts = useMemo(() => {
@@ -79,37 +70,13 @@ export function StationMapPage() {
     }
   }, [data, alertStationIds])
 
-  /* ── Auto-fit bounds when data & map load ── */
-  const fitBounds = useCallback(
-    (map: google.maps.Map) => {
-      if (!data?.stations.length) return
-      const bounds = new google.maps.LatLngBounds()
-      data.stations
-        .filter((s) => s.latitude && s.longitude)
-        .forEach((s) => bounds.extend({ lat: s.latitude, lng: s.longitude }))
-      map.fitBounds(bounds, { padding: 60 })
-    },
-    [data],
-  )
+  const handleSelect = useCallback((station: StationReading | null) => {
+    setSelectedStation(station)
+  }, [])
 
-  useEffect(() => {
-    if (mapInstance && data) fitBounds(mapInstance)
-  }, [mapInstance, data, fitBounds])
-
-  /* ── Select + pan ── */
-  const handleSelect = useCallback(
-    (station: StationReading | null) => {
-      setSelectedStation(station)
-      if (station && mapInstance) {
-        mapInstance.panTo({ lat: station.latitude, lng: station.longitude })
-      }
-    },
-    [mapInstance],
-  )
-
-  const handleRecentClick = useCallback(() => {
-    if (mapInstance) fitBounds(mapInstance)
-  }, [mapInstance, fitBounds])
+  const handleRecenter = useCallback(() => {
+    setRecenterCount((c) => c + 1)
+  }, [])
 
   /* ── API key ── */
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
@@ -151,8 +118,8 @@ export function StationMapPage() {
     )
   }
 
-  /* ── Missing API key ── */
-  if (!apiKey) {
+  /* ── Missing or placeholder API key ── */
+  if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
     return (
       <div className="flex h-screen bg-mist">
         <DashboardSidebar />
@@ -162,9 +129,15 @@ export function StationMapPage() {
               Map not configured
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-storm/60">
-              Set <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono">VITE_GOOGLE_MAPS_API_KEY</code>{' '}
-              in <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono">frontend/.env</code> to enable the
-              station map.
+              Set{' '}
+              <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono">
+                VITE_GOOGLE_MAPS_API_KEY
+              </code>{' '}
+              in{' '}
+              <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono">
+                frontend/.env
+              </code>{' '}
+              to enable the station map.
             </p>
             <p className="mt-3 text-xs text-storm/40">
               Remember to restrict the key by domain/referrer in Google Cloud Console.
@@ -175,16 +148,14 @@ export function StationMapPage() {
     )
   }
 
-  /* ── Empty: data loaded, no stations ── */
-  const hasPlottedStations =
-    data && data.stations.some((s) => s.latitude && s.longitude)
-
   /* ── Main render ── */
+  const hasPlottedStations = data && data.stations.some((s) => s.latitude && s.longitude)
+
   return (
-    <div className="h-screen flex bg-mist">
+    <div className="flex h-screen bg-mist">
       <DashboardSidebar />
 
-      <main className="flex flex-1 min-w-0">
+      <main className="flex min-w-0 flex-1">
         <div className="relative flex-1">
           <APIProvider apiKey={apiKey}>
             {!hasPlottedStations && data ? (
@@ -196,19 +167,15 @@ export function StationMapPage() {
             ) : (
               <MapScreenContent
                 stations={filteredStations}
+                allStations={data?.stations ?? []}
                 alertStationIds={alertStationIds}
                 selectedStation={selectedStation}
                 onSelect={handleSelect}
-                onMapLoad={(map) => {
-                  setMapInstance(map)
-                }}
                 filter={filter}
                 filterCounts={filterCounts}
                 onFilterChange={setFilter}
-                allStations={data?.stations ?? []}
-                onRecenter={handleRecentClick}
-                onSearchQuery={setSearchQuery}
-                searchQuery={searchQuery}
+                onRecenter={handleRecenter}
+                recenterCount={recenterCount}
               />
             )}
           </APIProvider>
@@ -216,7 +183,9 @@ export function StationMapPage() {
 
         <StationListPanel
           stations={filteredStations}
-          totalCount={data?.stations.filter((s) => s.latitude && s.longitude).length ?? 0}
+          totalCount={
+            data?.stations.filter((s) => s.latitude && s.longitude).length ?? 0
+          }
           selectedId={selectedStation?.id ?? null}
           alertIds={alertStationIds}
           onSelect={handleSelect}
@@ -228,41 +197,52 @@ export function StationMapPage() {
   )
 }
 
-/* ── Map content (extracted so APIProvider children can use hooks) ── */
+/* ── Map content container ── */
 
 function MapScreenContent({
   stations,
+  allStations,
   alertStationIds,
   selectedStation,
   onSelect,
-  onMapLoad,
   filter,
   filterCounts,
   onFilterChange,
-  allStations,
   onRecenter,
-  onSearchQuery,
-  searchQuery,
+  recenterCount,
 }: {
   stations: StationReading[]
+  allStations: StationReading[]
   alertStationIds: Set<number>
   selectedStation: StationReading | null
   onSelect: (s: StationReading | null) => void
-  onMapLoad: (map: google.maps.Map) => void
   filter: StationFilter
   filterCounts: Record<StationFilter, number>
   onFilterChange: (f: StationFilter) => void
-  allStations: StationReading[]
   onRecenter: () => void
-  onSearchQuery: (q: string) => void
-  searchQuery: string
+  recenterCount: number
 }) {
   const apiIsLoaded = useApiIsLoaded()
+  const apiStatus = useApiLoadingStatus()
 
   return (
-    <div className="h-full w-full relative">
-      {/* Map placeholder while Maps API loads */}
-      {!apiIsLoaded && (
+    <div className="relative h-full w-full">
+      {apiStatus === 'FAILED' && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-mist">
+          <div className="max-w-sm px-6 text-center">
+            <h2 className="text-lg font-semibold text-midnight font-display">
+              Map failed to load
+            </h2>
+            <p className="mt-2 text-sm text-storm/60">
+              Google Maps could not initialize. Check that your API key is valid, 
+              the Maps JavaScript API is enabled, and the key is not restricted. 
+              See console for details.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!apiIsLoaded && apiStatus !== 'FAILED' && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-mist">
           <div className="flex flex-col items-center gap-3">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-sky-light border-t-sky-primary" />
@@ -274,76 +254,123 @@ function MapScreenContent({
       <Map
         mapId={CUSTOM_MAP_ID}
         className="h-full w-full"
-        onLoad={onMapLoad}
-        onClick={() => onSelect(null)}
         defaultZoom={7}
         defaultCenter={{ lat: 1.5, lng: 32.5 }}
         gestureHandling="greedy"
         disableDefaultUI
         clickableIcons={false}
+        onClick={() => onSelect(null)}
       >
-        {stations.map((station) => (
-          <StationMarker
-            key={station.id}
-            station={station}
-            hasAlerts={alertStationIds.has(station.id)}
-            isSelected={selectedStation?.id === station.id}
-            onClick={() => onSelect(station)}
-          />
-        ))}
-
-        {selectedStation && (
-          <InfoWindow
-            position={{
-              lat: selectedStation.latitude,
-              lng: selectedStation.longitude,
-            }}
-            onCloseClick={() => onSelect(null)}
-            pixelOffset={[0, -18]}
-          >
-            <InfoWindowContent station={selectedStation} />
-          </InfoWindow>
-        )}
+        <MapView
+          stations={stations}
+          allStations={allStations}
+          alertStationIds={alertStationIds}
+          selectedStation={selectedStation}
+          onSelect={onSelect}
+          recenterCount={recenterCount}
+        />
       </Map>
 
       {/* ── Floating controls ── */}
       <div className="pointer-events-none absolute inset-0 z-10">
-        <div className="pointer-events-auto absolute top-4 left-4">
-          <StatusFilterBar
-            current={filter}
-            onChange={onFilterChange}
-            counts={filterCounts}
-          />
+        <div className="pointer-events-auto absolute left-4 top-4">
+          <StatusFilterBar current={filter} onChange={onFilterChange} counts={filterCounts} />
         </div>
 
-        <div className="pointer-events-auto absolute top-4 right-4 max-w-[200px]">
-          <SearchStationInput
-            stations={allStations}
-            onSelect={onSelect}
-            onQueryChange={onSearchQuery}
-          />
+        <div className="pointer-events-auto absolute right-4 top-4 max-w-[200px]">
+          <SearchStationInput stations={allStations} onSelect={onSelect} />
         </div>
 
-        <div className="pointer-events-auto absolute bottom-4 right-4 flex flex-col gap-2">
-          <RecenterButton
-            onClick={onRecenter}
-            count={stations.length}
-          />
+        <div className="pointer-events-auto absolute bottom-4 right-4">
+          <RecenterButton onClick={onRecenter} count={stations.length} />
         </div>
       </div>
     </div>
   )
 }
 
-/* ── Sub-components ── */
+/* ── Map-aware child (rendered inside <Map> so useMap() works) ── */
+
+function MapView({
+  stations,
+  allStations,
+  alertStationIds,
+  selectedStation,
+  onSelect,
+  recenterCount,
+}: {
+  stations: StationReading[]
+  allStations: StationReading[]
+  alertStationIds: Set<number>
+  selectedStation: StationReading | null
+  onSelect: (s: StationReading | null) => void
+  recenterCount: number
+}) {
+  const map = useMap()
+
+  /* Fit bounds on first load */
+  const hasFitted = useRef(false)
+  useEffect(() => {
+    if (!map || !allStations.length || hasFitted.current) return
+    const bounds = new google.maps.LatLngBounds()
+    allStations
+      .filter((s) => s.latitude && s.longitude)
+      .forEach((s) => bounds.extend({ lat: s.latitude, lng: s.longitude }))
+    map.fitBounds(bounds, 60)
+    hasFitted.current = true
+  }, [map, allStations])
+
+  /* Pan to selected station */
+  useEffect(() => {
+    if (!map || !selectedStation) return
+    map.panTo({ lat: selectedStation.latitude, lng: selectedStation.longitude })
+  }, [map, selectedStation])
+
+  /* Recenter triggered */
+  useEffect(() => {
+    if (!map || !allStations.length || recenterCount === 0) return
+    const bounds = new google.maps.LatLngBounds()
+    allStations
+      .filter((s) => s.latitude && s.longitude)
+      .forEach((s) => bounds.extend({ lat: s.latitude, lng: s.longitude }))
+    map.fitBounds(bounds, 60)
+  }, [map, allStations, recenterCount])
+
+  return (
+    <>
+      {stations.map((station) => (
+        <StationMarker
+          key={station.id}
+          station={station}
+          hasAlerts={alertStationIds.has(station.id)}
+          isSelected={selectedStation?.id === station.id}
+          onClick={() => onSelect(station)}
+        />
+      ))}
+
+      {selectedStation && (
+        <InfoWindow
+          position={{
+            lat: selectedStation.latitude,
+            lng: selectedStation.longitude,
+          }}
+          onCloseClick={() => onSelect(null)}
+          pixelOffset={[0, -18]}
+        >
+          <InfoWindowContent station={selectedStation} />
+        </InfoWindow>
+      )}
+    </>
+  )
+}
+
+/* ── InfoWindow content ── */
 
 function InfoWindowContent({ station }: { station: StationReading }) {
   return (
     <div className="min-w-[220px] py-1" aria-label={`Station details for ${station.name}`}>
       <div className="mb-2 flex items-center gap-2">
-        <h3 className="text-sm font-semibold text-midnight font-display">
-          {station.name}
-        </h3>
+        <h3 className="text-sm font-semibold text-midnight font-display">{station.name}</h3>
         <StatusBadge status={station.status} />
       </div>
       <p className="mb-2 text-xs text-storm/50">
@@ -352,47 +379,17 @@ function InfoWindowContent({ station }: { station: StationReading }) {
 
       {station.temperature && (
         <div className="mb-2 grid grid-cols-2 gap-x-4 gap-y-1">
-          <SensorReading
-            label="Temp"
-            value={
-              station.temperature
-                ? `${station.temperature.value.toFixed(1)}°C`
-                : '—'
-            }
-          />
-          <SensorReading
-            label="Humidity"
-            value={
-              station.humidity
-                ? `${station.humidity.value.toFixed(0)}%`
-                : '—'
-            }
-          />
-          <SensorReading
-            label="Rainfall"
-            value={
-              station.rainfall
-                ? `${station.rainfall.value.toFixed(1)}mm`
-                : '—'
-            }
-          />
-          <SensorReading
-            label="Wind"
-            value={
-              station.wind_speed
-                ? `${station.wind_speed.value.toFixed(1)}m/s`
-                : '—'
-            }
-          />
+          <SensorReading label="Temp" value={station.temperature ? `${station.temperature.value.toFixed(1)}°C` : '—'} />
+          <SensorReading label="Humidity" value={station.humidity ? `${station.humidity.value.toFixed(0)}%` : '—'} />
+          <SensorReading label="Rainfall" value={station.rainfall ? `${station.rainfall.value.toFixed(1)}mm` : '—'} />
+          <SensorReading label="Wind" value={station.wind_speed ? `${station.wind_speed.value.toFixed(1)}m/s` : '—'} />
         </div>
       )}
 
       <div className="mt-2 flex items-center gap-1.5 border-t border-slate-100 pt-2 text-[10px] text-storm/40">
         Last seen {formatRelativeTime(station.last_seen)}
         {station.is_stale && (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold text-amber-700">
-            Stale
-          </span>
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold text-amber-700">Stale</span>
         )}
       </div>
 
@@ -406,6 +403,8 @@ function InfoWindowContent({ station }: { station: StationReading }) {
   )
 }
 
+/* ── Sub-components ── */
+
 function SensorReading({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -418,11 +417,9 @@ function SensorReading({ label, value }: { label: string; value: string }) {
 function SearchStationInput({
   stations,
   onSelect,
-  onQueryChange,
 }: {
   stations: StationReading[]
   onSelect: (s: StationReading | null) => void
-  onQueryChange: (q: string) => void
 }) {
   const [query, setQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
@@ -470,7 +467,6 @@ function SearchStationInput({
           value={query}
           onChange={(e) => {
             setQuery(e.target.value)
-            onQueryChange(e.target.value)
             setIsOpen(true)
           }}
           onFocus={() => setIsOpen(true)}
@@ -489,7 +485,6 @@ function SearchStationInput({
               onClick={() => {
                 onSelect(station)
                 setQuery('')
-                onQueryChange('')
                 setIsOpen(false)
               }}
               className="flex w-full cursor-pointer items-center gap-2 px-3 py-2.5 text-left text-xs transition-colors hover:bg-slate-50"
@@ -504,13 +499,7 @@ function SearchStationInput({
   )
 }
 
-function RecenterButton({
-  onClick,
-  count,
-}: {
-  onClick: () => void
-  count: number
-}) {
+function RecenterButton({ onClick, count }: { onClick: () => void; count: number }) {
   return (
     <button
       type="button"
@@ -537,7 +526,16 @@ function RecenterButton({
 
 function ShieldExclamation() {
   return (
-    <svg className="h-7 w-7 text-rose" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      className="h-7 w-7 text-rose"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
       <path d="M12 8v4" />
       <circle cx="12" cy="16" r="0.5" fill="currentColor" />
@@ -561,17 +559,24 @@ function EmptyMapState({ onAdd }: { onAdd: () => void }) {
     <div className="flex h-full w-full items-center justify-center bg-mist">
       <div className="max-w-md px-6 text-center">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-sky-soft">
-          <svg className="h-8 w-8 text-sky-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg
+            className="h-8 w-8 text-sky-primary"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
             <circle cx="12" cy="10" r="3" />
           </svg>
         </div>
-        <h2 className="text-lg font-semibold text-midnight font-display">
-          No stations registered
-        </h2>
+        <h2 className="text-lg font-semibold text-midnight font-display">No stations registered</h2>
         <p className="mt-2 text-sm leading-relaxed text-storm/60">
-          Your weather network is empty. Add your first station to start monitoring
-          temperature, humidity, rainfall, and wind data in real time.
+          Your weather network is empty. Add your first station to start monitoring temperature,
+          humidity, rainfall, and wind data in real time.
         </p>
         <button
           type="button"

@@ -39,13 +39,9 @@ export function StationMarker({
 }: StationMarkerProps) {
   const status = hasAlerts ? 'fault' : station.status
 
-  const handleClick = useCallback(
-    (e: google.maps.MapMouseEvent & { domEvent: MouseEvent | KeyboardEvent }) => {
-      e.domEvent.stopPropagation()
-      onClick?.()
-    },
-    [onClick],
-  )
+  const handleClick = useCallback(() => {
+    onClick?.()
+  }, [onClick])
 
   return (
     <AdvancedMarker
