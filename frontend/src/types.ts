@@ -94,3 +94,10 @@ export interface ApiEnvelope<T> {
 }
 
 export type UserRole = 'admin' | 'meteorologist' | 'viewer' | 'farmer'
+
+export interface LoginResult {
+  access: string
+  refresh: string
+  username: string
+  role: UserRole
+}
