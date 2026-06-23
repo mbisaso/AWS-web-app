@@ -11,6 +11,7 @@ This replaces a previous ThingSpeak-based pipeline with a fully in-house Django 
 ## Tech Stack
 
 **Backend**
+
 - Python 3.11+ (3.14 confirmed working)
 - Django 5.2.3
 - Django REST Framework
@@ -19,6 +20,7 @@ This replaces a previous ThingSpeak-based pipeline with a fully in-house Django 
 - PostgreSQL 13+
 
 **Frontend**
+
 - React 19 + TypeScript
 - Vite 8
 - TailwindCSS v4
@@ -145,31 +147,32 @@ Frontend runs at `http://localhost:5173`
 
 ## Running URLs
 
-| URL | Description |
-|-----|-------------|
-| http://localhost:5173 | React landing page |
-| http://localhost:5173/login | Login page |
-| http://localhost:5173/register | Register page |
-| http://localhost:5173/dashboard | Dashboard |
-| http://localhost:8000/admin | Django admin panel |
+| URL                             | Description        |
+| ------------------------------- | ------------------ |
+| http://localhost:5173           | React landing page |
+| http://localhost:5173/login     | Login page         |
+| http://localhost:5173/register  | Register page      |
+| http://localhost:5173/dashboard | Dashboard          |
+| http://localhost:8000/admin     | Django admin panel |
 
 ---
 
 ## API Endpoints
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/ingest/` | None | Receives sensor data from ESP32 |
-| POST | `/api/token/` | None | Login — returns access + refresh tokens |
-| POST | `/api/token/refresh/` | None | Renew access token |
-| GET | `/api/latest/` | JWT Bearer | Latest reading per station |
-| GET | `/api/stations/` | JWT Bearer | All registered stations with status |
-| GET | `/api/stations/<station_id>/` | JWT Bearer | One station + its latest reading |
-| GET | `/api/stations/<station_id>/history/` | JWT Bearer | Time-series chart data |
+| Method | Endpoint                              | Auth       | Description                             |
+| ------ | ------------------------------------- | ---------- | --------------------------------------- |
+| POST   | `/api/ingest/`                        | None       | Receives sensor data from ESP32         |
+| POST   | `/api/token/`                         | None       | Login — returns access + refresh tokens |
+| POST   | `/api/token/refresh/`                 | None       | Renew access token                      |
+| GET    | `/api/latest/`                        | JWT Bearer | Latest reading per station              |
+| GET    | `/api/stations/`                      | JWT Bearer | All registered stations with status     |
+| GET    | `/api/stations/<station_id>/`         | JWT Bearer | One station + its latest reading        |
+| GET    | `/api/stations/<station_id>/history/` | JWT Bearer | Time-series chart data                  |
 
 ### Ingest endpoint formats
 
 **Format 1 — raw ESP32 string:**
+
 ```json
 {
   "station_id": "AWS-UG-001",
@@ -178,6 +181,7 @@ Frontend runs at `http://localhost:5173`
 ```
 
 **Format 2 — pre-parsed JSON:**
+
 ```json
 {
   "station_id": "AWS-UG-001",
@@ -189,12 +193,12 @@ Frontend runs at `http://localhost:5173`
 
 ### History endpoint query parameters
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `?hours=24` | 24 | How many hours back to fetch |
-| `?limit=200` | 200 | Max number of readings |
-| `?type=sensor` | sensor | Returns weather fields |
-| `?type=power` | — | Returns power rail fields instead |
+| Parameter      | Default | Description                       |
+| -------------- | ------- | --------------------------------- |
+| `?hours=24`    | 24      | How many hours back to fetch      |
+| `?limit=200`   | 200     | Max number of readings            |
+| `?type=sensor` | sensor  | Returns weather fields            |
+| `?type=power`  | —       | Returns power rail fields instead |
 
 ### Response envelope
 
@@ -210,49 +214,53 @@ All API responses follow this structure:
 ## Data Models
 
 ### `accounts.User`
+
 Extends Django's `AbstractUser` with a `role` field: `admin`, `meteorologist`, `viewer`, `farmer` (default: `viewer`)
 
 ### `stations.Station`
+
 One row per physical ESP32 device in the field.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `station_id` | string (unique) | Device identifier e.g. AWS-UG-001 |
-| `name` | string | Human-readable station name |
-| `location` | string | Text description of location |
-| `latitude` / `longitude` | float (nullable) | GPS coordinates |
-| `expected_interval_minutes` | int | How often this station should report (default: 15) |
+| Field                       | Type             | Description                                        |
+| --------------------------- | ---------------- | -------------------------------------------------- |
+| `station_id`                | string (unique)  | Device identifier e.g. AWS-UG-001                  |
+| `name`                      | string           | Human-readable station name                        |
+| `location`                  | string           | Text description of location                       |
+| `latitude` / `longitude`    | float (nullable) | GPS coordinates                                    |
+| `expected_interval_minutes` | int              | How often this station should report (default: 15) |
 
 ### `stations.StationStatus`
+
 One-to-one with Station. Tracks station health.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `status` | enum | `full` / `partial` / `down` |
-| `last_updated` | datetime | Auto-updated on save |
-| `details` | JSON | Arbitrary metadata |
-| `computed_by` | string | Who set the status — `rule_based` now, ML model name later |
+| Field          | Type     | Description                                                |
+| -------------- | -------- | ---------------------------------------------------------- |
+| `status`       | enum     | `full` / `partial` / `down`                                |
+| `last_updated` | datetime | Auto-updated on save                                       |
+| `details`      | JSON     | Arbitrary metadata                                         |
+| `computed_by`  | string   | Who set the status — `rule_based` now, ML model name later |
 
 ### `stations.SensorReading`
+
 One row per ESP32 transmission. The main time-series table.
 
-| Field | Description |
-|-------|-------------|
-| `station` | FK to Station (nullable) |
-| `station_code` | Raw station ID from ESP32 (always filled) |
-| `timestamp` | Datetime from ESP32 RTC |
-| `received_at` | When the server received it |
-| `temperature` | °C |
-| `humidity` | % |
-| `pressure` | hPa |
-| `altitude` | m |
-| `light` | lux |
-| `soil_moisture` | voltage |
-| `rain` | tip count |
-| `wind_speed` | km/h |
-| `wind_direction` | degrees |
-| `volt_3v3`, `volt_5v`, `volt_batt`, `volt_solar`, `volt_dc` | Power rail voltages |
-| `curr_batt`, `curr_solar` | Current readings |
+| Field                                                       | Description                               |
+| ----------------------------------------------------------- | ----------------------------------------- |
+| `station`                                                   | FK to Station (nullable)                  |
+| `station_code`                                              | Raw station ID from ESP32 (always filled) |
+| `timestamp`                                                 | Datetime from ESP32 RTC                   |
+| `received_at`                                               | When the server received it               |
+| `temperature`                                               | °C                                        |
+| `humidity`                                                  | %                                         |
+| `pressure`                                                  | hPa                                       |
+| `altitude`                                                  | m                                         |
+| `light`                                                     | lux                                       |
+| `soil_moisture`                                             | voltage                                   |
+| `rain`                                                      | tip count                                 |
+| `wind_speed`                                                | km/h                                      |
+| `wind_direction`                                            | degrees                                   |
+| `volt_3v3`, `volt_5v`, `volt_batt`, `volt_solar`, `volt_dc` | Power rail voltages                       |
+| `curr_batt`, `curr_solar`                                   | Current readings                          |
 
 All sensor fields are nullable — the ESP32 sends `nan` when a sensor is absent or broken.
 
@@ -271,10 +279,4 @@ DB indexes exist on `timestamp`, `station_code`, and the composite `(station_cod
 
 ---
 
-## Team
-
 Built at IoT-ra Lab, Makerere University — AdEMNEA Project.
-
-Backend: Henry Nyomore, Marvin  
-Frontend: Blaise, Larry  
-GSM monitoring: Trevor
