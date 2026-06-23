@@ -20,7 +20,7 @@ export function BulkActionBar({ selectedCount, onResolveSelected, onClearSelecti
 
   return (
     <div
-      className="sticky bottom-0 z-10 -mx-5 -mb-5 mt-2 rounded-b-2xl border-t border-sky-200 bg-sky-soft px-5 py-3 shadow-lg sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
+      className="sticky bottom-0 z-10 -mx-5 -mb-5 mt-2 rounded-b-2xl border-t border-rose-100 bg-gradient-to-r from-rose-50/80 via-sky-soft/60 to-amber-50/80 px-5 py-3 shadow-lg backdrop-blur-sm sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8"
       role="toolbar"
       aria-label="Bulk actions"
     >

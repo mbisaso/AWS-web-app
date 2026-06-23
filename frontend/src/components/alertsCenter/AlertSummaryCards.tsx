@@ -33,11 +33,45 @@ export function AlertSummaryCards({ alerts, isLoading, activeSeverity, onSeverit
     )
   }
 
-  const severityCards: { severity: AlertSeverity | 'unresolved'; label: string; count: number; dotClass: string; textClass: string }[] = [
-    { severity: 'unresolved' as any, label: 'Unresolved', count: unresolvedCount, dotClass: 'bg-rose', textClass: 'text-rose' },
-    { severity: 'critical', label: 'Critical', count: criticalCount, dotClass: 'bg-rose', textClass: 'text-rose' },
-    { severity: 'warning', label: 'Warning', count: warningCount, dotClass: 'bg-amber', textClass: 'text-amber' },
-    { severity: 'info', label: 'Info', count: infoCount, dotClass: 'bg-sky-bright', textClass: 'text-sky-bright' },
+  const severityCards: {
+    severity: AlertSeverity | 'unresolved'
+    label: string
+    count: number
+    dotClass: string
+    textClass: string
+    borderClass: string
+    bgClass: string
+    activeGlow: string
+  }[] = [
+    {
+      severity: 'unresolved' as any,
+      label: 'Unresolved', count: unresolvedCount,
+      dotClass: 'bg-rose', textClass: 'text-rose',
+      borderClass: 'border-t-rose',
+      bgClass: 'bg-gradient-to-b from-rose-50/30 to-white',
+      activeGlow: 'ring-2 ring-rose/20 ring-offset-1',
+    },
+    {
+      severity: 'critical', label: 'Critical', count: criticalCount,
+      dotClass: 'bg-rose', textClass: 'text-rose',
+      borderClass: 'border-t-rose',
+      bgClass: 'bg-gradient-to-b from-rose-50/20 to-white',
+      activeGlow: 'ring-2 ring-rose/20 ring-offset-1',
+    },
+    {
+      severity: 'warning', label: 'Warning', count: warningCount,
+      dotClass: 'bg-amber', textClass: 'text-amber',
+      borderClass: 'border-t-amber',
+      bgClass: 'bg-gradient-to-b from-amber-50/20 to-white',
+      activeGlow: 'ring-2 ring-amber/20 ring-offset-1',
+    },
+    {
+      severity: 'info', label: 'Info', count: infoCount,
+      dotClass: 'bg-sky-bright', textClass: 'text-sky-bright',
+      borderClass: 'border-t-sky-bright',
+      bgClass: 'bg-gradient-to-b from-sky-soft/40 to-white',
+      activeGlow: 'ring-2 ring-sky-bright/20 ring-offset-1',
+    },
   ]
 
   return (
@@ -56,8 +90,10 @@ export function AlertSummaryCards({ alerts, isLoading, activeSeverity, onSeverit
                   onSeverityFilter(activeSeverity === card.severity ? 'all' : card.severity)
                 }
               }}
-              className={`cursor-pointer rounded-2xl border p-5 text-left shadow-xs transition-all duration-200 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary ${
-                isActive ? 'border-slate-300 bg-white' : 'border-slate-200 bg-white'
+              className={`relative cursor-pointer rounded-2xl border border-t-[3px] p-5 text-left shadow-xs transition-all duration-200 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary ${
+                isActive
+                  ? `border-slate-200 ${card.borderClass} ${card.bgClass} ${card.activeGlow}`
+                  : 'border-slate-200 border-t-slate-200 bg-white hover:border-t-slate-300'
               }`}
               aria-pressed={isActive}
               aria-label={`${card.count} ${card.label} alerts. Click to ${isActive ? 'clear filter' : 'filter by ' + card.label}`}
@@ -68,7 +104,9 @@ export function AlertSummaryCards({ alerts, isLoading, activeSeverity, onSeverit
                 </p>
                 <span className={`flex h-2.5 w-2.5 rounded-full ${card.dotClass}`} aria-hidden="true" />
               </div>
-              <p className="mt-3 text-3xl font-bold text-midnight font-display tabular-nums">
+              <p className={`mt-3 text-3xl font-bold font-display tabular-nums transition-colors duration-200 ${
+                isActive ? card.textClass : 'text-midnight'
+              }`}>
                 {card.count}
               </p>
               <p className="mt-1 text-xs text-storm/40">
@@ -76,6 +114,18 @@ export function AlertSummaryCards({ alerts, isLoading, activeSeverity, onSeverit
                   ? 'needs attention'
                   : `${((card.count / (alerts.length || 1)) * 100).toFixed(0)}% of total`}
               </p>
+
+              {/* Subtle decorative corner gradient */}
+              <div className="pointer-events-none absolute -top-px right-0 h-16 w-16 rounded-bl-full opacity-30"
+                style={{
+                  background: card.severity === 'critical' || card.severity === 'unresolved'
+                    ? 'radial-gradient(circle at top right, rgba(225,29,72,0.15), transparent)'
+                    : card.severity === 'warning'
+                    ? 'radial-gradient(circle at top right, rgba(245,158,11,0.12), transparent)'
+                    : 'radial-gradient(circle at top right, rgba(56,189,248,0.12), transparent)'
+                }}
+                aria-hidden="true"
+              />
             </button>
           )
         })}

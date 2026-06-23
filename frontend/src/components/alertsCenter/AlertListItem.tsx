@@ -40,9 +40,13 @@ export function AlertListItem({ alert, isSelected, onSelect, isNew }: AlertListI
   const [expanded, setExpanded] = useState(false)
   const severity = SEVERITY_CONFIG[alert.severity]
 
+  const borderColor = alert.severity === 'critical' ? 'border-l-rose'
+    : alert.severity === 'warning' ? 'border-l-amber'
+    : 'border-l-sky-bright'
+
   return (
     <article
-      className={`rounded-xl border bg-white shadow-xs transition-all duration-200 ${
+      className={`relative rounded-xl border bg-white shadow-xs transition-all duration-200 ${
         isNew ? 'animate-fade-in-up' : ''
       } ${alert.is_resolved ? 'opacity-60' : ''} ${
         expanded ? 'border-slate-300' : 'border-slate-200 hover:border-slate-300 hover:shadow-sm'
@@ -50,6 +54,10 @@ export function AlertListItem({ alert, isSelected, onSelect, isNew }: AlertListI
       role="listitem"
       aria-label={`${alert.severity} alert: ${alert.message}`}
     >
+      {/* Colored left accent bar */}
+      <div className={`pointer-events-none absolute inset-y-2 left-0 w-[3px] rounded-r-full ${borderColor} transition-opacity duration-200 ${
+        expanded ? 'opacity-100' : 'opacity-40 group-hover:opacity-80'
+      }`} aria-hidden="true" />
       {/* ── Row header ── */}
       <div className="flex items-start gap-3 px-4 py-3.5 sm:px-5">
         {/* Checkbox */}
@@ -78,7 +86,16 @@ export function AlertListItem({ alert, isSelected, onSelect, isNew }: AlertListI
         >
           {/* Top row: severity + type + timestamp */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`text-xs font-semibold uppercase tracking-wider ${severity.text}`}>
+            <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider ${
+              alert.severity === 'critical' ? 'bg-rose-50 text-rose' :
+              alert.severity === 'warning' ? 'bg-amber-50 text-amber' :
+              'bg-sky-soft text-sky-bright'
+            }`}>
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${
+                alert.severity === 'critical' ? 'bg-rose' :
+                alert.severity === 'warning' ? 'bg-amber' :
+                'bg-sky-bright'
+              }`} aria-hidden="true" />
               {severity.label}
             </span>
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-storm/60">

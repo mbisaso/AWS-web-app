@@ -163,7 +163,7 @@ export function AlertFilterBar({ stations, filters, onFilterChange, onClearFilte
   )
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs" aria-label="Alert filters">
+    <section className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-xs before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-[2px] before:rounded-t-2xl before:bg-gradient-to-r before:from-rose-400/40 before:via-amber-400/40 before:to-sky-bright/40" aria-label="Alert filters">
       {/* ── Mobile toggle ── */}
       <button
         type="button"

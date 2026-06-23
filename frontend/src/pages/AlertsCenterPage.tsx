@@ -184,9 +184,19 @@ export function AlertsCenterPage() {
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}
-        <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-midnight to-ocean p-6 shadow-md sm:p-8">
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300">Alerts Center</p>
+        <div className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-midnight via-[#1a1a3e] to-rose-950/40 p-6 shadow-lg sm:p-8">
+          {/* Decorative glow orbs */}
+          <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-rose-500/10 blur-3xl" aria-hidden="true" />
+          <div className="pointer-events-none absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-amber-400/8 blur-3xl" aria-hidden="true" />
+
+          <div className="relative z-10 flex flex-col gap-2">
+            <div className="flex items-center gap-2.5">
+              <svg className="h-5 w-5 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-300/80">Alerts Center</p>
+            </div>
             <h1 className="text-2xl font-semibold text-white font-display sm:text-3xl">
               Alert management
             </h1>
@@ -196,6 +206,9 @@ export function AlertsCenterPage() {
                 : `${localAlerts.length} alert${localAlerts.length !== 1 ? 's' : ''}`}
             </p>
           </div>
+
+          {/* Subtle bottom accent line */}
+          <div className="absolute bottom-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-rose-400/20 to-transparent" aria-hidden="true" />
         </div>
 
         {/* ── Summary cards ── */}
