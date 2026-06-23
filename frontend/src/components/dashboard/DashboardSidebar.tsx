@@ -4,7 +4,7 @@ import { MenuIcon, CloseIcon } from '../landing/Icons'
 
 const NAV_ITEMS: { label: string; href: string }[] = [
   { label: 'Overview', href: '/dashboard' },
-  { label: 'Weather data', href: '#' },
+  { label: 'Weather data', href: '/dashboard/weather-data' },
   { label: 'Power data', href: '#' },
   { label: 'Set sleep time', href: '#' },
   { label: 'Weather analysis', href: '#' },

@@ -357,3 +357,180 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   return response.json()
   */
 }
+
+/* ─────────────────────────────────────────────
+   Weather Data screen types & mock data
+   ───────────────────────────────────────────── */
+
+export type SensorType =
+  | 'temperature'
+  | 'humidity'
+  | 'rainfall'
+  | 'wind_speed'
+  | 'wind_direction'
+  | 'atmospheric_pressure'
+  | 'solar_radiation'
+
+export interface HistoricalReading {
+  id: number
+  timestamp: string
+  station_id: number
+  station_name: string
+  sensor_type: SensorType
+  value: number
+  unit: string
+  is_anomaly: boolean
+  anomaly_reason?: string
+  is_stale: boolean
+}
+
+export interface CurrentSensorReading {
+  value: number
+  unit: string
+  trend: 'up' | 'down' | 'stable'
+  is_stale: boolean
+  is_out_of_range: boolean
+}
+
+export interface WeatherDataResponse {
+  readings: HistoricalReading[]
+  current: Partial<Record<SensorType, CurrentSensorReading | null>>
+}
+
+export const SENSOR_CONFIG: Record<SensorType, { label: string; unit: string; color: string }> = {
+  temperature:        { label: 'Temperature',        unit: '°C',   color: '#F97316' },
+  humidity:           { label: 'Humidity',           unit: '%',    color: '#0EA5E9' },
+  rainfall:           { label: 'Rainfall',           unit: 'mm',   color: '#38BDF8' },
+  wind_speed:         { label: 'Wind Speed',         unit: 'm/s',  color: '#22C55E' },
+  wind_direction:     { label: 'Wind Direction',     unit: '°',    color: '#94A3B8' },
+  atmospheric_pressure: { label: 'Atm. Pressure',    unit: 'hPa',  color: '#8B5CF6' },
+  solar_radiation:    { label: 'Solar Radiation',    unit: 'W/m²', color: '#F59E0B' },
+}
+
+const SENSOR_LIMITS: Record<SensorType, { min: number; max: number }> = {
+  temperature:        { min: -10, max: 55 },
+  humidity:           { min: 0,   max: 100 },
+  rainfall:           { min: 0,   max: 200 },
+  wind_speed:         { min: 0,   max: 50 },
+  wind_direction:     { min: 0,   max: 360 },
+  atmospheric_pressure: { min: 900, max: 1100 },
+  solar_radiation:    { min: 0,   max: 1400 },
+}
+
+function generateSensorValue(type: SensorType, hour: number, stationIdx: number): number {
+  const seed = (stationIdx * 7 + hour * 13) % 100
+  const r = (seed % 17) / 17
+
+  switch (type) {
+    case 'temperature': {
+      const base = 22 + (stationIdx % 5) * 2
+      const diurnal = -5 * Math.cos((hour - 14) * Math.PI / 12)
+      return parseFloat((base + diurnal + (r - 0.5) * 3).toFixed(1))
+    }
+    case 'humidity': {
+      const base = 55 + (stationIdx % 4) * 8
+      const diurnal = 8 * Math.cos((hour - 14) * Math.PI / 12)
+      return parseFloat(Math.min(100, Math.max(20, base + diurnal + (r - 0.5) * 6)).toFixed(0))
+    }
+    case 'rainfall':
+      return r < 0.1 ? parseFloat((Math.random() * 18).toFixed(1)) : 0
+    case 'wind_speed':
+      return parseFloat(Math.max(0.3, (2 + (r - 0.5) * 4 + Math.sin(hour * Math.PI / 12) * 1.5)).toFixed(1))
+    case 'wind_direction':
+      return parseFloat((r * 360).toFixed(0))
+    case 'atmospheric_pressure':
+      return parseFloat((1013 + (r - 0.5) * 12).toFixed(1))
+    case 'solar_radiation': {
+      if (hour < 6 || hour > 19) return 0
+      const peak = 700 + (r - 0.5) * 200
+      return parseFloat(Math.max(0, (peak * Math.sin((hour - 6) * Math.PI / 13))).toFixed(0))
+    }
+  }
+}
+
+function getAnomalyReason(type: SensorType, value: number): string {
+  if (type === 'temperature' && value > 45) return 'Extreme temperature'
+  if (type === 'temperature' && value < 0) return 'Below-freezing reading'
+  if (type === 'humidity' && value > 95) return 'Near-saturation humidity'
+  if (type === 'rainfall' && value > 50) return 'Extreme precipitation event'
+  if (type === 'wind_speed' && value > 25) return 'High wind speed alert'
+  if (type === 'solar_radiation' && value > 1200) return 'Extreme solar irradiance'
+  if (type === 'atmospheric_pressure' && (value < 980 || value > 1045)) return 'Abnormal pressure'
+  return 'Unexpected sensor reading'
+}
+
+export async function fetchWeatherData(params: {
+  stationId?: number | null
+  sensorType: SensorType
+  dateFrom: string
+  dateTo: string
+}): Promise<WeatherDataResponse> {
+  /* --- MOCK IMPLEMENTATION (development only) --- */
+  await new Promise((resolve) => setTimeout(resolve, 400 + Math.random() * 300))
+
+  const fromMs = new Date(params.dateFrom).getTime()
+  const toMs = new Date(params.dateTo).getTime()
+  const intervalMs = 3 * 60 * 60 * 1000
+
+  const stations = params.stationId
+    ? STATION_DEFS.filter((s) => s.id === params.stationId)
+    : STATION_DEFS
+
+  const readings: HistoricalReading[] = []
+  const latestByStation: Map<number, { value: number; prevValue: number | null }> = new Map()
+
+  for (const station of stations) {
+    const stationIdx = STATION_DEFS.indexOf(station)
+
+    for (let t = fromMs; t <= toMs; t += intervalMs) {
+      const hour = new Date(t).getHours()
+      const value = generateSensorValue(params.sensorType, hour, stationIdx)
+      const isAnomaly = readings.length > 0 && readings.length % 37 === 0
+
+      readings.push({
+        id: readings.length + 1,
+        timestamp: new Date(t).toISOString(),
+        station_id: station.id,
+        station_name: station.name,
+        sensor_type: params.sensorType,
+        value,
+        unit: SENSOR_CONFIG[params.sensorType].unit,
+        is_anomaly: isAnomaly,
+        anomaly_reason: isAnomaly ? getAnomalyReason(params.sensorType, value) : undefined,
+        is_stale: false,
+      })
+    }
+
+    const lastReading = readings[readings.length - 1]
+    if (lastReading) {
+      latestByStation.set(station.id, { value: lastReading.value, prevValue: readings.length >= 2 ? readings[readings.length - 2].value : null })
+    }
+  }
+
+  const current: Partial<Record<SensorType, CurrentSensorReading | null>> = {}
+
+  if (params.stationId && latestByStation.has(params.stationId)) {
+    const { value, prevValue } = latestByStation.get(params.stationId)!
+    const limits = SENSOR_LIMITS[params.sensorType]
+    let trend: 'up' | 'down' | 'stable' = 'stable'
+    if (prevValue !== null) {
+      const diff = value - prevValue
+      trend = Math.abs(diff) < 0.5 ? 'stable' : diff > 0 ? 'up' : 'down'
+    }
+    current[params.sensorType] = {
+      value,
+      unit: SENSOR_CONFIG[params.sensorType].unit,
+      trend,
+      is_stale: false,
+      is_out_of_range: value < limits.min || value > limits.max,
+    }
+  }
+
+  return { readings, current }
+}
+
+export const DATE_PRESETS = [
+  { label: 'Today',     days: 0 },
+  { label: 'Last 7 days', days: 7 },
+  { label: 'Last 30 days', days: 30 },
+] as const
