@@ -717,3 +717,129 @@ export async function fetchPowerData(params: {
 
   return { readings, current }
 }
+
+/* ─────────────────────────────────────────────
+   Weather Analysis screen types & mock data
+   ───────────────────────────────────────────── */
+
+export type ViewMode = 'trends' | 'comparison' | 'correlation' | 'distribution'
+
+export interface AnalysisStats {
+  average: number
+  min: number
+  max: number
+  std_dev: number
+  count: number
+  trend: 'rising' | 'falling' | 'stable'
+  percent_change: number | null
+  compared_to_baseline: { pct_above: number; baseline_value: number } | null
+  sparkline: number[]
+}
+
+export interface AnalysisDataResponse {
+  readings: HistoricalReading[]
+  stats: Record<string, AnalysisStats>
+}
+
+const BASELINE_VALUES: Partial<Record<SensorType, number>> = {
+  temperature: 26.0,
+  humidity: 65,
+  rainfall: 2.5,
+  wind_speed: 3.5,
+  atmospheric_pressure: 1013,
+  solar_radiation: 450,
+}
+
+function computeStats(values: number[]): AnalysisStats {
+  const count = values.length
+  const sum = values.reduce((a, b) => a + b, 0)
+  const average = sum / count
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const variance = values.reduce((acc, v) => acc + (v - average) ** 2, 0) / count
+  const std_dev = Math.sqrt(variance)
+
+  const firstHalf = values.slice(0, Math.floor(count / 2))
+  const secondHalf = values.slice(Math.floor(count / 2))
+  const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / firstHalf.length
+  const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / secondHalf.length
+  const trend: 'rising' | 'falling' | 'stable' =
+    secondAvg - firstAvg > firstAvg * 0.02 ? 'rising'
+    : firstAvg - secondAvg > firstAvg * 0.02 ? 'falling'
+    : 'stable'
+
+  const percent_change = firstAvg > 0 ? parseFloat((((secondAvg - firstAvg) / firstAvg) * 100).toFixed(1)) : null
+
+  const step = Math.max(1, Math.floor(count / 20))
+  const sparkline: number[] = []
+  for (let i = 0; i < count && sparkline.length < 20; i += step) {
+    sparkline.push(values[i])
+  }
+
+  return { average: parseFloat(average.toFixed(1)), min: parseFloat(min.toFixed(1)), max: parseFloat(max.toFixed(1)), std_dev: parseFloat(std_dev.toFixed(2)), count, trend, percent_change, compared_to_baseline: null, sparkline }
+}
+
+export async function fetchAnalysisData(params: {
+  sensorTypes: SensorType[]
+  stationIds: number[]
+  dateFrom: string
+  dateTo: string
+}): Promise<AnalysisDataResponse> {
+  /* --- MOCK IMPLEMENTATION (development only) --- */
+  await new Promise((resolve) => setTimeout(resolve, 500 + Math.random() * 400))
+
+  const stations = params.stationIds.length
+    ? STATION_DEFS.filter((s) => params.stationIds.includes(s.id))
+    : STATION_DEFS
+
+  const fromMs = new Date(params.dateFrom).getTime()
+  const toMs = new Date(params.dateTo).getTime()
+  const intervalMs = 3 * 60 * 60 * 1000
+
+  const readings: HistoricalReading[] = []
+  const valuesByKey = new Map<string, number[]>()
+
+  for (const sensorType of params.sensorTypes) {
+    for (const station of stations) {
+      const stationIdx = STATION_DEFS.indexOf(station)
+      const key = `${station.id}:${sensorType}`
+      const vals: number[] = []
+
+      for (let t = fromMs; t <= toMs; t += intervalMs) {
+        const hour = new Date(t).getHours()
+        const value = generateSensorValue(sensorType, hour, stationIdx)
+        const isAnomaly = readings.length > 0 && readings.length % 47 === 0
+
+        readings.push({
+          id: readings.length + 1,
+          timestamp: new Date(t).toISOString(),
+          station_id: station.id,
+          station_name: station.name,
+          sensor_type: sensorType,
+          value,
+          unit: SENSOR_CONFIG[sensorType].unit,
+          is_anomaly: isAnomaly,
+          anomaly_reason: isAnomaly ? getAnomalyReason(sensorType, value) : undefined,
+          is_stale: false,
+        })
+        vals.push(value)
+      }
+      valuesByKey.set(key, vals)
+    }
+  }
+
+  const stats: Record<string, AnalysisStats> = {}
+
+  for (const [key, vals] of valuesByKey) {
+    if (!vals.length) continue
+    const s = computeStats(vals)
+    const baselineVal = BASELINE_VALUES[params.sensorTypes.find((st) => key.includes(st))!]
+    if (baselineVal !== undefined) {
+      const pctAbove = parseFloat((((s.average - baselineVal) / baselineVal) * 100).toFixed(1))
+      s.compared_to_baseline = { pct_above: pctAbove, baseline_value: baselineVal }
+    }
+    stats[key] = s
+  }
+
+  return { readings, stats }
+}
