@@ -23,6 +23,10 @@ from .serializers import (
     StationSerializer,
 )
 
+import csv
+import math
+from django.http import HttpResponse
+
 def api_response(data=None, message=None, error=None, status_code=200):
     """
     Standard response format for all API endpoints.
@@ -188,11 +192,12 @@ def ingest(request):
     if 'raw' in data:
         parsed = parse_esp32_string(data['raw'])
 
-        naive_dt = parse_datetime(parsed.get('Time', ''))
-        if naive_dt is None:
-            return Response({'error': 'Could not parse timestamp'}, status=400)
-
-        timestamp = timezone.make_aware(naive_dt, datetime.timezone.utc)
+        timestamp = parse_datetime(parsed.get('Time', ''))
+        if timestamp is None:
+            return Response(
+                {'error': 'Could not parse timestamp from raw string'},
+                status=400
+            )
 
         reading = SensorReading(
             station        = station,
@@ -354,4 +359,51 @@ def station_detail(request, station_id):
         'latest_reading': SensorReadingLatestSerializer(
                             latest_reading
                           ).data if latest_reading else None,
+    })
+
+
+# ─────────────────────────────────────────────────────────
+# API: Export endpoint — ML training data download
+# ─────────────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def export(request):
+    from django.utils import timezone
+    from datetime import timedelta
+
+    station_id = request.query_params.get('station_id')
+    hours      = int(request.query_params.get('hours', 168))
+    fmt        = request.query_params.get('output', 'json')
+    fields     = request.query_params.get('fields', 'all')
+
+    since    = timezone.now() - timedelta(hours=hours)
+    readings = SensorReading.objects.filter(
+        timestamp__gte=since
+    ).order_by('timestamp')
+
+    if station_id:
+        readings = readings.filter(station_code=station_id)
+
+    if fields == 'sensor':
+        serializer = SensorReadingChartSerializer(readings, many=True)
+    elif fields == 'power':
+        serializer = PowerChartSerializer(readings, many=True)
+    else:
+        serializer = SensorReadingSerializer(readings, many=True)
+
+    if fmt == 'csv':
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="aws_export.csv"'
+        fieldnames = list(serializer.child.fields.keys())
+        writer = csv.DictWriter(response, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in serializer.data:
+            writer.writerow(row)
+        return response
+
+    return Response({
+        'success': True,
+        'count':   len(serializer.data),
+        'data':    serializer.data,
     })

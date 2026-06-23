@@ -62,7 +62,8 @@ INSTALLED_APPS = [
     'accounts',
     'stations',
     'rest_framework_simplejwt',
-] 
+    'corsheaders',
+]
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",   # ← Vite dev server
@@ -101,6 +102,7 @@ LOGOUT_REDIRECT_URL = "login"
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware', 
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -182,4 +184,6 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+]
