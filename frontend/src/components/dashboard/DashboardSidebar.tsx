@@ -1,19 +1,14 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { MenuIcon, CloseIcon } from '../landing/Icons'
 
-interface NavItem {
-  label: string
-  href: string
-  active?: boolean
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { label: 'Overview', href: '/dashboard', active: true },
+const NAV_ITEMS: { label: string; href: string }[] = [
+  { label: 'Overview', href: '/dashboard' },
   { label: 'Weather data', href: '#' },
   { label: 'Power data', href: '#' },
   { label: 'Set sleep time', href: '#' },
   { label: 'Weather analysis', href: '#' },
-      { label: 'Station map', href: '/stations/map' },
+  { label: 'Station map', href: '/stations/map' },
   { label: 'Alerts center', href: '#' },
   { label: 'Station manager', href: '#' },
 ]
@@ -82,23 +77,28 @@ function Brand() {
 
 /* ── Shared nav ── */
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  const pathname = useLocation().pathname
+
   return (
     <nav className="mt-6 space-y-1" aria-label="Main navigation">
-      {NAV_ITEMS.map((item) => (
-        <a
-          key={item.label}
-          href={item.href}
-          onClick={onNavigate}
-          className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors duration-200 cursor-pointer ${
-            item.active
-              ? 'bg-white/10 text-white'
-              : 'text-white/50 hover:bg-white/5 hover:text-white/80'
-          }`}
-          aria-current={item.active ? 'page' : undefined}
-        >
-          {item.label}
-        </a>
-      ))}
+      {NAV_ITEMS.map((item) => {
+        const isActive = pathname === item.href || (item.href !== '#' && pathname.startsWith(item.href))
+        return (
+          <a
+            key={item.label}
+            href={item.href}
+            onClick={onNavigate}
+            className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors duration-200 cursor-pointer ${
+              isActive
+                ? 'bg-white/10 text-white'
+                : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+            }`}
+            aria-current={isActive ? 'page' : undefined}
+          >
+            {item.label}
+          </a>
+        )
+      })}
     </nav>
   )
 }
