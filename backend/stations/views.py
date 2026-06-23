@@ -1,17 +1,20 @@
+import math
+import datetime
+
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.dateparse import parse_datetime
+from django.utils import timezone
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
-
-from .models import Station, StationStatus, SensorReading
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from .models import Station, StationStatus, SensorReading
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
@@ -19,8 +22,6 @@ from .serializers import (
     PowerChartSerializer,
     StationSerializer,
 )
-
-import math
 
 def api_response(data=None, message=None, error=None, status_code=200):
     """
@@ -187,16 +188,15 @@ def ingest(request):
     if 'raw' in data:
         parsed = parse_esp32_string(data['raw'])
 
-        timestamp = parse_datetime(parsed.get('Time', ''))
-        if timestamp is None:
-            return Response(
-                {'error': 'Could not parse timestamp from raw string'},
-                status_code=400
-            )
+        naive_dt = parse_datetime(parsed.get('Time', ''))
+        if naive_dt is None:
+            return Response({'error': 'Could not parse timestamp'}, status=400)
+
+        timestamp = timezone.make_aware(naive_dt, datetime.timezone.utc)
 
         reading = SensorReading(
             station        = station,
-            station_code     = station_id,
+            station_code   = station_id,
             timestamp      = timestamp,
             pressure       = safe_float(parsed.get('Press')),
             altitude       = safe_float(parsed.get('Alt')),
@@ -218,11 +218,14 @@ def ingest(request):
 
     # ── Format 2: pre-parsed JSON ─────────────────────────
     else:
-        timestamp = parse_datetime(str(data.get('timestamp', '')))
+        naive_dt = parse_datetime(str(data.get('timestamp', '')))
+        if naive_dt is None:
+            return api_response(error='timestamp is required and must be ISO format', status_code=400)
+        timestamp = timezone.make_aware(naive_dt, datetime.timezone.utc)
         if timestamp is None:
             return api_response(
                 {'error': 'timestamp is required and must be ISO format'},
-                status_code=400
+                status=400
             )
 
         reading = SensorReading(
