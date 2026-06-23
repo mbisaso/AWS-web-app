@@ -534,3 +534,186 @@ export const DATE_PRESETS = [
   { label: 'Last 7 days', days: 7 },
   { label: 'Last 30 days', days: 30 },
 ] as const
+
+/* ─────────────────────────────────────────────
+   Power Data screen types & mock data
+   ───────────────────────────────────────────── */
+
+export type ChargingStatus = 'charging' | 'discharging' | 'idle'
+
+export type PowerMetricType =
+  | 'battery_level'
+  | 'voltage'
+  | 'current_draw'
+  | 'solar_input'
+
+export interface PowerReading {
+  id: number
+  timestamp: string
+  station_id: number
+  station_name: string
+  metric: PowerMetricType
+  value: number
+  unit: string
+  is_anomaly: boolean
+  anomaly_reason?: string
+  is_stale: boolean
+}
+
+export interface PowerCurrentReading {
+  battery_level: number | null
+  voltage: number | null
+  current_draw: number | null
+  solar_input: number | null
+  charging_status: ChargingStatus | null
+  estimated_days_remaining: number | null
+  is_stale: boolean
+}
+
+export interface PowerDataResponse {
+  readings: PowerReading[]
+  current: PowerCurrentReading | null
+}
+
+export const POWER_METRIC_CONFIG: Record<PowerMetricType, { label: string; unit: string; color: string }> = {
+  battery_level: { label: 'Battery Level', unit: '%', color: '#22C55E' },
+  voltage:       { label: 'Voltage',       unit: 'V', color: '#0EA5E9' },
+  current_draw:  { label: 'Current Draw',  unit: 'A', color: '#F97316' },
+  solar_input:   { label: 'Solar Input',   unit: 'W', color: '#F59E0B' },
+}
+
+const BATTERY_CAPACITY_AH = 100
+const NOMINAL_VOLTAGE = 12
+const TOTAL_WATT_HOURS = BATTERY_CAPACITY_AH * NOMINAL_VOLTAGE
+
+function generatePowerMetricValue(metric: PowerMetricType, hour: number, stationIdx: number): number {
+  const seed = (stationIdx * 7 + hour * 13 + 3) % 100
+  const r = (seed % 17) / 17
+
+  switch (metric) {
+    case 'battery_level': {
+      const base = 65 + (stationIdx % 3) * 10
+      const solarHours = Math.max(0, Math.min(1, (hour - 6) / 8))
+      const chargeBoost = solarHours * 12
+      const overnightDrop = -15 * (1 - solarHours)
+      return parseFloat(Math.min(100, Math.max(5, base + chargeBoost + overnightDrop + (r - 0.5) * 5)).toFixed(0))
+    }
+    case 'voltage': {
+      const level = generatePowerMetricValue('battery_level', hour, stationIdx)
+      return parseFloat((11.0 + (level / 100) * 3.2 + (r - 0.5) * 0.3).toFixed(2))
+    }
+    case 'current_draw': {
+      const baseDraw = 0.8 + (stationIdx % 5) * 0.3
+      const solarHours = Math.max(0, Math.min(1, (hour - 6) / 8))
+      const draw = hour >= 19 || hour < 6 ? baseDraw * 1.5 : baseDraw * 0.6
+      const solarOffset = solarHours > 0 ? -0.3 * solarHours : 0
+      return parseFloat(Math.max(0.1, draw + solarOffset + (r - 0.5) * 0.4).toFixed(2))
+    }
+    case 'solar_input': {
+      if (hour < 6 || hour > 19) return 0
+      const peak = 80 + (stationIdx % 4) * 30 + (r - 0.5) * 40
+      return parseFloat(Math.max(0, (peak * Math.sin((hour - 6) * Math.PI / 13))).toFixed(0))
+    }
+  }
+}
+
+function getPowerAnomalyReason(metric: PowerMetricType, value: number): string {
+  if (metric === 'battery_level' && value < 15) return 'Critically low battery'
+  if (metric === 'battery_level' && value < 30) return 'Low battery'
+  if (metric === 'voltage' && value < 11.5) return 'Under-voltage — battery may be depleted'
+  if (metric === 'voltage' && value > 14.5) return 'Over-voltage — possible regulator fault'
+  if (metric === 'current_draw' && value > 8) return 'Abnormally high current draw'
+  if (metric === 'solar_input' && value < 5 && new Date().getHours() >= 8 && new Date().getHours() <= 17) return 'Solar panel under-performing during daylight'
+  return 'Unexpected power reading'
+}
+
+function getChargingStatus(hour: number, batteryLevel: number, solarInput: number): ChargingStatus {
+  if (solarInput > 10 && batteryLevel < 95) return 'charging'
+  if (solarInput > 5 && batteryLevel < 90) return 'charging'
+  if (solarInput === 0 && batteryLevel < 50) return 'discharging'
+  if (batteryLevel >= 95) return 'idle'
+  if (hour >= 6 && hour <= 19 && solarInput > 0) return 'charging'
+  return 'discharging'
+}
+
+export async function fetchPowerData(params: {
+  stationId?: number | null
+  metric: PowerMetricType
+  dateFrom: string
+  dateTo: string
+}): Promise<PowerDataResponse> {
+  /* --- MOCK IMPLEMENTATION (development only) --- */
+  await new Promise((resolve) => setTimeout(resolve, 400 + Math.random() * 300))
+
+  const fromMs = new Date(params.dateFrom).getTime()
+  const toMs = new Date(params.dateTo).getTime()
+  const intervalMs = 3 * 60 * 60 * 1000
+
+  const stations = params.stationId
+    ? STATION_DEFS.filter((s) => s.id === params.stationId)
+    : STATION_DEFS
+
+  const readings: PowerReading[] = []
+  const latestByStation: Map<number, number> = new Map()
+
+  for (const station of stations) {
+    const stationIdx = STATION_DEFS.indexOf(station)
+    let latestValue: number | null = null
+
+    for (let t = fromMs; t <= toMs; t += intervalMs) {
+      const hour = new Date(t).getHours()
+      const value = generatePowerMetricValue(params.metric, hour, stationIdx)
+      const isAnomaly = readings.length > 0 && readings.length % 41 === 0
+
+      readings.push({
+        id: readings.length + 1,
+        timestamp: new Date(t).toISOString(),
+        station_id: station.id,
+        station_name: station.name,
+        metric: params.metric,
+        value,
+        unit: POWER_METRIC_CONFIG[params.metric].unit,
+        is_anomaly: isAnomaly,
+        anomaly_reason: isAnomaly ? getPowerAnomalyReason(params.metric, value) : undefined,
+        is_stale: false,
+      })
+      latestValue = value
+    }
+
+    if (latestValue !== null) {
+      latestByStation.set(station.id, latestValue)
+    }
+  }
+
+  const current: PowerCurrentReading | null = params.stationId && latestByStation.has(params.stationId)
+    ? (() => {
+        const station = STATION_DEFS.find((s) => s.id === params.stationId)!
+        const hour = new Date().getHours()
+        const stationIdx = STATION_DEFS.indexOf(station)
+        const batteryLevel = generatePowerMetricValue('battery_level', hour, stationIdx)
+        const voltage = generatePowerMetricValue('voltage', hour, stationIdx)
+        const currentDraw = generatePowerMetricValue('current_draw', hour, stationIdx)
+        const solarInput = generatePowerMetricValue('solar_input', hour, stationIdx)
+        const chargingStatus = getChargingStatus(hour, batteryLevel, solarInput)
+
+        const avgDailyConsumption = (0.8 + (stationIdx % 5) * 0.3) * 24
+        const avgDailySolar = 80 * 8 * 0.6
+        const netDaily = avgDailySolar - avgDailyConsumption * 12
+        const daysRemaining = batteryLevel > 20
+          ? null
+          : Math.max(0, Math.round((batteryLevel / 100 * TOTAL_WATT_HOURS) / (Math.abs(netDaily) || 1) * (netDaily < 0 ? 0.8 : 1)))
+
+        return {
+          battery_level: batteryLevel,
+          voltage,
+          current_draw: currentDraw,
+          solar_input: solarInput,
+          charging_status: chargingStatus,
+          estimated_days_remaining: daysRemaining,
+          is_stale: false,
+        }
+      })()
+    : null
+
+  return { readings, current }
+}

@@ -6,6 +6,7 @@ import {
   RegisterPage,
   StationMapPage,
   WeatherDataPage,
+  PowerDataPage,
 } from './pages'
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/dashboard/weather-data" element={<WeatherDataPage />} />
+        <Route path="/dashboard/power-data" element={<PowerDataPage />} />
         <Route path="/stations/map" element={<StationMapPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

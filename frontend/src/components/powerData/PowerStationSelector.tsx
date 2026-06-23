@@ -1,31 +1,31 @@
-import type { SensorType, StationReading } from '../../services/api'
-import { SENSOR_CONFIG } from '../../services/api'
+import type { PowerMetricType, StationReading } from '../../services/api'
+import { POWER_METRIC_CONFIG } from '../../services/api'
 import { StationDropdown } from '../shared/StationDropdown'
 import { DateRangePicker } from '../shared/DateRangePicker'
 
-const SENSOR_TYPES = Object.keys(SENSOR_CONFIG) as SensorType[]
+const POWER_METRICS = Object.keys(POWER_METRIC_CONFIG) as PowerMetricType[]
 
-interface StationSensorSelectorProps {
+interface PowerStationSelectorProps {
   stations: StationReading[]
   selectedStationId: number | null
   onStationChange: (id: number | null) => void
-  selectedSensor: SensorType
-  onSensorChange: (sensor: SensorType) => void
+  selectedMetric: PowerMetricType
+  onMetricChange: (metric: PowerMetricType) => void
   dateFrom: string
   dateTo: string
   onDateChange: (from: string, to: string) => void
 }
 
-export function StationSensorSelector({
+export function PowerStationSelector({
   stations,
   selectedStationId,
   onStationChange,
-  selectedSensor,
-  onSensorChange,
+  selectedMetric,
+  onMetricChange,
   dateFrom,
   dateTo,
   onDateChange,
-}: StationSensorSelectorProps) {
+}: PowerStationSelectorProps) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -41,17 +41,17 @@ export function StationSensorSelector({
         />
       </div>
 
-      <div className="flex flex-wrap gap-1" role="tablist" aria-label="Sensor type">
-        {SENSOR_TYPES.map((type) => {
-          const cfg = SENSOR_CONFIG[type]
-          const isActive = selectedSensor === type
+      <div className="flex flex-wrap gap-1" role="tablist" aria-label="Power metric">
+        {POWER_METRICS.map((metric) => {
+          const cfg = POWER_METRIC_CONFIG[metric]
+          const isActive = selectedMetric === metric
           return (
             <button
-              key={type}
+              key={metric}
               type="button"
               role="tab"
               aria-selected={isActive}
-              onClick={() => onSensorChange(type)}
+              onClick={() => onMetricChange(metric)}
               className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
                 isActive
                   ? 'bg-midnight text-white shadow-xs'

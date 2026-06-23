@@ -1,4 +1,5 @@
-import { type StationReading } from '../../services/api'
+import { useMemo } from 'react'
+import type { StationReading } from '../../services/api'
 
 interface SummaryChartsProps {
   stations: StationReading[]
@@ -16,6 +17,19 @@ export function SummaryCharts({
   const total = stations.length
   const hasData = total > 0
 
+  const tempStations = useMemo(() => {
+    return stations
+      .filter((s) => s.temperature)
+      .sort((a, b) => (b.temperature?.value ?? 0) - (a.temperature?.value ?? 0))
+  }, [stations])
+
+  const maxTemp = tempStations.length > 0
+    ? Math.max(...tempStations.map((s) => s.temperature!.value))
+    : 0
+  const avgTemp = tempStations.length > 0
+    ? tempStations.reduce((sum, s) => sum + s.temperature!.value, 0) / tempStations.length
+    : 0
+
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       {/* ── Donut: status distribution ── */}
@@ -31,41 +45,19 @@ export function SummaryCharts({
         </h3>
 
         <div className="mt-4 flex items-center gap-6">
-          {/* Donut */}
           <div className="relative flex h-28 w-28 shrink-0 items-center justify-center">
             {hasData ? (
               <svg viewBox="0 0 120 120" className="h-28 w-28 -rotate-90" role="img" aria-label={`${onlineCount} online, ${partialCount} partial, ${offlineCount} offline`}>
-                {/* Background ring */}
                 <circle cx="60" cy="60" r="48" fill="none" stroke="#F1F5F9" strokeWidth="10" />
-                {/* Online */}
-                <DonutArc
-                  r={48}
-                  ratio={onlineCount / total}
-                  offset={0}
-                  color="#22C55E"
-                />
-                {/* Partial */}
-                <DonutArc
-                  r={48}
-                  ratio={partialCount / total}
-                  offset={onlineCount / total}
-                  color="#F59E0B"
-                />
-                {/* Offline */}
-                <DonutArc
-                  r={48}
-                  ratio={offlineCount / total}
-                  offset={(onlineCount + partialCount) / total}
-                  color="#E11D48"
-                />
+                <DonutArc r={48} ratio={onlineCount / total} offset={0} color="#22C55E" />
+                <DonutArc r={48} ratio={partialCount / total} offset={onlineCount / total} color="#F59E0B" />
+                <DonutArc r={48} ratio={offlineCount / total} offset={(onlineCount + partialCount) / total} color="#E11D48" />
               </svg>
             ) : (
               <div className="flex h-28 w-28 items-center justify-center rounded-full bg-slate-50">
                 <span className="text-xs text-storm/30">No data</span>
               </div>
             )}
-
-            {/* Center label */}
             <div className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
               <div className="text-center">
                 <p className="text-xl font-bold text-midnight font-display">{total}</p>
@@ -74,7 +66,6 @@ export function SummaryCharts({
             </div>
           </div>
 
-          {/* Legend */}
           <div className="space-y-2.5">
             <LegendItem color="#22C55E" label="Online" count={onlineCount} percentage={total > 0 ? Math.round(onlineCount / total * 100) : 0} />
             <LegendItem color="#F59E0B" label="Partial" count={partialCount} percentage={total > 0 ? Math.round(partialCount / total * 100) : 0} />
@@ -93,49 +84,50 @@ export function SummaryCharts({
         </p>
         <h3 className="mt-1 text-base font-semibold text-midnight font-display">
           Temperature by station
+          {tempStations.length > 0 && (
+            <span className="ml-2 text-xs font-normal text-storm/40">avg {avgTemp.toFixed(1)}°C</span>
+          )}
         </h3>
 
-        <div className="mt-4 space-y-3">
-          {stations
-            .filter((s) => s.temperature)
-            .slice(0, 8)
-            .map((station, _, arr) => {
-              const maxTemp = Math.max(...arr.map((s) => s.temperature?.value ?? 0))
-              const tempVal = station.temperature!.value
-              const barWidth = maxTemp > 0 ? (tempVal / maxTemp) * 100 : 0
-              const barColor =
-                station.status === 'online'
-                  ? 'bg-emerald'
-                  : station.status === 'partial'
-                    ? 'bg-amber'
-                    : 'bg-rose'
+        <div className="mt-4 space-y-2">
+          {tempStations.map((station) => {
+            const tempVal = station.temperature!.value
+            const barPct = maxTemp > 0 ? (tempVal / maxTemp) * 100 : 0
+            const isAboveAvg = tempVal > avgTemp
 
-              return (
-                <div key={station.id} className="flex items-center gap-3">
-                  <span className="w-28 truncate text-xs font-medium text-storm/70">
-                    {station.name}
-                  </span>
-                  <div className="flex-1">
-                    <div className="h-5 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className={`h-full rounded-full ${barColor} transition-all duration-700 ease-out`}
-                        style={{ width: `${barWidth}%` }}
-                        role="progressbar"
-                        aria-valuenow={tempVal}
-                        aria-valuemin={0}
-                        aria-valuemax={maxTemp}
-                        aria-label={`${station.name}: ${tempVal}°C`}
-                      />
-                    </div>
+            return (
+              <div key={station.id} className="flex items-center gap-3">
+                <span className="w-28 truncate text-xs font-medium text-storm/70" title={station.name}>
+                  {station.name}
+                </span>
+                <div className="relative flex-1">
+                  <div className="h-5 bg-slate-100" style={{ width: '100%' }}>
+                    <div
+                      className="h-full bg-sky-primary transition-all duration-700 ease-out"
+                      style={{ width: `${barPct}%` }}
+                      role="progressbar"
+                      aria-valuenow={tempVal}
+                      aria-valuemin={0}
+                      aria-valuemax={maxTemp}
+                      aria-label={`${station.name}: ${tempVal}°C`}
+                    />
                   </div>
-                  <span className="w-14 text-right text-xs font-semibold tabular-nums text-midnight">
-                    {tempVal.toFixed(1)}°C
-                  </span>
+                  {isAboveAvg && (
+                    <div
+                      className="absolute bottom-0 top-0 w-px bg-amber-400"
+                      style={{ left: `${(avgTemp / maxTemp) * 100}%` }}
+                      aria-hidden="true"
+                    />
+                  )}
                 </div>
-              )
-            })}
+                <span className="w-14 text-right text-xs font-semibold tabular-nums text-midnight">
+                  {tempVal.toFixed(1)}°C
+                </span>
+              </div>
+            )
+          })}
 
-          {stations.filter((s) => s.temperature).length === 0 && (
+          {tempStations.length === 0 && (
             <div className="flex flex-col items-center py-6">
               <span className="text-xs text-storm/30">No temperature data available</span>
             </div>
@@ -145,8 +137,6 @@ export function SummaryCharts({
     </div>
   )
 }
-
-/* ── Sub-components ── */
 
 function DonutArc({
   r,
