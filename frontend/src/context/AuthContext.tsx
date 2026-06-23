@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
-import { apiClient } from '../api/client'
+import { apiClient, setAuthToken } from '../api/client'
 
 interface AuthContextValue {
   accessToken: string | null
@@ -22,14 +22,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
     setAccessToken(response.data.access)
     setUsername(usernameInput)
-    // TODO: no /api/me/ or profile endpoint exists yet to fetch role.
-    // Sidebar currently shows a hardcoded "Admin" label — revisit once
-    // accounts app exposes the logged-in user's role.
+    setAuthToken(response.data.access)
   }
 
   function logout() {
     setAccessToken(null)
     setUsername(null)
+    setAuthToken(null)
   }
 
   return (
