@@ -1,15 +1,17 @@
 import { useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { MenuIcon, CloseIcon } from '../landing/Icons'
 
-const NAV_ITEMS: { label: string; href: string }[] = [
+const NAV_ITEMS: { label: string; href: string; adminOnly?: boolean }[] = [
   { label: 'Overview', href: '/dashboard' },
   { label: 'Weather data', href: '/dashboard/weather-data' },
   { label: 'Power data', href: '/dashboard/power-data' },
   { label: 'Weather analysis', href: '/dashboard/weather-analysis' },
   { label: 'Station map', href: '/stations/map' },
   { label: 'Alerts center', href: '/dashboard/alerts-center' },
-  { label: 'Station manager', href: '#' },
+  { label: 'SIM management', href: '/dashboard/sim-management' },
+  { label: 'Station manager', href: '/dashboard/station-manager', adminOnly: true },
 ]
 
 export function DashboardSidebar() {
@@ -77,10 +79,14 @@ function Brand() {
 /* ── Shared nav ── */
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = useLocation().pathname
+  const { user } = useCurrentUser()
+  const isAdmin = user?.role === 'admin'
+
+  const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin)
 
   return (
     <nav className="mt-6 space-y-1" aria-label="Main navigation">
-      {NAV_ITEMS.map((item) => {
+      {visibleItems.map((item) => {
         const isActive = pathname === item.href || (item.href !== '#' && pathname.startsWith(item.href))
         return (
           <a

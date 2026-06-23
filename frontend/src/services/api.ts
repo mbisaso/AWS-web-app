@@ -1066,3 +1066,457 @@ export async function fetchAnalysisData(params: {
 
   return { readings, stats }
 }
+
+/* ─────────────────────────────────────────────
+   Station & User Management — types & mock data
+   ───────────────────────────────────────────── */
+
+export type ConnectivityType = 'gsm' | 'lora' | 'wifi'
+
+export type UserRole = 'admin' | 'analyst' | 'technician' | 'public_viewer'
+
+export interface StationManagementData {
+  id: number
+  name: string
+  station_code: string
+  location: string
+  latitude: number
+  longitude: number
+  status: StationStatus
+  connectivity: ConnectivityType
+  expected_interval_minutes: number
+  sensors: string[]
+  notes: string
+  sim_id: number | null
+  created_at: string
+  is_active: boolean
+}
+
+export interface SimAccount {
+  id: number
+  carrier: string
+  iccid: string
+  phone_number: string
+  bundle_size_mb: number
+  usage_mb: number
+  expiry_date: string
+  status: 'active' | 'inactive'
+  station_id: number | null
+}
+
+export interface UserAccount {
+  id: number
+  name: string
+  email: string
+  role: UserRole
+  status: 'active' | 'invited' | 'disabled'
+  last_login: string | null
+  created_at: string
+}
+
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Admin',
+  analyst: 'Analyst',
+  technician: 'Technician',
+  public_viewer: 'Public Viewer',
+}
+
+export const CONNECTIVITY_LABELS: Record<ConnectivityType, string> = {
+  gsm: 'GSM',
+  lora: 'LoRa',
+  wifi: 'Wi-Fi',
+}
+
+const SENSOR_OPTIONS = ['temperature', 'humidity', 'rainfall', 'wind_speed', 'pressure', 'solar_radiation']
+
+/* ── In-memory mock database ── */
+
+let nextStationId = 100
+let nextSimId = 50
+let nextUserId = 20
+
+const MOCK_STATIONS: StationManagementData[] = STATION_DEFS.map((s, i) => ({
+  id: s.id,
+  name: s.name,
+  station_code: s.station_code,
+  location: s.location,
+  latitude: s.latitude,
+  longitude: s.longitude,
+  status: s.status,
+  connectivity: (['gsm', 'lora', 'wifi'] as ConnectivityType[])[i % 3],
+  expected_interval_minutes: s.interval,
+  sensors: SENSOR_OPTIONS.slice(0, 3 + (i % 3)),
+  notes: i === 2 ? 'Solar panel replaced March 2026. New charge controller installed.' : '',
+  sim_id: i < 7 ? i + 1 : null,
+  created_at: new Date(Date.now() - (30 + i * 45) * 24 * 60 * 60 * 1000).toISOString(),
+  is_active: i !== 8,
+}))
+
+const MOCK_SIMS: SimAccount[] = [
+  { id: 1, carrier: 'Airtel', iccid: '891234000000000001', phone_number: '+256700100001', bundle_size_mb: 500, usage_mb: 320, expiry_date: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10), status: 'active', station_id: 1 },
+  { id: 2, carrier: 'MTN', iccid: '891234000000000002', phone_number: '+256700100002', bundle_size_mb: 1000, usage_mb: 540, expiry_date: new Date(Date.now() + 45 * 86400000).toISOString().slice(0, 10), status: 'active', station_id: 2 },
+  { id: 3, carrier: 'Airtel', iccid: '891234000000000003', phone_number: '+256700100003', bundle_size_mb: 500, usage_mb: 480, expiry_date: new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10), status: 'inactive', station_id: 3 },
+  { id: 4, carrier: 'Africell', iccid: '891234000000000004', phone_number: '+256700100004', bundle_size_mb: 2000, usage_mb: 210, expiry_date: new Date(Date.now() + 120 * 86400000).toISOString().slice(0, 10), status: 'active', station_id: 4 },
+  { id: 5, carrier: 'MTN', iccid: '891234000000000005', phone_number: '+256700100005', bundle_size_mb: 500, usage_mb: 500, expiry_date: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), status: 'active', station_id: 5 },
+  { id: 6, carrier: 'Airtel', iccid: '891234000000000006', phone_number: '+256700100006', bundle_size_mb: 1000, usage_mb: 60, expiry_date: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10), status: 'active', station_id: 6 },
+  { id: 7, carrier: 'Africell', iccid: '891234000000000007', phone_number: '+256700100007', bundle_size_mb: 500, usage_mb: 0, expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10), status: 'active', station_id: 7 },
+  { id: 8, carrier: 'MTN', iccid: '891234000000000008', phone_number: '+256700100008', bundle_size_mb: 2000, usage_mb: 1500, expiry_date: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10), status: 'active', station_id: null },
+]
+
+const MOCK_USERS: UserAccount[] = [
+  { id: 1, name: 'Sarah Kintu', email: 'sarah@awsmonitor.ug', role: 'admin', status: 'active', last_login: new Date(Date.now() - 15 * 60000).toISOString(), created_at: new Date(Date.now() - 300 * 86400000).toISOString() },
+  { id: 2, name: 'James Opondo', email: 'james@awsmonitor.ug', role: 'analyst', status: 'active', last_login: new Date(Date.now() - 2 * 3600000).toISOString(), created_at: new Date(Date.now() - 200 * 86400000).toISOString() },
+  { id: 3, name: 'Grace Nabatanzi', email: 'grace@awsmonitor.ug', role: 'technician', status: 'active', last_login: new Date(Date.now() - 24 * 3600000).toISOString(), created_at: new Date(Date.now() - 150 * 86400000).toISOString() },
+  { id: 4, name: 'Peter Mukasa', email: 'peter@awsmonitor.ug', role: 'technician', status: 'active', last_login: new Date(Date.now() - 3 * 86400000).toISOString(), created_at: new Date(Date.now() - 100 * 86400000).toISOString() },
+  { id: 5, name: 'Alice Akello', email: 'alice@awsmonitor.ug', role: 'public_viewer', status: 'active', last_login: new Date(Date.now() - 7 * 86400000).toISOString(), created_at: new Date(Date.now() - 60 * 86400000).toISOString() },
+  { id: 6, name: 'Robert Ssempijja', email: 'robert@awsmonitor.ug', role: 'analyst', status: 'invited', last_login: null, created_at: new Date(Date.now() - 2 * 86400000).toISOString() },
+]
+
+/* ── Station CRUD ── */
+
+export async function fetchStations(): Promise<StationManagementData[]> {
+  await new Promise((r) => setTimeout(r, 300 + Math.random() * 200))
+  return MOCK_STATIONS.filter((s) => s.is_active)
+}
+
+export async function fetchAllStations(): Promise<StationManagementData[]> {
+  await new Promise((r) => setTimeout(r, 200))
+  return [...MOCK_STATIONS]
+}
+
+export async function createStation(data: Partial<StationManagementData>): Promise<StationManagementData> {
+  await new Promise((r) => setTimeout(r, 400 + Math.random() * 200))
+  const station: StationManagementData = {
+    id: nextStationId++,
+    name: data.name ?? 'New Station',
+    station_code: data.station_code ?? `AWS-${String(nextStationId).padStart(3, '0')}`,
+    location: data.location ?? '',
+    latitude: data.latitude ?? 1.5,
+    longitude: data.longitude ?? 32.5,
+    status: 'online',
+    connectivity: data.connectivity ?? 'gsm',
+    expected_interval_minutes: data.expected_interval_minutes ?? 15,
+    sensors: data.sensors ?? [],
+    notes: data.notes ?? '',
+    sim_id: data.sim_id ?? null,
+    created_at: new Date().toISOString(),
+    is_active: true,
+  }
+  MOCK_STATIONS.push(station)
+  return station
+}
+
+export async function updateStation(id: number, data: Partial<StationManagementData>): Promise<StationManagementData> {
+  await new Promise((r) => setTimeout(r, 300 + Math.random() * 200))
+  const idx = MOCK_STATIONS.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Station not found')
+  MOCK_STATIONS[idx] = { ...MOCK_STATIONS[idx], ...data }
+  return MOCK_STATIONS[idx]
+}
+
+export async function decommissionStation(id: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, 200))
+  const idx = MOCK_STATIONS.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Station not found')
+  MOCK_STATIONS[idx].is_active = false
+  MOCK_STATIONS[idx].status = 'offline'
+}
+
+export async function deleteStation(id: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, 300))
+  const idx = MOCK_STATIONS.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Station not found')
+  MOCK_STATIONS.splice(idx, 1)
+}
+
+/* ── SIM CRUD ── */
+
+export async function fetchSimAccounts(): Promise<SimAccount[]> {
+  await new Promise((r) => setTimeout(r, 200))
+  return [...MOCK_SIMS]
+}
+
+export async function createSimAccount(data: Partial<SimAccount>): Promise<SimAccount> {
+  await new Promise((r) => setTimeout(r, 300))
+  const sim: SimAccount = {
+    id: nextSimId++,
+    carrier: data.carrier ?? '',
+    iccid: data.iccid ?? '',
+    phone_number: data.phone_number ?? '',
+    bundle_size_mb: data.bundle_size_mb ?? 500,
+    usage_mb: 0,
+    expiry_date: data.expiry_date ?? '',
+    status: 'active',
+    station_id: null,
+  }
+  MOCK_SIMS.push(sim)
+  return sim
+}
+
+export async function assignSimToStation(simId: number, stationId: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, 200))
+  const sim = MOCK_SIMS.find((s) => s.id === simId)
+  if (!sim) throw new Error('SIM not found')
+  const prev = MOCK_SIMS.find((s) => s.station_id === stationId)
+  if (prev) prev.station_id = null
+  sim.station_id = stationId
+  const station = MOCK_STATIONS.find((s) => s.id === stationId)
+  if (station) station.sim_id = simId
+}
+
+export async function unassignSimFromStation(simId: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, 200))
+  const sim = MOCK_SIMS.find((s) => s.id === simId)
+  if (!sim) throw new Error('SIM not found')
+  const station = MOCK_STATIONS.find((s) => s.sim_id === simId)
+  if (station) station.sim_id = null
+  sim.station_id = null
+}
+
+/* ── User CRUD ── */
+
+export async function fetchUsers(): Promise<UserAccount[]> {
+  await new Promise((r) => setTimeout(r, 300 + Math.random() * 200))
+  return [...MOCK_USERS]
+}
+
+export async function createUser(data: Partial<UserAccount>): Promise<UserAccount> {
+  await new Promise((r) => setTimeout(r, 300 + Math.random() * 200))
+  const user: UserAccount = {
+    id: nextUserId++,
+    name: data.name ?? '',
+    email: data.email ?? '',
+    role: data.role ?? 'analyst',
+    status: 'invited',
+    last_login: null,
+    created_at: new Date().toISOString(),
+  }
+  MOCK_USERS.push(user)
+  return user
+}
+
+export async function updateUser(id: number, data: Partial<UserAccount>): Promise<UserAccount> {
+  await new Promise((r) => setTimeout(r, 300))
+  const idx = MOCK_USERS.findIndex((u) => u.id === id)
+  if (idx === -1) throw new Error('User not found')
+  MOCK_USERS[idx] = { ...MOCK_USERS[idx], ...data }
+  return MOCK_USERS[idx]
+}
+
+export async function disableUser(id: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, 200))
+  const idx = MOCK_USERS.findIndex((u) => u.id === id)
+  if (idx === -1) throw new Error('User not found')
+  MOCK_USERS[idx].status = 'disabled'
+}
+
+export async function deleteUser(id: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, 200))
+  const idx = MOCK_USERS.findIndex((u) => u.id === id)
+  if (idx === -1) throw new Error('User not found')
+  MOCK_USERS.splice(idx, 1)
+}
+
+/* ─────────────────────────────────────────────
+   SIM Management — types & mock data
+   ───────────────────────────────────────────── */
+
+export interface TopUpRecord {
+  id: number
+  sim_id: number
+  amount_mb: number
+  added_by: string
+  note: string
+  created_at: string
+  new_total_mb: number
+}
+
+export interface DailyUsage {
+  date: string
+  usage_mb: number
+}
+
+export interface SimManagementData {
+  sim: SimAccount
+  station_name: string | null
+  station_id: number | null
+  estimated_days_remaining: number | null
+  projected_expiry_date: string | null
+  forecast_confidence_note: string
+  daily_usage: DailyUsage[]
+  top_up_history: TopUpRecord[]
+}
+
+export interface SimFleetSummary {
+  total_active: number
+  expiring_soon_count: number
+  expiring_soon_threshold_days: number
+  expired_count: number
+  total_remaining_mb: number
+}
+
+/* ── In-memory mock SIM management data ── */
+
+let nextTopUpId = 100
+
+const SIM_USERS = ['Sarah Kintu', 'James Opondo', 'Grace Nabatanzi']
+
+function generateDailyUsage(baseDailyMb: number, days: number): DailyUsage[] {
+  const now = Date.now()
+  const result: DailyUsage[] = []
+  for (let i = days; i >= 1; i--) {
+    const date = new Date(now - i * 86400000).toISOString().slice(0, 10)
+    const jitter = (Math.random() - 0.3) * baseDailyMb * 0.6
+    const spike = Math.random() < 0.08 ? baseDailyMb * (1 + Math.random() * 2) : 0
+    result.push({ date, usage_mb: parseFloat((baseDailyMb + jitter + spike).toFixed(2)) })
+  }
+  return result
+}
+
+function generateTopUpHistory(simId: number, bundleSize: number, totalTopUps: number): TopUpRecord[] {
+  const history: TopUpRecord[] = []
+  let runningTotal = bundleSize
+  for (let i = 0; i < totalTopUps; i++) {
+    const amount = 200 + Math.round(Math.random() * 800)
+    runningTotal += amount
+    history.push({
+      id: nextTopUpId++,
+      sim_id: simId,
+      amount_mb: amount,
+      added_by: SIM_USERS[i % SIM_USERS.length],
+      note: i === 0 ? 'Monthly top-up' : 'Emergency top-up — low balance',
+      created_at: new Date(Date.now() - (totalTopUps - i) * 25 * 86400000).toISOString(),
+      new_total_mb: runningTotal,
+    })
+  }
+  return history
+}
+
+function calcDaysRemaining(sim: SimAccount): number | null {
+  if (sim.bundle_size_mb <= 0 || sim.status !== 'active') return null
+  const remaining = sim.bundle_size_mb - sim.usage_mb
+  if (remaining <= 0) return 0
+  const dailyUsage = sim.usage_mb / 30
+  if (dailyUsage <= 0) return null
+  return Math.round(remaining / dailyUsage)
+}
+
+/* ── Lazy-init cache (module-level, survives within-session refreshes) ── */
+
+let cachedSimMgmt: SimManagementData[] | null = null
+
+function buildSimManagementData(): SimManagementData[] {
+  return MOCK_SIMS.map((sim) => {
+    const station = MOCK_STATIONS.find((s) => s.sim_id === sim.id)
+    const baseDaily = sim.usage_mb > 0 ? sim.usage_mb / 30 : 5
+    const days = sim.status === 'active' ? calcDaysRemaining(sim) : null
+    const remaining = sim.bundle_size_mb - sim.usage_mb
+    let projectedDate: string | null = null
+    if (days !== null && days > 0 && remaining > 0) {
+      projectedDate = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10)
+    }
+
+    const confidenceNote =
+      days === null
+        ? 'Insufficient usage data to project depletion'
+        : remaining <= 0
+          ? 'Bundle is exhausted'
+          : days <= 7
+            ? 'Based on the last 7 days of usage — high confidence (near-term)'
+            : 'Based on the last 30 days of usage — estimate may shift with seasonal changes'
+
+    return {
+      sim,
+      station_name: station?.name ?? null,
+      station_id: station?.id ?? null,
+      estimated_days_remaining: days,
+      projected_expiry_date: projectedDate,
+      forecast_confidence_note: confidenceNote,
+      daily_usage: generateDailyUsage(baseDaily, 60),
+      top_up_history: generateTopUpHistory(sim.id, sim.bundle_size_mb, Math.floor(Math.random() * 4)),
+    }
+  })
+}
+
+function getSimManagementData(): SimManagementData[] {
+  if (!cachedSimMgmt) cachedSimMgmt = buildSimManagementData()
+  return cachedSimMgmt
+}
+
+const EXPIRING_SOON_THRESHOLD_DAYS = 7
+
+/* ── Public API ── */
+
+export async function fetchSimManagementData(): Promise<{
+  sims: SimManagementData[]
+  summary: SimFleetSummary
+}> {
+  await new Promise((r) => setTimeout(r, 250 + Math.random() * 150))
+  const list = getSimManagementData()
+
+  const active = list.filter((s) => s.sim.status === 'active')
+  const totalActive = active.length
+  const totalRemaining = active.reduce((sum, s) => sum + Math.max(0, s.sim.bundle_size_mb - s.sim.usage_mb), 0)
+  const expiringSoon = active.filter(
+    (s) => s.estimated_days_remaining !== null && s.estimated_days_remaining <= EXPIRING_SOON_THRESHOLD_DAYS && s.estimated_days_remaining >= 0,
+  )
+  const expired = list.filter(
+    (s) =>
+      s.estimated_days_remaining === 0 ||
+      (s.sim.expiry_date && new Date(s.sim.expiry_date) < new Date()),
+  )
+
+  return {
+    sims: list,
+    summary: {
+      total_active: totalActive,
+      expiring_soon_count: expiringSoon.length,
+      expiring_soon_threshold_days: EXPIRING_SOON_THRESHOLD_DAYS,
+      expired_count: expired.length,
+      total_remaining_mb: totalRemaining,
+    },
+  }
+}
+
+export async function topUpSim(
+  simId: number,
+  amountMb: number,
+  note: string,
+): Promise<SimManagementData> {
+  await new Promise((r) => setTimeout(r, 400 + Math.random() * 200))
+
+  const data = getSimManagementData()
+  const entry = data.find((d) => d.sim.id === simId)
+  if (!entry) throw new Error('SIM not found')
+  if (entry.sim.status !== 'active') throw new Error('Cannot top up an inactive SIM')
+
+  /* Update in-memory SIM account */
+  const mockSim = MOCK_SIMS.find((s) => s.id === simId)
+  if (mockSim) {
+    mockSim.bundle_size_mb += amountMb
+  }
+
+  entry.sim.bundle_size_mb += amountMb
+  const remaining = entry.sim.bundle_size_mb - entry.sim.usage_mb
+  const newDays = remaining > 0
+    ? Math.round(remaining / Math.max(1, entry.sim.usage_mb / 30))
+    : 0
+
+  const topUp: TopUpRecord = {
+    id: nextTopUpId++,
+    sim_id: simId,
+    amount_mb: amountMb,
+    added_by: 'Sarah Kintu',
+    note,
+    created_at: new Date().toISOString(),
+    new_total_mb: entry.sim.bundle_size_mb,
+  }
+
+  entry.top_up_history = [...entry.top_up_history, topUp]
+  entry.estimated_days_remaining = newDays
+  entry.projected_expiry_date = newDays > 0
+    ? new Date(Date.now() + newDays * 86400000).toISOString().slice(0, 10)
+    : null
+
+  return entry
+}
