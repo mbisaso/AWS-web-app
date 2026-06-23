@@ -1,90 +1,32 @@
-const summaryCards = [
-  {
-    title: 'Fully transmitting',
-    count: '12',
-    description: 'Stations reporting on schedule',
-    tone: 'bg-emerald-50 text-emerald-700',
-  },
-  {
-    title: 'Partial transmission',
-    count: '03',
-    description: 'Stations with delayed readings',
-    tone: 'bg-amber-50 text-amber-700',
-  },
-  {
-    title: 'Totally down',
-    count: '01',
-    description: 'Stations without recent data',
-    tone: 'bg-rose-50 text-rose-700',
-  },
-]
+import { Sidebar } from '../components/Sidebar'
+import { mockStationSummaries } from '../data/stations'
+import type { StationOperationalStatus } from '../types'
 
-const stations = [
-  {
-    code: 'AWS-001',
-    name: 'Rukungiri Ridge',
-    status: 'Online',
-    updated: '2 min ago',
-  },
-  {
-    code: 'AWS-014',
-    name: 'Lake Victoria East',
-    status: 'Partial',
-    updated: '11 min ago',
-  },
-  {
-    code: 'AWS-027',
-    name: 'Karamoja Basin',
-    status: 'Down',
-    updated: '42 min ago',
-  },
-  {
-    code: 'AWS-031',
-    name: 'Mount Elgon Gate',
-    status: 'Online',
-    updated: '5 min ago',
-  },
-]
+const STATUS_LABELS: Record<StationOperationalStatus, { title: string; tone: string; description: string }> = {
+  full: { title: 'Fully transmitting', tone: 'bg-emerald-50 text-emerald-700', description: 'Stations reporting on schedule' },
+  partial: { title: 'Partial transmission', tone: 'bg-amber-50 text-amber-700', description: 'Stations with delayed readings' },
+  down: { title: 'Totally down', tone: 'bg-rose-50 text-rose-700', description: 'Stations without recent data' },
+}
+
+const STATUS_BADGE: Record<StationOperationalStatus, string> = {
+  full: 'bg-emerald-50 text-emerald-700',
+  partial: 'bg-amber-50 text-amber-700',
+  down: 'bg-rose-50 text-rose-700',
+}
 
 export function DashboardPage() {
+  const counts = mockStationSummaries.reduce(
+    (acc, station) => {
+      acc[station.status] += 1
+      return acc
+    },
+    { full: 0, partial: 0, down: 0 } as Record<StationOperationalStatus, number>
+  )
+
   return (
     <div className="min-h-screen bg-[#f2f6fa] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
-        <aside className="hidden w-[290px] shrink-0 border-r border-slate-200 bg-[#1a2332] px-5 py-6 text-white lg:flex lg:flex-col">
-          <div className="flex items-center gap-3 border-b border-white/10 pb-6">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#0a6ebd] text-lg font-black text-white">A</div>
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-100">AWS Monitor</p>
-              <p className="text-xs text-slate-300">Dashboard</p>
-            </div>
-          </div>
-
-          <nav className="mt-6 space-y-2 text-sm">
-            <a className="flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 font-medium text-white" href="/dashboard">
-              <span>Dashboard</span>
-            </a>
-            <a className="flex items-center gap-3 rounded-2xl px-4 py-3 text-slate-300 transition hover:bg-white/5 hover:text-white" href="#">
-              <span>Weather data</span>
-            </a>
-            <a className="flex items-center gap-3 rounded-2xl px-4 py-3 text-slate-300 transition hover:bg-white/5 hover:text-white" href="#">
-              <span>Power data</span>
-            </a>
-            <a className="flex items-center gap-3 rounded-2xl px-4 py-3 text-slate-300 transition hover:bg-white/5 hover:text-white" href="#">
-              <span>Set sleep time</span>
-            </a>
-            <a className="flex items-center gap-3 rounded-2xl px-4 py-3 text-slate-300 transition hover:bg-white/5 hover:text-white" href="#">
-              <span>Weather analysis</span>
-            </a>
-          </nav>
-
-          <div className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-4">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Signed in as</p>
-            <p className="mt-2 text-lg font-semibold text-white">Admin</p>
-            <a className="mt-4 inline-flex text-sm font-medium text-sky-200 hover:text-white" href="/">
-              Log out
-            </a>
-          </div>
-        </aside>
+        <Sidebar />
 
         <main className="flex-1 px-5 py-5 sm:px-6 lg:px-8">
           <div className="rounded-[28px] border border-slate-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.06)]">
@@ -103,11 +45,13 @@ export function DashboardPage() {
               <section>
                 <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Station summary</div>
                 <div className="grid gap-4 md:grid-cols-3">
-                  {summaryCards.map((card) => (
-                    <article key={card.title} className="rounded-[28px] border border-slate-200 bg-[#f8fafc] p-5">
-                      <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${card.tone}`}>{card.count}</div>
-                      <h2 className="mt-4 text-xl font-semibold text-[#1a2332]">{card.title}</h2>
-                      <p className="mt-2 text-sm leading-7 text-slate-600">{card.description}</p>
+                  {(Object.keys(STATUS_LABELS) as StationOperationalStatus[]).map((status) => (
+                    <article key={status} className="rounded-[28px] border border-slate-200 bg-[#f8fafc] p-5">
+                      <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${STATUS_LABELS[status].tone}`}>
+                        {String(counts[status]).padStart(2, '0')}
+                      </div>
+                      <h2 className="mt-4 text-xl font-semibold text-[#1a2332]">{STATUS_LABELS[status].title}</h2>
+                      <p className="mt-2 text-sm leading-7 text-slate-600">{STATUS_LABELS[status].description}</p>
                     </article>
                   ))}
                 </div>
@@ -117,26 +61,18 @@ export function DashboardPage() {
                 <div>
                   <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">All stations</div>
                   <div className="grid gap-4 md:grid-cols-2">
-                    {stations.map((station) => (
-                      <article key={station.code} className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+                    {mockStationSummaries.map((station) => (
+                      <article key={station.stationId} className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
                         <div className="flex items-start justify-between gap-4">
                           <div>
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{station.code}</p>
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{station.stationId}</p>
                             <h3 className="mt-2 text-lg font-semibold text-[#1a2332]">{station.name}</h3>
                           </div>
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                              station.status === 'Online'
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : station.status === 'Partial'
-                                  ? 'bg-amber-50 text-amber-700'
-                                  : 'bg-rose-50 text-rose-700'
-                            }`}
-                          >
-                            {station.status}
+                          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGE[station.status]}`}>
+                            {station.status === 'full' ? 'Online' : station.status === 'partial' ? 'Partial' : 'Down'}
                           </span>
                         </div>
-                        <p className="mt-4 text-sm text-slate-500">Last update: {station.updated}</p>
+                        <p className="mt-4 text-sm text-slate-500">Last update: {station.lastUpdated}</p>
                       </article>
                     ))}
                   </div>
