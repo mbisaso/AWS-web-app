@@ -8,6 +8,7 @@ import { PowerStationSelector } from '../components/powerData/PowerStationSelect
 import { PowerStatusCard } from '../components/powerData/PowerStatusCard'
 import { PowerHistoricalChart } from '../components/powerData/PowerHistoricalChart'
 import { PowerReadingsTable } from '../components/powerData/PowerReadingsTable'
+import { PowerSummaryCharts } from '../components/powerData/PowerSummaryCharts'
 
 const SECONDARY_MAP: Partial<Record<PowerMetricType, PowerMetricType>> = {
   battery_level: 'voltage',
@@ -147,6 +148,15 @@ export function PowerDataPage() {
         {/* ── Readings table ── */}
         <section aria-label="Power readings data table">
           <PowerReadingsTable
+            readings={readings}
+            metric={metric}
+            isLoading={chartIsLoading}
+          />
+        </section>
+
+        {/* ── Summary charts (cross-station overview) ── */}
+        <section aria-label="Power summary" className="mt-6">
+          <PowerSummaryCharts
             readings={readings}
             metric={metric}
             isLoading={chartIsLoading}
