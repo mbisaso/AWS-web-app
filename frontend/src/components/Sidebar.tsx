@@ -1,4 +1,5 @@
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 const COMING_SOON_ITEMS = ['Weather data', 'Power data', 'Set sleep time', 'Weather analysis']
 
@@ -7,6 +8,14 @@ interface SidebarProps {
 }
 
 export function Sidebar({ userLabel = 'Admin' }: SidebarProps) {
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    logout()
+    navigate('/')
+  }
+
   return (
     <aside className="hidden w-[290px] shrink-0 border-r border-slate-200 bg-[#1a2332] px-5 py-6 text-white lg:flex lg:flex-col">
       <div className="flex items-center gap-3 border-b border-white/10 pb-6">
@@ -42,9 +51,12 @@ export function Sidebar({ userLabel = 'Admin' }: SidebarProps) {
       <div className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-4">
         <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Signed in as</p>
         <p className="mt-2 text-lg font-semibold text-white">{userLabel}</p>
-        <Link className="mt-4 inline-flex text-sm font-medium text-sky-200 hover:text-white" to="/">
+        <button
+          onClick={handleLogout}
+          className="mt-4 inline-flex text-sm font-medium text-sky-200 hover:text-white"
+        >
           Log out
-        </Link>
+        </button>
       </div>
     </aside>
   )
