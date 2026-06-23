@@ -4,14 +4,51 @@ from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils.dateparse import parse_datetime
 
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 
 from .models import Station, StationStatus, SensorReading
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.authentication import JWTAuthentication
+
+from .serializers import (
+    SensorReadingSerializer,
+    SensorReadingLatestSerializer,
+    SensorReadingChartSerializer,
+    PowerChartSerializer,
+    StationSerializer,
+)
 
 import math
 
+def api_response(data=None, message=None, error=None, status_code=200):
+    """
+    Standard response format for all API endpoints.
+    React always gets the same structure — easy to handle.
+
+    Success:
+    {
+        "success": true,
+        "message": "optional message",
+        "data": { ... }
+    }
+
+    Error:
+    {
+        "success": false,
+        "error": "what went wrong"
+    }
+    """
+    if error:
+        return Response(
+            {'success': False, 'error': error},
+            status=status_code
+        )
+    return Response(
+        {'success': True, 'message': message, 'data': data},
+        status=status_code
+    )
 
 # ─────────────────────────────────────────────────────────
 # Existing views (unchanged)
@@ -118,7 +155,9 @@ def get_or_none(station_code):
 # API: Ingest endpoint — ESP32 posts data here
 # ─────────────────────────────────────────────────────────
 
+# Ingest — AllowAny so ESP32 can post without login
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def ingest(request):
     """
     Receives sensor data from the ESP32 via GSM POST request.
@@ -152,7 +191,7 @@ def ingest(request):
         if timestamp is None:
             return Response(
                 {'error': 'Could not parse timestamp from raw string'},
-                status=status.HTTP_400_BAD_REQUEST
+                status_code=400
             )
 
         reading = SensorReading(
@@ -181,9 +220,9 @@ def ingest(request):
     else:
         timestamp = parse_datetime(str(data.get('timestamp', '')))
         if timestamp is None:
-            return Response(
+            return api_response(
                 {'error': 'timestamp is required and must be ISO format'},
-                status=status.HTTP_400_BAD_REQUEST
+                status_code=400
             )
 
         reading = SensorReading(
@@ -220,9 +259,9 @@ def ingest(request):
             }
         )
 
-    return Response(
+    return api_response(
         {'status': 'ok', 'id': reading.id},
-        status=status.HTTP_201_CREATED
+        status_code=201
     )
 
 
@@ -231,95 +270,85 @@ def ingest(request):
 # ─────────────────────────────────────────────────────────
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def stations_list(request):
+    """
+    Returns all registered stations with their current status.
+    Used by React sidebar/station selector.
+    """
+    stations = Station.objects.select_related('status').all()
+    serializer = StationSerializer(stations, many=True)
+    return api_response(data=serializer.data)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def latest(request):
-    """
-    Returns the most recent reading for every station.
-    Used by the React dashboard to show current conditions.
-    """
-    # Get distinct station_ids and their latest reading
     station_codes = SensorReading.objects.values_list(
         'station_code', flat=True
     ).distinct()
 
     results = []
-    for sid in station_codes:
+    for code in station_codes:
         reading = SensorReading.objects.filter(
-            station_code=sid
+            station_code=code
         ).order_by('-timestamp').first()
-
         if reading:
-            results.append({
-                'station_code':   reading.station_code,
-                'timestamp':      reading.timestamp,
-                'received_at':    reading.received_at,
-                'temperature':    reading.temperature,
-                'humidity':       reading.humidity,
-                'pressure':       reading.pressure,
-                'altitude':       reading.altitude,
-                'light':          reading.light,
-                'soil_moisture':  reading.soil_moisture,
-                'rain':           reading.rain,
-                'wind_speed':     reading.wind_speed,
-                'wind_direction': reading.wind_direction,
-                'volt_3v3':       reading.volt_3v3,
-                'volt_5v':        reading.volt_5v,
-                'volt_batt':      reading.volt_batt,
-                'volt_solar':     reading.volt_solar,
-                'volt_dc':        reading.volt_dc,
-                'curr_batt':      reading.curr_batt,
-                'curr_solar':     reading.curr_solar,
-            })
+            results.append(SensorReadingLatestSerializer(reading).data)
 
-    return Response(results)
-
-
+    return api_response(data=results)
 # ─────────────────────────────────────────────────────────
 # API: Historical readings for a station
 # ─────────────────────────────────────────────────────────
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def history(request, station_id):
-    """
-    Returns historical readings for a specific station.
-    Used by React charts.
-
-    Query params:
-    ?hours=24       → last 24 hours (default)
-    ?hours=168      → last 7 days
-    ?limit=100      → max rows returned (default 200)
-
-    Example:
-    GET /api/stations/AWS-UG-001/history/?hours=24
-    """
     from django.utils import timezone
     from datetime import timedelta
 
-    hours = int(request.query_params.get('hours', 24))
-    limit = int(request.query_params.get('limit', 200))
-    since = timezone.now() - timedelta(hours=hours)
+    hours      = int(request.query_params.get('hours', 24))
+    limit      = int(request.query_params.get('limit', 200))
+    chart_type = request.query_params.get('type', 'sensor')
+    since      = timezone.now() - timedelta(hours=hours)
 
     readings = SensorReading.objects.filter(
         station_code=station_id,
         timestamp__gte=since
     ).order_by('timestamp')[:limit]
 
-    results = [
-        {
-            'timestamp':      r.timestamp,
-            'temperature':    r.temperature,
-            'humidity':       r.humidity,
-            'pressure':       r.pressure,
-            'light':          r.light,
-            'soil_moisture':  r.soil_moisture,
-            'rain':           r.rain,
-            'wind_speed':     r.wind_speed,
-            'wind_direction': r.wind_direction,
-            'volt_batt':      r.volt_batt,
-            'volt_solar':     r.volt_solar,
-            'curr_batt':      r.curr_batt,
-            'curr_solar':     r.curr_solar,
-        }
-        for r in readings
-    ]
+    if chart_type == 'power':
+        serializer = PowerChartSerializer(readings, many=True)
+    else:
+        serializer = SensorReadingChartSerializer(readings, many=True)
 
-    return Response(results)
+    return api_response(data={
+        'station_id': station_id,
+        'hours':      hours,
+        'count':      readings.count(),
+        'readings':   serializer.data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def station_detail(request, station_id):
+    try:
+        station = Station.objects.select_related('status').get(
+            station_id=station_id
+        )
+    except Station.DoesNotExist:
+        return api_response(
+            error=f'Station {station_id} not found',
+            status_code=404
+        )
+
+    latest_reading = SensorReading.objects.filter(
+        station_code=station_id
+    ).order_by('-timestamp').first()
+
+    return api_response(data={
+        'station':        StationSerializer(station).data,
+        'latest_reading': SensorReadingLatestSerializer(
+                            latest_reading
+                          ).data if latest_reading else None,
+    })
