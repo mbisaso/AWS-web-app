@@ -1,10 +1,120 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import 'tailwindcss';
+
+@theme {
+  /* ── Weather-inspired color palette ── */
+  --color-sky-soft: #F0F9FF;
+  --color-sky-mist: #E0F2FE;
+  --color-sky-light: #BAE6FD;
+  --color-sky-bright: #38BDF8;
+  --color-sky-primary: #0EA5E9;
+  --color-sky-deep: #0369A1;
+  --color-sky-night: #0C4A6E;
+  --color-ocean: #1E3A5F;
+  --color-sunset: #F97316;
+  --color-sunset-light: #FED7AA;
+  --color-sunset-glow: #FDE68A;
+  --color-emerald: #22C55E;
+  --color-emerald-deep: #059669;
+  --color-storm: #334155;
+  --color-midnight: #0F172A;
+  --color-surface: #FFFFFF;
+  --color-mist: #F8FAFC;
+
+  /* ── Custom font family token ── */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+
+  /* ── Custom animations ── */
+  --animate-fade-in-up: fade-in-up 0.6s ease-out forwards;
+  --animate-fade-in-up-slow: fade-in-up 0.9s ease-out forwards;
+  --animate-float-drift: float-drift 8s ease-in-out infinite;
+  --animate-float-drift-slow: float-drift 6s ease-in-out infinite;
+  --animate-float-drift-slower: float-drift 10s ease-in-out infinite;
+  --animate-gradient-shift: gradient-shift 15s ease infinite;
+  --animate-pulse-soft: pulse-soft 3s ease-in-out infinite;
+  --animate-shimmer: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes float-drift {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+  }
+  33% {
+    transform: translateY(-10px) translateX(6px);
+  }
+  66% {
+    transform: translateY(-4px) translateX(-6px);
+  }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  25% { background-position: 50% 0%; }
+  50% { background-position: 100% 50%; }
+  75% { background-position: 50% 100%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes float-rotate {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(180deg); }
+}
+
+@keyframes radar-sweep {
+  0% { transform: rotate(0deg); opacity: 0.4; }
+  100% { transform: rotate(360deg); opacity: 0; }
+}
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@utility animation-delay-100 {
+  animation-delay: 100ms;
+}
+@utility animation-delay-200 {
+  animation-delay: 200ms;
+}
+@utility animation-delay-300 {
+  animation-delay: 300ms;
+}
+@utility animation-delay-400 {
+  animation-delay: 400ms;
+}
+@utility animation-delay-500 {
+  animation-delay: 500ms;
+}
+@utility animation-delay-700 {
+  animation-delay: 700ms;
+}
 
 :root {
   font-family: 'Inter', sans-serif;
-  color: #e2e8f0;
-  background: #020617;
+  color: #0F172A;
+  background: #FFFFFF;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -18,10 +128,7 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  background:
-    radial-gradient(circle at top left, rgba(14, 165, 233, 0.2), transparent 32%),
-    radial-gradient(circle at top right, rgba(16, 185, 129, 0.16), transparent 28%),
-    linear-gradient(180deg, #020617 0%, #020617 45%, #0f172a 100%);
+  background: #FFFFFF;
 }
 
 * {
@@ -33,10 +140,21 @@ body {
 }
 
 ::selection {
-  background: rgba(34, 211, 238, 0.28);
-  color: #f8fafc;
+  background: rgba(14, 165, 233, 0.2);
+  color: #0C4A6E;
 }
 
 .font-display {
   font-family: 'Space Grotesk', sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  html {
+    scroll-behavior: auto;
+  }
 }

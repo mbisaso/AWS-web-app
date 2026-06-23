@@ -11,6 +11,11 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+import dj_database_url
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,21 +25,27 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-1j9^g8g7l!+!moagn4zvs)^+$kx2$aau7@bo*!n+14r%ro4jqt'
-
+SECRET_KEY = os.environ.get('SECRET_KEY', '26k@jq%=17n(r86e^atmailv0e&yjfc%qh@2w$*2)6+8onbt*!*')
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = [
      'localhost',
     '127.0.0.1',
+    '.trycloudflare.com', 
+    '.lhr.life', 
      '.ngrok-free.dev',    # ← add this
     '.ngrok-free.app',
+    '.onrender.com',
 ]
 
 CSRF_TRUSTED_ORIGINS = [
+    'https://*.trycloudflare.com',
+    'https://*.lhr.life',
     'https://*.ngrok-free.dev',
     'https://*.ngrok-free.app',
+    'https://*.onrender.com',
 ]
 
 # Application definition
@@ -47,11 +58,20 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'corsheaders',
     'accounts',
     'stations',
     'rest_framework_simplejwt',
     'corsheaders',
 ]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",   # ← Vite dev server
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 
 # ── REST Framework config ─────────────────────────────
 REST_FRAMEWORK = {
@@ -80,6 +100,7 @@ LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware', 
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -88,6 +109,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', 
+    
 ]
 
 ROOT_URLCONF = 'aws_dashboard.urls'
@@ -114,16 +137,10 @@ WSGI_APPLICATION = 'aws_dashboard.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'aws-db',        # ← must match exactly including hyphen
-        'USER': 'aws_user',
-        'PASSWORD': 'aws@2026',  
-        'HOST': 'localhost',
-        'PORT': '5432',        # Default PostgreSQL port. Change this if your instance runs on a different port (e.g. 5433).
-    }
+    'default': dj_database_url.config(
+        default='postgresql://postgres:aws@2026@localhost:5433/aws_db'
+    )
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -149,7 +166,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Africa/Kampala'  # EAT UTC+3
 
 USE_I18N = True
 
@@ -159,6 +176,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATIC_URL = 'static/'
 
 # Default primary key field type

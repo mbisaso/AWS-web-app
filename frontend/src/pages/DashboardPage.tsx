@@ -54,7 +54,7 @@ export function DashboardPage() {
               <div className="flex items-center gap-3 text-sm text-slate-500">
                 <span className="rounded-full bg-sky-50 px-3 py-1 font-medium text-[#0a6ebd]">All stations</span>
               </div>
-            </div>
+            </section>
 
             <div className="space-y-8 px-6 py-6">
               {isLoading && <p className="text-sm text-slate-500">Loading stations…</p>}
@@ -121,8 +121,8 @@ export function DashboardPage() {
               )}
             </div>
           </div>
-        </main>
-      </div>
+        )}
+      </main>
     </div>
   )
 }
