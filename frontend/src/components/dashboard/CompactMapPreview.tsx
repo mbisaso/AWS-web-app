@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { type StationReading } from '../../services/api'
 import { MapPinIcon } from '../landing/Icons'
 
@@ -26,12 +27,17 @@ function toSvgCoord(lat: number, lng: number) {
 }
 
 export function CompactMapPreview({ stations }: CompactMapPreviewProps) {
+  const navigate = useNavigate()
   const placedStations = stations.filter((s) => s.latitude && s.longitude)
 
   return (
     <section
-      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs"
+      className="group cursor-pointer rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition-all duration-200 hover:shadow-md hover:border-sky-200"
       aria-label="Station map preview"
+      onClick={() => navigate('/stations/map')}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') navigate('/stations/map') }}
+      tabIndex={0}
+      role="button"
     >
       <div className="flex items-center justify-between">
         <div>
@@ -42,14 +48,10 @@ export function CompactMapPreview({ stations }: CompactMapPreviewProps) {
             Network overview
           </h3>
         </div>
-        <a
-          href="#"
-          className="inline-flex items-center gap-1 text-xs font-medium text-sky-primary transition-colors duration-200 hover:text-sky-deep cursor-pointer"
-          aria-label="View full station map"
-        >
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-sky-primary transition-colors duration-200 group-hover:text-sky-deep cursor-pointer">
           View full map
           <MapPinIcon className="h-3.5 w-3.5" />
-        </a>
+        </span>
       </div>
 
       {/* Mini SVG map */}

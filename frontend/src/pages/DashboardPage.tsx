@@ -94,33 +94,13 @@ export function DashboardPage() {
 
   /* ── Main dashboard ── */
   return (
-    <div className="flex min-h-screen flex-col bg-mist lg:flex-row">
-      {/* Subtle background texture */}
-      <div
-        className="pointer-events-none fixed inset-0 opacity-[0.015"
-        style={{
-          backgroundImage:
-            'radial-gradient(circle at 1px 1px, #0F172A 1px, transparent 0)',
-          backgroundSize: '28px 28px',
-        }}
-        aria-hidden="true"
-      />
-
+    <div className="flex min-h-screen flex-col bg-mist lg:h-screen lg:flex-row">
       <DashboardSidebar />
 
-      <main className="relative flex-1 min-w-0 px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
+      <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header with subtle gradient ── */}
         <div className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-midnight to-ocean p-6 shadow-md sm:p-8">
-          <div
-            className="pointer-events-none absolute inset-0 opacity-[0.04]"
-            style={{
-              backgroundImage:
-                'radial-gradient(circle at 1px 1px, #FFFFFF 1px, transparent 0)',
-              backgroundSize: '24px 24px',
-            }}
-            aria-hidden="true"
-          />
-          <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300">
                 Dashboard
@@ -283,48 +263,57 @@ export function DashboardPage() {
 
               {/* Desktop table */}
               <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs max-md:hidden">
-                <table className="w-full" role="table" aria-label="Station readings">
+                <table className="w-full table-fixed" role="table" aria-label="Station readings">
+                  <colgroup>
+                    <col className="w-[22%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[11%]" />
+                    <col className="w-[22%]" />
+                  </colgroup>
                   <thead>
                     <tr className="border-b border-slate-100 bg-slate-50/50">
                       <th
                         scope="col"
-                        className="py-3 pr-4 pl-5 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
+                        className="py-3.5 pl-5 pr-2 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
                       >
                         Station
                       </th>
                       <th
                         scope="col"
-                        className="py-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
+                        className="py-3.5 px-2 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
                       >
                         Status
                       </th>
                       <th
                         scope="col"
-                        className="py-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
+                        className="py-3.5 px-2 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
                       >
                         Temp
                       </th>
                       <th
                         scope="col"
-                        className="py-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
+                        className="py-3.5 px-2 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
                       >
                         Humidity
                       </th>
                       <th
                         scope="col"
-                        className="py-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
+                        className="py-3.5 px-2 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
                       >
                         Rainfall
                       </th>
                       <th
                         scope="col"
-                        className="py-3 pr-4 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
+                        className="py-3.5 px-2 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
                       >
                         Wind
                       </th>
                       <th
                         scope="col"
-                        className="py-3 pr-5 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
+                        className="py-3.5 pl-2 pr-5 text-left text-[11px] font-semibold uppercase tracking-wider text-storm/40"
                       >
                         Last seen
                       </th>

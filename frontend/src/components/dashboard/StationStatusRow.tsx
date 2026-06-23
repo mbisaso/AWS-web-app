@@ -19,20 +19,18 @@ export function StationStatusRow({ station }: StationStatusRowProps) {
         role="row"
         aria-label={`${station.name} — ${station.status}`}
       >
-        <td className="py-3.5 pr-4" role="cell">
-          <div className="flex items-center gap-2">
-            <div>
-              <p className="text-sm font-semibold text-midnight">{station.name}</p>
-              <p className="text-xs text-storm/40">{station.station_code}</p>
-            </div>
+        <td className="py-3.5 pl-5 pr-2" role="cell">
+          <div className="truncate">
+            <p className="truncate text-sm font-semibold text-midnight">{station.name}</p>
+            <p className="text-xs text-storm/40">{station.station_code}</p>
           </div>
         </td>
 
-        <td className="py-3.5 pr-4" role="cell">
+        <td className="py-3.5 px-2" role="cell">
           <StatusBadge status={station.status} />
         </td>
 
-        <td className="py-3.5 pr-4" role="cell">
+        <td className="py-3.5 px-2" role="cell">
           {station.temperature ? (
             <span className="text-sm font-medium tabular-nums text-midnight">
               {station.temperature.value.toFixed(1)}
@@ -43,7 +41,7 @@ export function StationStatusRow({ station }: StationStatusRowProps) {
           )}
         </td>
 
-        <td className="py-3.5 pr-4" role="cell">
+        <td className="py-3.5 px-2" role="cell">
           {station.humidity ? (
             <span className="text-sm font-medium tabular-nums text-midnight">
               {station.humidity.value}
@@ -54,7 +52,7 @@ export function StationStatusRow({ station }: StationStatusRowProps) {
           )}
         </td>
 
-        <td className="py-3.5 pr-4" role="cell">
+        <td className="py-3.5 px-2" role="cell">
           {station.rainfall ? (
             <span className="text-sm font-medium tabular-nums text-midnight">
               {station.rainfall.value.toFixed(1)}
@@ -65,7 +63,7 @@ export function StationStatusRow({ station }: StationStatusRowProps) {
           )}
         </td>
 
-        <td className="py-3.5 pr-4" role="cell">
+        <td className="py-3.5 px-2" role="cell">
           {station.wind_speed ? (
             <span className="text-sm font-medium tabular-nums text-midnight">
               {station.wind_speed.value.toFixed(1)}
@@ -76,7 +74,7 @@ export function StationStatusRow({ station }: StationStatusRowProps) {
           )}
         </td>
 
-        <td className="py-3.5" role="cell">
+        <td className="py-3.5 pl-2 pr-5" role="cell">
           <div className="flex items-center gap-2">
             <ClockIcon className="h-3.5 w-3.5 text-storm/30" />
             <span
