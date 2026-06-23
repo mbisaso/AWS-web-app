@@ -8,6 +8,7 @@ import {
   WeatherDataPage,
   PowerDataPage,
   WeatherAnalysisPage,
+  AlertsCenterPage,
 } from './pages'
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
         <Route path="/dashboard/weather-data" element={<WeatherDataPage />} />
         <Route path="/dashboard/power-data" element={<PowerDataPage />} />
         <Route path="/dashboard/weather-analysis" element={<WeatherAnalysisPage />} />
+        <Route path="/dashboard/alerts-center" element={<AlertsCenterPage />} />
         <Route path="/stations/map" element={<StationMapPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

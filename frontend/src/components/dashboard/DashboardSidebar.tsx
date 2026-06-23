@@ -8,7 +8,7 @@ const NAV_ITEMS: { label: string; href: string }[] = [
   { label: 'Power data', href: '/dashboard/power-data' },
   { label: 'Weather analysis', href: '/dashboard/weather-analysis' },
   { label: 'Station map', href: '/stations/map' },
-  { label: 'Alerts center', href: '#' },
+  { label: 'Alerts center', href: '/dashboard/alerts-center' },
   { label: 'Station manager', href: '#' },
 ]
 

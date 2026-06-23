@@ -46,8 +46,45 @@ export interface Alert {
   type: AlertType
   severity: AlertSeverity
   station_name: string
+  station_id: number
   message: string
   timestamp: string
+  is_resolved?: boolean
+  resolved_at?: string
+  resolved_note?: string
+  explanation?: string
+  related_url?: string
+}
+
+export interface AlertFilterParams {
+  severity?: AlertSeverity | 'all'
+  type?: AlertType | 'all'
+  station_id?: number | null
+  status?: 'unresolved' | 'resolved' | 'all'
+  search?: string
+  date_from?: string
+  date_to?: string
+  page?: number
+  page_size?: number
+}
+
+export interface AlertsDataResponse {
+  alerts: Alert[]
+  total: number
+}
+
+export const ALERT_TYPE_LABELS: Record<AlertType, string> = {
+  station_offline: 'Station Offline',
+  sensor_anomaly: 'Sensor Anomaly',
+  sim_expiring: 'SIM Expiry',
+  low_battery: 'Low Battery',
+  threshold_breach: 'Threshold Breach',
+}
+
+export const SEVERITY_CONFIG: Record<AlertSeverity, { label: string; dot: string; text: string; bg: string; border: string }> = {
+  critical: { label: 'Critical', dot: 'bg-rose', text: 'text-rose', bg: 'bg-rose-50/50', border: 'border-rose-200' },
+  warning: { label: 'Warning', dot: 'bg-amber', text: 'text-amber', bg: 'bg-amber-50/50', border: 'border-amber-200' },
+  info: { label: 'Info', dot: 'bg-sky-bright', text: 'text-sky-bright', bg: 'bg-sky-soft/50', border: 'border-sky-light' },
 }
 
 export interface DashboardSummary {
@@ -248,46 +285,60 @@ const STATION_DEFS = [
   },
 ]
 
+/* ── Station-id to station_name lookup ── */
+const STATION_MAP = Object.fromEntries(STATION_DEFS.map((s) => [s.id, `${s.station_code} · ${s.name}`]))
+
+function stationName(id: number): string {
+  return STATION_MAP[id] ?? `Station ${id}`
+}
+
 const ALERT_DEFS: Omit<Alert, 'id'>[] = [
   {
     type: 'station_offline',
     severity: 'critical',
-    station_name: 'AWS-027 · Karamoja Basin',
+    station_name: stationName(3),
+    station_id: 3,
     message: 'No transmission received for over 3 hours. Battery may be depleted.',
     timestamp: minutesAgo(12),
   },
   {
     type: 'sensor_anomaly',
     severity: 'warning',
-    station_name: 'AWS-014 · Lake Victoria East',
+    station_name: stationName(2),
+    station_id: 2,
     message: 'Humidity sensor reporting erratic values (78% → 94% in 5 minutes).',
     timestamp: minutesAgo(28),
+    explanation: 'The humidity sensor at Lake Victoria East exhibited a rapid 16% rise within 5 minutes. This rate of change is 3.8σ above the station\'s typical diurnal variation, suggesting possible sensor condensation or mechanical fault.',
   },
   {
     type: 'sim_expiring',
     severity: 'warning',
-    station_name: 'AWS-035 · Moroto Drylands',
+    station_name: stationName(9),
+    station_id: 9,
     message: 'GSM SIM card expires in 14 days. Please arrange replacement.',
     timestamp: minutesAgo(55),
   },
   {
     type: 'low_battery',
     severity: 'warning',
-    station_name: 'AWS-022 · Gulu Savannah',
+    station_name: stationName(6),
+    station_id: 6,
     message: 'Battery voltage at 11.8V — below nominal operating range (12.0–14.2V).',
     timestamp: minutesAgo(104),
   },
   {
     type: 'threshold_breach',
     severity: 'info',
-    station_name: 'AWS-019 · Kasese Highlands',
+    station_name: stationName(8),
+    station_id: 8,
     message: 'Rainfall exceeded 24h threshold: 48.2mm recorded (limit: 40mm).',
     timestamp: minutesAgo(185),
   },
   {
     type: 'station_offline',
     severity: 'critical',
-    station_name: 'AWS-035 · Moroto Drylands',
+    station_name: stationName(9),
+    station_id: 9,
     message: 'No transmission received for over 7 hours. Station presumed offline.',
     timestamp: minutesAgo(240),
   },
@@ -353,6 +404,178 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   })
   if (!response.ok) {
     throw new Error(`Dashboard API error: ${response.status} ${response.statusText}`)
+  }
+  return response.json()
+  */
+}
+
+/* ─────────────────────────────────────────────
+   Alerts Center types & mock data
+   ───────────────────────────────────────────── */
+
+const ALERT_TEMPLATES: Array<{
+  type: AlertType
+  severity: AlertSeverity
+  station_id: number
+  message: string
+  explanation?: string
+}> = [
+  /* ── Critical: station_offline ── */
+  { type: 'station_offline', severity: 'critical', station_id: 3, message: 'Heartbeat timeout — no response for 3+ hours. Battery may be depleted.' },
+  { type: 'station_offline', severity: 'critical', station_id: 9, message: 'Station presumed offline after 48 missed check-ins over 12 hours.' },
+  { type: 'station_offline', severity: 'critical', station_id: 3, message: 'Communication link lost. Last known battery voltage: 11.2V.' },
+  { type: 'station_offline', severity: 'critical', station_id: 1, message: 'Solar charge controller reported zero input for 48 hours. Battery at critical level.' },
+  { type: 'station_offline', severity: 'critical', station_id: 6, message: 'No transmission received — possible antenna damage after reported storm.' },
+  { type: 'station_offline', severity: 'critical', station_id: 8, message: 'Cellular modem not responding to ping. Network carrier shows no recent connection.' },
+
+  /* ── Warning: sensor_anomaly ── */
+  { type: 'sensor_anomaly', severity: 'warning', station_id: 2, message: 'Humidity reading 4.2 σ above 30-day baseline (78% → 94% in 5 min).', explanation: 'The humidity sensor exhibited a rapid 16% rise within 5 minutes, 4.2 standard deviations above the station\'s typical diurnal variation. Likely causes: condensation on the sensor element or mechanical damage to the radiation shield.' },
+  { type: 'sensor_anomaly', severity: 'warning', station_id: 5, message: 'Temperature sensor reporting 38.5°C — exceeds expected range for this hour by 6.1°C.', explanation: 'The temperature reading of 38.5°C at 14:00 local time is 6.1°C above the historical average for this hour. The model confidence is moderate (p=0.78). Possible causes: direct sunlight exposure due to shield misalignment, or a genuine extreme event.' },
+  { type: 'sensor_anomaly', severity: 'warning', station_id: 7, message: 'Wind speed sensor stuck at 0.0 m/s for 90+ minutes despite gust readings at adjacent stations.', explanation: 'Zero-wind reading sustained for 90+ minutes while stations within 15 km report gusts of 4–7 m/s. The sensor likely has mechanical friction or bearing failure. Anemometer replacement recommended.' },
+  { type: 'sensor_anomaly', severity: 'warning', station_id: 10, message: 'Barometric pressure dropped 4.2 hPa in 30 minutes — anomalous rate of change.', explanation: 'A pressure drop of 4.2 hPa in 30 minutes exceeds the 99th percentile for rate-of-change at this station. This may indicate a rapidly approaching convective system or sensor malfunction. Cross-referencing with satellite imagery recommended.' },
+  { type: 'sensor_anomaly', severity: 'warning', station_id: 4, message: 'Solar radiation sensor reading 1,200 W/m² at 18:00 — physically implausible for this hour.', explanation: 'Solar radiation of 1,200 W/m² at 18:00 local time is above the theoretical maximum for this latitude and time of day. The sensor may be partially shaded by debris or the signal conditioner may be drifting.' },
+
+  /* ── Warning: sim_expiring ── */
+  { type: 'sim_expiring', severity: 'warning', station_id: 9, message: 'SIM card expires in 14 days. Please arrange replacement.' },
+  { type: 'sim_expiring', severity: 'warning', station_id: 6, message: 'Data bundle depleted — 0 MB of 500 MB monthly allocation remaining.' },
+  { type: 'sim_expiring', severity: 'warning', station_id: 3, message: 'SIM card expires in 7 days. Automatic renewal may fail — manual intervention required.' },
+  { type: 'sim_expiring', severity: 'warning', station_id: 2, message: 'Roaming charges exceeded: $12.40 incurred in the last 24 hours above plan limit.' },
+
+  /* ── Warning: low_battery ── */
+  { type: 'low_battery', severity: 'warning', station_id: 6, message: 'Battery voltage at 11.8V — below nominal operating range (12.0–14.2V).' },
+  { type: 'low_battery', severity: 'warning', station_id: 3, message: 'Battery at 32% state of charge. Solar input insufficient for current load.' },
+  { type: 'low_battery', severity: 'warning', station_id: 1, message: 'Battery temperature at 52°C — exceeds safe operating limit of 45°C.' },
+
+  /* ── Info: threshold_breach ── */
+  { type: 'threshold_breach', severity: 'info', station_id: 8, message: 'Rainfall exceeded 24h threshold: 48.2mm recorded (limit: 40mm).' },
+  { type: 'threshold_breach', severity: 'info', station_id: 10, message: 'Wind gust 22.4 m/s exceeds warning threshold of 20 m/s.' },
+  { type: 'threshold_breach', severity: 'info', station_id: 5, message: 'Daily max temperature 35.8°C exceeds alert threshold of 34.0°C.' },
+
+  /* ── Info: sensor_anomaly (lower severity) ── */
+  { type: 'sensor_anomaly', severity: 'info', station_id: 7, message: 'Rain gauge tips reported at 15-min intervals despite no precipitation — possible debris or insect activity.', explanation: 'The rain gauge has been reporting consistent tip counts at regular intervals for the past 6 hours despite no recorded precipitation. This pattern is characteristic of debris (leaf/insect) in the funnel rather than actual rainfall.' },
+  { type: 'sensor_anomaly', severity: 'info', station_id: 4, message: 'Battery voltage sensor calibration drift detected: offset of 0.15V relative to reference reading during maintenance.', explanation: 'Routine cross-check during maintenance revealed a 0.15V offset between the telemetry-reported voltage and the manual multimeter reading at the battery terminals. This is within the alert threshold for investigation.' },
+
+  /* ── Info: threshold_breach (continued) ── */
+  { type: 'threshold_breach', severity: 'info', station_id: 2, message: 'Relative humidity averaged 92% over the last 6 hours — dew point alert for crop advisory.' },
+  { type: 'threshold_breach', severity: 'info', station_id: 6, message: 'Soil moisture deficit: 7 consecutive days below 25th percentile. Irrigation advisory.' },
+  { type: 'threshold_breach', severity: 'info', station_id: 9, message: 'Atmospheric pressure dropped 8 hPa in 6 hours — advisory for incoming weather system.' },
+]
+
+const RESOLUTION_NOTES = [
+  'Replaced battery on-site. Voltage restored to 13.1V.',
+  'SIM card replaced with new unit. Connectivity restored.',
+  'Remote reboot resolved connectivity issue.',
+  'Sensor cleaned and recalibrated. Readings back within normal range.',
+  'Filed maintenance ticket for antenna inspection.',
+  'Temporary fix applied — awaiting replacement part.',
+  'Threshold adjusted per region review. No action required.',
+  'Technician dispatched and resolved on-site.',
+]
+
+function generateMockAlerts(): Alert[] {
+  const alerts: Alert[] = []
+  let id = 1
+
+  for (const tpl of ALERT_TEMPLATES) {
+    /* spread timestamps over the last 7 days */
+    const hoursAgo = Math.random() * 7 * 24
+    const timestamp = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString()
+
+    /* ~30% resolved */
+    const is_resolved = Math.random() < 0.3
+    let resolved_at: string | undefined
+    let resolved_note: string | undefined
+
+    if (is_resolved) {
+      const resolveHoursAfter = 1 + Math.random() * 48
+      resolved_at = new Date(Date.now() - (hoursAgo - resolveHoursAfter) * 60 * 60 * 1000).toISOString()
+      resolved_note = RESOLUTION_NOTES[id % RESOLUTION_NOTES.length]
+    }
+
+    alerts.push({
+      id,
+      ...tpl,
+      station_name: stationName(tpl.station_id),
+      timestamp,
+      is_resolved,
+      resolved_at,
+      resolved_note,
+    })
+    id++
+  }
+
+  /* sort newest first */
+  alerts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  return alerts
+}
+
+let cachedMockAlerts: Alert[] | null = null
+
+function getMockAlerts(): Alert[] {
+  if (!cachedMockAlerts) {
+    cachedMockAlerts = generateMockAlerts()
+  }
+  return cachedMockAlerts
+}
+
+export async function fetchAlertsData(params?: AlertFilterParams): Promise<AlertsDataResponse> {
+  /* --- MOCK IMPLEMENTATION (development only) --- */
+  await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 200))
+
+  let filtered = getMockAlerts()
+
+  if (params) {
+    if (params.severity && params.severity !== 'all') {
+      filtered = filtered.filter((a) => a.severity === params.severity)
+    }
+    if (params.type && params.type !== 'all') {
+      filtered = filtered.filter((a) => a.type === params.type)
+    }
+    if (params.station_id) {
+      filtered = filtered.filter((a) => a.station_id === params.station_id)
+    }
+    if (params.status === 'unresolved') {
+      filtered = filtered.filter((a) => !a.is_resolved)
+    } else if (params.status === 'resolved') {
+      filtered = filtered.filter((a) => a.is_resolved)
+    }
+    if (params.search) {
+      const q = params.search.toLowerCase()
+      filtered = filtered.filter(
+        (a) => a.message.toLowerCase().includes(q) || a.station_name.toLowerCase().includes(q),
+      )
+    }
+    if (params.date_from) {
+      const from = new Date(params.date_from).getTime()
+      filtered = filtered.filter((a) => new Date(a.timestamp).getTime() >= from)
+    }
+    if (params.date_to) {
+      const to = new Date(params.date_to).getTime() + 86_400_000
+      filtered = filtered.filter((a) => new Date(a.timestamp).getTime() <= to)
+    }
+  }
+
+  return { alerts: filtered, total: filtered.length }
+
+  /* --- PRODUCTION IMPLEMENTATION (uncomment when API is ready) ---
+  const query = new URLSearchParams()
+  if (params?.severity && params.severity !== 'all') query.set('severity', params.severity)
+  if (params?.type && params.type !== 'all') query.set('type', params.type)
+  if (params?.station_id) query.set('station_id', String(params.station_id))
+  if (params?.status && params.status !== 'all') query.set('status', params.status)
+  if (params?.search) query.set('search', params.search)
+  if (params?.date_from) query.set('date_from', params.date_from)
+  if (params?.date_to) query.set('date_to', params.date_to)
+  if (params?.page) query.set('page', String(params.page))
+  if (params?.page_size) query.set('page_size', String(params.page_size))
+
+  const url = `${API_BASE}/alerts/?${query.toString()}`
+  const response = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    throw new Error(`Alerts API error: ${response.status} ${response.statusText}`)
   }
   return response.json()
   */

@@ -43,7 +43,7 @@ export function RecentAlertsPreview({ alerts }: RecentAlertsPreviewProps) {
           </h3>
         </div>
         <a
-          href="#"
+          href="/dashboard/alerts-center"
           className="text-xs font-medium text-sky-primary transition-colors duration-200 hover:text-sky-deep cursor-pointer"
         >
           View all
