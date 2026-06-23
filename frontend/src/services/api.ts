@@ -1520,3 +1520,380 @@ export async function topUpSim(
 
   return entry
 }
+
+/* ─────────────────────────────────────────────
+   Reports & Export — types & mock data
+   ───────────────────────────────────────────── */
+
+export type ReportType = 'station_summary' | 'weather_summary' | 'power_sim_health' | 'alerts_summary' | 'custom'
+export type ReportFormat = 'pdf' | 'csv'
+export type ReportStatus = 'completed' | 'failed' | 'generating'
+export type ScheduleFrequency = 'daily' | 'weekly' | 'monthly'
+
+export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
+  station_summary: 'Station Summary',
+  weather_summary: 'Weather Summary',
+  power_sim_health: 'Power / SIM Health',
+  alerts_summary: 'Alerts Summary',
+  custom: 'Custom (combination)',
+}
+
+export const REPORT_TYPE_DESCRIPTIONS: Record<ReportType, string> = {
+  station_summary: 'Overview of all stations: status, location, connectivity, last reading time.',
+  weather_summary: 'Temperature, humidity, rainfall, wind speed — averages, min/max, anomaly count.',
+  power_sim_health: 'Battery levels, charging status, voltage, SIM data usage and remaining.',
+  alerts_summary: 'All alerts in the selected period grouped by severity and type.',
+  custom: 'Pick specific sections from any of the above report types.',
+}
+
+export const SCHEDULE_FREQUENCY_LABELS: Record<ScheduleFrequency, string> = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+}
+
+export interface ReportMetricSection {
+  id: string
+  label: string
+  available_in_csv: boolean
+  checked: boolean
+}
+
+export function getDefaultMetricsForType(type: ReportType): ReportMetricSection[] {
+  switch (type) {
+    case 'station_summary':
+      return [
+        { id: 'station_status', label: 'Station status breakdown', available_in_csv: true, checked: true },
+        { id: 'station_connectivity', label: 'Connectivity overview', available_in_csv: true, checked: true },
+        { id: 'station_locations', label: 'Station locations map', available_in_csv: false, checked: true },
+        { id: 'station_last_reading', label: 'Last reading timestamps', available_in_csv: true, checked: true },
+      ]
+    case 'weather_summary':
+      return [
+        { id: 'weather_averages', label: 'Averages (temp, humidity, etc.)', available_in_csv: true, checked: true },
+        { id: 'weather_minmax', label: 'Min / max values', available_in_csv: true, checked: true },
+        { id: 'weather_anomalies', label: 'Anomaly count & details', available_in_csv: true, checked: true },
+        { id: 'weather_chart_temperature', label: 'Temperature trend chart', available_in_csv: false, checked: true },
+        { id: 'weather_chart_rainfall', label: 'Rainfall bar chart', available_in_csv: false, checked: true },
+      ]
+    case 'power_sim_health':
+      return [
+        { id: 'power_battery', label: 'Battery level overview', available_in_csv: true, checked: true },
+        { id: 'power_charging', label: 'Charging status summary', available_in_csv: true, checked: true },
+        { id: 'power_voltage', label: 'Voltage range report', available_in_csv: true, checked: true },
+        { id: 'power_sim_usage', label: 'SIM data usage & remaining', available_in_csv: true, checked: true },
+        { id: 'power_chart', label: 'Power trend chart', available_in_csv: false, checked: true },
+      ]
+    case 'alerts_summary':
+      return [
+        { id: 'alerts_by_severity', label: 'Alerts by severity', available_in_csv: true, checked: true },
+        { id: 'alerts_by_type', label: 'Alerts by type', available_in_csv: true, checked: true },
+        { id: 'alerts_timeline', label: 'Alert timeline', available_in_csv: true, checked: true },
+        { id: 'alerts_resolution', label: 'Resolution status summary', available_in_csv: true, checked: true },
+      ]
+    case 'custom':
+      return [
+        { id: 'station_status', label: 'Station status breakdown', available_in_csv: true, checked: true },
+        { id: 'weather_averages', label: 'Weather averages', available_in_csv: true, checked: true },
+        { id: 'weather_anomalies', label: 'Weather anomaly count', available_in_csv: true, checked: true },
+        { id: 'power_battery', label: 'Battery level overview', available_in_csv: true, checked: true },
+        { id: 'power_sim_usage', label: 'SIM data usage & remaining', available_in_csv: true, checked: true },
+        { id: 'alerts_by_severity', label: 'Alerts by severity', available_in_csv: true, checked: true },
+        { id: 'weather_chart_temperature', label: 'Temperature trend chart', available_in_csv: false, checked: true },
+      ]
+  }
+}
+
+export interface ReportConfig {
+  type: ReportType
+  station_ids: number[]  // empty = all
+  date_from: string
+  date_to: string
+  format: ReportFormat
+  metrics: string[]  // metric section ids
+}
+
+export interface ReportResult {
+  id: number
+  name: string
+  type: ReportType
+  format: ReportFormat
+  scope_summary: string
+  date_from: string
+  date_to: string
+  generated_at: string
+  generated_by: string
+  status: ReportStatus
+  file_size_bytes: number | null
+  failure_reason: string | null
+}
+
+export interface ScheduledReport {
+  id: number
+  name: string
+  type: ReportType
+  format: ReportFormat
+  scope_summary: string
+  station_ids: number[]
+  date_range_days: number  // e.g. 7 for "last 7 days"
+  metrics: string[]
+  frequency: ScheduleFrequency
+  time_of_day: string  // "HH:MM"
+  recipients: string[]  // email addresses
+  is_active: boolean
+  next_run: string
+  last_run: string | null
+  created_at: string
+}
+
+const MOCK_STATION_NAMES = STATION_DEFS.map((s) => s.name)
+
+/* ── In-memory mock report store ── */
+let nextReportId = 200
+let nextScheduleId = 50
+
+const MOCK_REPORT_HISTORY: ReportResult[] = []
+let MOCK_SCHEDULES: ScheduledReport[] = []
+
+/* ── Seed mock data lazily ── */
+let seeded = false
+function seedReports() {
+  if (seeded) return
+  seeded = true
+
+  const types: ReportType[] = ['station_summary', 'weather_summary', 'power_sim_health', 'alerts_summary', 'custom']
+  const formats: ReportFormat[] = ['pdf', 'csv']
+  const users = ['Sarah Kintu', 'James Opondo', 'Scheduled', 'Scheduled']
+
+  for (let i = 0; i < 18; i++) {
+    const type = types[i % types.length]
+    const format = formats[i % 2]
+    const daysAgo = i * 3 + Math.floor(Math.random() * 2)
+    const status: ReportStatus = i === 6 ? 'failed' : i === 12 ? 'failed' : 'completed'
+    const stationIds = i % 3 === 0 ? [] : [1, 2, 3].slice(0, (i % 3) + 1)
+    const stationNames = stationIds.length
+      ? stationIds.map((id) => MOCK_STATION_NAMES[id - 1] ?? `Station #${id}`).join(', ')
+      : 'All stations'
+
+    MOCK_REPORT_HISTORY.push({
+      id: nextReportId++,
+      name: `${REPORT_TYPE_LABELS[type]} — ${new Date(Date.now() - daysAgo * 86400000).toLocaleDateString()}`,
+      type,
+      format,
+      scope_summary: stationNames,
+      date_from: new Date(Date.now() - (daysAgo + 7) * 86400000).toISOString().slice(0, 10),
+      date_to: new Date(Date.now() - daysAgo * 86400000).toISOString().slice(0, 10),
+      generated_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
+      generated_by: users[i % users.length],
+      status,
+      file_size_bytes: status === 'completed' ? Math.round(100_000 + Math.random() * 900_000) : null,
+      failure_reason: status === 'failed' ? (i === 6 ? 'No data in selected range' : 'Data source temporarily unavailable') : null,
+    })
+  }
+
+  /* Reverse so most recent first */
+  MOCK_REPORT_HISTORY.reverse()
+
+  MOCK_SCHEDULES = [
+    {
+      id: nextScheduleId++,
+      name: 'Daily station health report',
+      type: 'station_summary',
+      format: 'pdf',
+      scope_summary: 'All stations',
+      station_ids: [],
+      date_range_days: 1,
+      metrics: getDefaultMetricsForType('station_summary').map((m) => m.id),
+      frequency: 'daily',
+      time_of_day: '07:00',
+      recipients: ['ops@awsmonitor.ug', 'supervisor@example.com'],
+      is_active: true,
+      next_run: new Date(Date.now() + 6 * 3600000).toISOString(),
+      last_run: new Date(Date.now() - 18 * 3600000).toISOString(),
+      created_at: new Date(Date.now() - 60 * 86400000).toISOString(),
+    },
+    {
+      id: nextScheduleId++,
+      name: 'Weekly weather summary',
+      type: 'weather_summary',
+      format: 'pdf',
+      scope_summary: 'Northern region stations',
+      station_ids: [1, 2, 3],
+      date_range_days: 7,
+      metrics: getDefaultMetricsForType('weather_summary').map((m) => m.id),
+      frequency: 'weekly',
+      time_of_day: '09:00',
+      recipients: ['analysts@awsmonitor.ug'],
+      is_active: true,
+      next_run: new Date(Date.now() + 3 * 86400000).toISOString(),
+      last_run: new Date(Date.now() - 4 * 86400000).toISOString(),
+      created_at: new Date(Date.now() - 45 * 86400000).toISOString(),
+    },
+    {
+      id: nextScheduleId++,
+      name: 'Monthly alerts digest',
+      type: 'alerts_summary',
+      format: 'csv',
+      scope_summary: 'All stations',
+      station_ids: [],
+      date_range_days: 30,
+      metrics: getDefaultMetricsForType('alerts_summary').filter((m) => m.available_in_csv).map((m) => m.id),
+      frequency: 'monthly',
+      time_of_day: '06:00',
+      recipients: ['compliance@awsmonitor.ug'],
+      is_active: false,
+      next_run: new Date(Date.now() + 20 * 86400000).toISOString(),
+      last_run: new Date(Date.now() - 10 * 86400000).toISOString(),
+      created_at: new Date(Date.now() - 90 * 86400000).toISOString(),
+    },
+  ]
+}
+
+/* ── Public API ── */
+
+export async function generateReport(config: ReportConfig): Promise<ReportResult> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 800 + Math.random() * 1200))
+
+  /* Simulate empty-data detection */
+  const hasData = config.date_from < new Date().toISOString().slice(0, 10)
+  if (!hasData) {
+    const result: ReportResult = {
+      id: nextReportId++,
+      name: `${REPORT_TYPE_LABELS[config.type]} — ${new Date().toLocaleDateString()}`,
+      type: config.type,
+      format: config.format,
+      scope_summary: config.station_ids.length
+        ? config.station_ids.map((id) => MOCK_STATION_NAMES[id - 1] ?? `Station #${id}`).join(', ')
+        : 'All stations',
+      date_from: config.date_from,
+      date_to: config.date_to,
+      generated_at: new Date().toISOString(),
+      generated_by: 'Sarah Kintu',
+      status: 'failed',
+      file_size_bytes: null,
+      failure_reason: 'No data in selected range',
+    }
+    MOCK_REPORT_HISTORY.unshift(result)
+    return result
+  }
+
+  const stationNames = config.station_ids.length
+    ? config.station_ids.map((id) => MOCK_STATION_NAMES[id - 1] ?? `Station #${id}`).join(', ')
+    : 'All stations'
+
+  const result: ReportResult = {
+    id: nextReportId++,
+    name: `${REPORT_TYPE_LABELS[config.type]} — ${new Date().toLocaleDateString()}`,
+    type: config.type,
+    format: config.format,
+    scope_summary: stationNames,
+    date_from: config.date_from,
+    date_to: config.date_to,
+    generated_at: new Date().toISOString(),
+    generated_by: 'Sarah Kintu',
+    status: 'completed',
+    file_size_bytes: config.format === 'pdf'
+      ? Math.round(200_000 + Math.random() * 800_000)
+      : Math.round(30_000 + Math.random() * 70_000),
+    failure_reason: null,
+  }
+  MOCK_REPORT_HISTORY.unshift(result)
+  return result
+}
+
+export async function checkForEmptyData(_config: ReportConfig): Promise<{ empty: boolean; message: string | null }> {
+  await new Promise((r) => setTimeout(r, 100 + Math.random() * 100))
+  /* Randomly warn ~15% of the time for demo */
+  const empty = Math.random() < 0.15
+  return {
+    empty,
+    message: empty ? 'No readings found for this station in the selected range. The report will indicate no data available.' : null,
+  }
+}
+
+export async function fetchReportHistory(params?: {
+  type?: ReportType | 'all'
+  status?: ReportStatus | 'all'
+  search?: string
+  date_from?: string
+  date_to?: string
+  page?: number
+  page_size?: number
+}): Promise<{ history: ReportResult[]; total: number }> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 200 + Math.random() * 100))
+
+  let list = [...MOCK_REPORT_HISTORY]
+  if (params?.type && params.type !== 'all') list = list.filter((r) => r.type === params.type)
+  if (params?.status && params.status !== 'all') list = list.filter((r) => r.status === params.status)
+  if (params?.search) {
+    const q = params.search.toLowerCase()
+    list = list.filter((r) => r.name.toLowerCase().includes(q) || r.scope_summary.toLowerCase().includes(q))
+  }
+  if (params?.date_from) list = list.filter((r) => r.date_from >= params.date_from!)
+  if (params?.date_to) list = list.filter((r) => r.date_to <= params.date_to!)
+
+  const total = list.length
+  const page = params?.page ?? 1
+  const pageSize = params?.page_size ?? 10
+  const paged = list.slice((page - 1) * pageSize, page * pageSize)
+
+  return { history: paged, total }
+}
+
+export async function fetchScheduleList(): Promise<ScheduledReport[]> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 150 + Math.random() * 100))
+  return [...MOCK_SCHEDULES]
+}
+
+export async function createSchedule(data: Partial<ScheduledReport>): Promise<ScheduledReport> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 300 + Math.random() * 200))
+  const schedule: ScheduledReport = {
+    id: nextScheduleId++,
+    name: data.name ?? 'Untitled schedule',
+    type: data.type ?? 'station_summary',
+    format: data.format ?? 'pdf',
+    scope_summary: data.scope_summary ?? 'All stations',
+    station_ids: data.station_ids ?? [],
+    date_range_days: data.date_range_days ?? 7,
+    metrics: data.metrics ?? [],
+    frequency: data.frequency ?? 'daily',
+    time_of_day: data.time_of_day ?? '08:00',
+    recipients: data.recipients ?? [],
+    is_active: data.is_active ?? true,
+    next_run: data.next_run ?? new Date(Date.now() + 86400000).toISOString(),
+    last_run: null,
+    created_at: new Date().toISOString(),
+  }
+  MOCK_SCHEDULES.push(schedule)
+  return schedule
+}
+
+export async function updateSchedule(id: number, data: Partial<ScheduledReport>): Promise<ScheduledReport> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 200 + Math.random() * 100))
+  const idx = MOCK_SCHEDULES.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Schedule not found')
+  MOCK_SCHEDULES[idx] = { ...MOCK_SCHEDULES[idx], ...data }
+  return MOCK_SCHEDULES[idx]
+}
+
+export async function deleteSchedule(id: number): Promise<void> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 150 + Math.random() * 100))
+  const idx = MOCK_SCHEDULES.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Schedule not found')
+  MOCK_SCHEDULES.splice(idx, 1)
+}
+
+export async function toggleSchedule(id: number): Promise<ScheduledReport> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 100))
+  const idx = MOCK_SCHEDULES.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Schedule not found')
+  MOCK_SCHEDULES[idx].is_active = !MOCK_SCHEDULES[idx].is_active
+  return MOCK_SCHEDULES[idx]
+}

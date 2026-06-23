@@ -11,6 +11,7 @@ const NAV_ITEMS: { label: string; href: string; adminOnly?: boolean }[] = [
   { label: 'Station map', href: '/stations/map' },
   { label: 'Alerts center', href: '/dashboard/alerts-center' },
   { label: 'SIM management', href: '/dashboard/sim-management' },
+  { label: 'Reports & Export', href: '/dashboard/reports' },
   { label: 'Station manager', href: '/dashboard/station-manager', adminOnly: true },
 ]
 

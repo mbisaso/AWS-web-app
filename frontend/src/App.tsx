@@ -11,6 +11,7 @@ import {
   AlertsCenterPage,
   StationManagerPage,
   SimManagementPage,
+  ReportsPage,
 } from './pages'
 
 function App() {
@@ -27,6 +28,7 @@ function App() {
         <Route path="/dashboard/alerts-center" element={<AlertsCenterPage />} />
         <Route path="/dashboard/station-manager" element={<StationManagerPage />} />
         <Route path="/dashboard/sim-management" element={<SimManagementPage />} />
+        <Route path="/dashboard/reports" element={<ReportsPage />} />
         <Route path="/stations/map" element={<StationMapPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

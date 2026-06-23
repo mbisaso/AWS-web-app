@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { SimManagementData, SimFleetSummary } from '../services/api'
-import { fetchSimManagementData, topUpSim, fetchAlertsData } from '../services/api'
+import { fetchSimManagementData, topUpSim } from '../services/api'
 import { usePollingData } from '../hooks/usePollingData'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { SimFleetSummaryCard } from '../components/simManagement/SimFleetSummaryCard'
@@ -36,7 +36,6 @@ export function SimManagementPage() {
 
   /* ── Detail panel state ── */
   const [selectedSim, setSelectedSim] = useState<SimManagementData | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
 
   const handleSelectSim = useCallback((s: SimManagementData) => {
     setSelectedSim(s)
@@ -176,7 +175,7 @@ export function SimManagementPage() {
           <section aria-label="SIM detail" className="mb-6">
             <SimDetailPanel
               data={selectedSim}
-              isLoading={detailLoading}
+              isLoading={dataLoading}
               onTopUp={() => setTopUpTarget(selectedSim)}
               onClose={handleCloseDetail}
             />
