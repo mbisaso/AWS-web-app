@@ -4,12 +4,11 @@ import { MenuIcon, CloseIcon } from '../landing/Icons'
 
 const NAV_ITEMS: { label: string; href: string }[] = [
   { label: 'Overview', href: '/dashboard' },
-  { label: 'Weather data', href: '#' },
-  { label: 'Power data', href: '#' },
-  { label: 'Set sleep time', href: '#' },
-  { label: 'Weather analysis', href: '#' },
+  { label: 'Weather data', href: '/dashboard/weather-data' },
+  { label: 'Power data', href: '/dashboard/power-data' },
+  { label: 'Weather analysis', href: '/dashboard/weather-analysis' },
   { label: 'Station map', href: '/stations/map' },
-  { label: 'Alerts center', href: '#' },
+  { label: 'Alerts center', href: '/dashboard/alerts-center' },
   { label: 'Station manager', href: '#' },
 ]
 
