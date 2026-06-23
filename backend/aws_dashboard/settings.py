@@ -120,7 +120,7 @@ DATABASES = {
         'USER': 'aws_user',
         'PASSWORD': 'aws@2026',  
         'HOST': 'localhost',
-        'PORT': '5433',
+        'PORT': '5432',        # Default PostgreSQL port. Change this if your instance runs on a different port (e.g. 5433).
     }
 }
 
