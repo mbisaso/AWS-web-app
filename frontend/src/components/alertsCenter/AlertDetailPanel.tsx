@@ -74,7 +74,7 @@ export function AlertDetailPanel({ alert }: AlertDetailPanelProps) {
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-storm/40">Timeline</p>
             <div className="mt-1.5 space-y-1.5">
               <div className="flex items-center gap-2 text-xs">
-                <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-rose" aria-hidden="true" />
+                <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-red-500" aria-hidden="true" />
                 <span className="text-storm/60">Alert created</span>
                 <span className="font-medium text-midnight" title={formatExactTime(alert.timestamp)}>
                   {formatRelativeTime(alert.timestamp)}

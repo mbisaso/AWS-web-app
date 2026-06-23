@@ -82,9 +82,9 @@ export const ALERT_TYPE_LABELS: Record<AlertType, string> = {
 }
 
 export const SEVERITY_CONFIG: Record<AlertSeverity, { label: string; dot: string; text: string; bg: string; border: string }> = {
-  critical: { label: 'Critical', dot: 'bg-rose', text: 'text-rose', bg: 'bg-rose-50/50', border: 'border-rose-200' },
-  warning: { label: 'Warning', dot: 'bg-amber', text: 'text-amber', bg: 'bg-amber-50/50', border: 'border-amber-200' },
-  info: { label: 'Info', dot: 'bg-sky-bright', text: 'text-sky-bright', bg: 'bg-sky-soft/50', border: 'border-sky-light' },
+  critical: { label: 'Critical', dot: 'bg-red-500', text: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
+  warning: { label: 'Warning', dot: 'bg-yellow-500', text: 'text-yellow-500', bg: 'bg-yellow-50', border: 'border-yellow-200' },
+  info: { label: 'Info', dot: 'bg-blue-500', text: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
 }
 
 export interface DashboardSummary {

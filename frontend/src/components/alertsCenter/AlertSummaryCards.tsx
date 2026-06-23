@@ -46,31 +46,31 @@ export function AlertSummaryCards({ alerts, isLoading, activeSeverity, onSeverit
     {
       severity: 'unresolved' as any,
       label: 'Unresolved', count: unresolvedCount,
-      dotClass: 'bg-rose', textClass: 'text-rose',
-      borderClass: 'border-t-rose',
-      bgClass: 'bg-gradient-to-b from-rose-50/30 to-white',
-      activeGlow: 'ring-2 ring-rose/20 ring-offset-1',
+      dotClass: 'bg-orange-500', textClass: 'text-orange-500',
+      borderClass: 'border-t-orange-500',
+      bgClass: 'bg-gradient-to-b from-orange-50/30 to-white',
+      activeGlow: 'ring-2 ring-orange-500/20 ring-offset-1',
     },
     {
       severity: 'critical', label: 'Critical', count: criticalCount,
-      dotClass: 'bg-rose', textClass: 'text-rose',
-      borderClass: 'border-t-rose',
-      bgClass: 'bg-gradient-to-b from-rose-50/20 to-white',
-      activeGlow: 'ring-2 ring-rose/20 ring-offset-1',
+      dotClass: 'bg-red-500', textClass: 'text-red-600',
+      borderClass: 'border-t-red-500',
+      bgClass: 'bg-gradient-to-b from-red-50/20 to-white',
+      activeGlow: 'ring-2 ring-red-500/20 ring-offset-1',
     },
     {
       severity: 'warning', label: 'Warning', count: warningCount,
-      dotClass: 'bg-amber', textClass: 'text-amber',
-      borderClass: 'border-t-amber',
-      bgClass: 'bg-gradient-to-b from-amber-50/20 to-white',
-      activeGlow: 'ring-2 ring-amber/20 ring-offset-1',
+      dotClass: 'bg-yellow-500', textClass: 'text-yellow-500',
+      borderClass: 'border-t-yellow-500',
+      bgClass: 'bg-gradient-to-b from-yellow-50/20 to-white',
+      activeGlow: 'ring-2 ring-yellow-500/20 ring-offset-1',
     },
     {
       severity: 'info', label: 'Info', count: infoCount,
-      dotClass: 'bg-sky-bright', textClass: 'text-sky-bright',
-      borderClass: 'border-t-sky-bright',
-      bgClass: 'bg-gradient-to-b from-sky-soft/40 to-white',
-      activeGlow: 'ring-2 ring-sky-bright/20 ring-offset-1',
+      dotClass: 'bg-blue-500', textClass: 'text-blue-500',
+      borderClass: 'border-t-blue-500',
+      bgClass: 'bg-gradient-to-b from-blue-50/40 to-white',
+      activeGlow: 'ring-2 ring-blue-500/20 ring-offset-1',
     },
   ]
 
@@ -119,10 +119,12 @@ export function AlertSummaryCards({ alerts, isLoading, activeSeverity, onSeverit
               <div className="pointer-events-none absolute -top-px right-0 h-16 w-16 rounded-bl-full opacity-30"
                 style={{
                   background: card.severity === 'critical' || card.severity === 'unresolved'
-                    ? 'radial-gradient(circle at top right, rgba(225,29,72,0.15), transparent)'
+                    ? card.severity === 'unresolved'
+                      ? 'radial-gradient(circle at top right, rgba(249,115,22,0.15), transparent)'
+                      : 'radial-gradient(circle at top right, rgba(239,68,68,0.15), transparent)'
                     : card.severity === 'warning'
-                    ? 'radial-gradient(circle at top right, rgba(245,158,11,0.12), transparent)'
-                    : 'radial-gradient(circle at top right, rgba(56,189,248,0.12), transparent)'
+                    ? 'radial-gradient(circle at top right, rgba(234,179,8,0.12), transparent)'
+                    : 'radial-gradient(circle at top right, rgba(59,130,246,0.12), transparent)'
                 }}
                 aria-hidden="true"
               />
@@ -144,11 +146,11 @@ export function AlertSummaryCards({ alerts, isLoading, activeSeverity, onSeverit
             >
               <span
                 className={`inline-block h-1.5 w-1.5 rounded-full ${
-                  type === 'station_offline' ? 'bg-rose' :
-                  type === 'sensor_anomaly' ? 'bg-amber' :
-                  type === 'sim_expiring' ? 'bg-amber' :
-                  type === 'low_battery' ? 'bg-amber' :
-                  'bg-sky-bright'
+                  type === 'station_offline' ? 'bg-red-500' :
+                  type === 'sensor_anomaly' ? 'bg-yellow-500' :
+                  type === 'sim_expiring' ? 'bg-yellow-500' :
+                  type === 'low_battery' ? 'bg-yellow-500' :
+                  'bg-blue-500'
                 }`}
                 aria-hidden="true"
               />

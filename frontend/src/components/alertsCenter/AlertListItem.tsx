@@ -40,9 +40,9 @@ export function AlertListItem({ alert, isSelected, onSelect, isNew }: AlertListI
   const [expanded, setExpanded] = useState(false)
   const severity = SEVERITY_CONFIG[alert.severity]
 
-  const borderColor = alert.severity === 'critical' ? 'border-l-rose'
-    : alert.severity === 'warning' ? 'border-l-amber'
-    : 'border-l-sky-bright'
+  const borderColor = alert.severity === 'critical' ? 'border-l-red-500'
+    : alert.severity === 'warning' ? 'border-l-yellow-500'
+    : 'border-l-blue-500'
 
   return (
     <article
@@ -87,14 +87,14 @@ export function AlertListItem({ alert, isSelected, onSelect, isNew }: AlertListI
           {/* Top row: severity + type + timestamp */}
           <div className="flex flex-wrap items-center gap-2">
             <span className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider ${
-              alert.severity === 'critical' ? 'bg-rose-50 text-rose' :
-              alert.severity === 'warning' ? 'bg-amber-50 text-amber' :
-              'bg-sky-soft text-sky-bright'
+              alert.severity === 'critical' ? 'bg-red-50 text-red-600' :
+              alert.severity === 'warning' ? 'bg-yellow-50 text-yellow-500' :
+              'bg-blue-50 text-blue-500'
             }`}>
               <span className={`inline-block h-1.5 w-1.5 rounded-full ${
-                alert.severity === 'critical' ? 'bg-rose' :
-                alert.severity === 'warning' ? 'bg-amber' :
-                'bg-sky-bright'
+                alert.severity === 'critical' ? 'bg-red-500' :
+                alert.severity === 'warning' ? 'bg-yellow-500' :
+                'bg-blue-500'
               }`} aria-hidden="true" />
               {severity.label}
             </span>
