@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -5,10 +7,13 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import Optional
 
+# Absolute path anchored to this file's location — works regardless of working directory
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 # Load model, threshold and feature list on startup
-model     = joblib.load('../models/station_health_model.pkl')
-threshold = joblib.load('../models/classification_threshold.pkl')
-features  = joblib.load('../models/feature_cols.pkl')
+model     = joblib.load(BASE_DIR / 'models' / 'station_health_model.pkl')
+threshold = joblib.load(BASE_DIR / 'models' / 'classification_threshold.pkl')
+features  = joblib.load(BASE_DIR / 'models' / 'feature_cols.pkl')
 
 app = FastAPI(title="AWS Station Health Predictor")
 
