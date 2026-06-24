@@ -22,6 +22,7 @@ from .serializers import (
 
 import csv
 import math
+import os
 import requests
 from django.http import HttpResponse
 
@@ -229,7 +230,7 @@ def call_ml_service(reading, station_code):
 
     try:
         resp = requests.post(
-            'http://localhost:8001/predict',
+            os.environ.get('ML_SERVICE_URL', 'http://localhost:8001/predict'),
             json=payload,
             timeout=2,
         )

@@ -14,6 +14,7 @@ media/
 
 # Environment
 .env
+backend/.env
 .venv
 venv/
 env/

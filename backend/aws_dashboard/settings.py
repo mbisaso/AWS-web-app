@@ -10,32 +10,28 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load environment variables from backend/.env
+load_dotenv(BASE_DIR / '.env')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-1j9^g8g7l!+!moagn4zvs)^+$kx2$aau7@bo*!n+14r%ro4jqt'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-fallback-do-not-use-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = [
-     'localhost',
-    '127.0.0.1',
-     '.ngrok-free.dev',    # ← add this
-    '.ngrok-free.app',
-]
+ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://*.ngrok-free.dev',
-    'https://*.ngrok-free.app',
-]
+CSRF_TRUSTED_ORIGINS = os.environ.get('CSRF_TRUSTED_ORIGINS', 'http://localhost:5173').split(',')
 
 # Application definition
 
@@ -114,11 +110,11 @@ WSGI_APPLICATION = 'aws_dashboard.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'aws-db',        # ← must match exactly including hyphen
-        'USER': 'aws_user',
-        'PASSWORD': 'aws@2026',  
-        'HOST': 'localhost',
-        'PORT': '5432',        # Default PostgreSQL port. Change this if your instance runs on a different port (e.g. 5433).
+        'NAME':     os.environ.get('DB_NAME',     'aws-db'),
+        'USER':     os.environ.get('DB_USER',     'aws_user'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+        'HOST':     os.environ.get('DB_HOST',     'localhost'),
+        'PORT':     os.environ.get('DB_PORT',     '5432'),
     }
 }
 
