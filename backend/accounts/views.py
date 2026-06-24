@@ -1,29 +1,57 @@
-from django.shortcuts import render, redirect
-from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
 
-User = get_user_model()
-
-class CustomUserCreationForm(UserCreationForm):
-    class Meta:
-        model = User
-        fields = ('username', 'password1', 'password2')
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['username'].help_text = 'Letters, digits and @/./+/-/_ only.'
-        self.fields['password1'].help_text = 'At least 8 characters. Cannot be entirely numeric.'
-        self.fields['password2'].help_text = None
-        self.fields['password1'].label = 'Password'
-        self.fields['password2'].label = 'Confirm password'
+from .serializers import RegisterSerializer
 
 
-def register_view(request):
-    if request.method == 'POST':
-        form = CustomUserCreationForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return redirect('login')
-    else:
-        form = CustomUserCreationForm()
-    return render(request, 'registration/register.html', {'form': form})
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_api(request):
+    username = request.data.get('username')
+    password = request.data.get('password')
+
+    user = authenticate(request, username=username, password=password)
+    if user is None:
+        return Response(
+            {'success': False, 'error': 'Invalid username or password'},
+            status=401,
+        )
+
+    refresh = RefreshToken.for_user(user)
+    return Response({
+        'success': True,
+        'message': 'Login successful',
+        'data': {
+            'access':   str(refresh.access_token),
+            'refresh':  str(refresh),
+            'username': user.username,
+            'role':     user.role,
+        },
+    })
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_api(request):
+    serializer = RegisterSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(
+            {'success': False, 'error': serializer.errors},
+            status=400,
+        )
+
+    user = serializer.save()
+    return Response(
+        {
+            'success': True,
+            'message': 'Account created',
+            'data': {
+                'username': user.username,
+                'role':     user.role,
+            },
+        },
+        status=201,
+    )

@@ -1,4 +1,29 @@
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+
 export function LoginPage() {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { login } = useAuth()
+  const navigate = useNavigate()
+
+  async function handleSubmit(e: { preventDefault(): void }) {
+    e.preventDefault()
+    setError(null)
+    setIsSubmitting(true)
+    try {
+      await login(username, password)
+      navigate('/dashboard')
+    } catch {
+      setError('Invalid username or password.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#f2f6fa] px-4 py-10 text-slate-900">
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-7xl items-center justify-center">
@@ -41,7 +66,10 @@ export function LoginPage() {
                 Use your credentials to enter the monitoring dashboard.
               </p>
 
-              <form className="mt-8 space-y-5" method="post">
+              <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+                {error && (
+                  <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>
+                )}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-[#1a2332]" htmlFor="username">
                     Username
@@ -50,6 +78,8 @@ export function LoginPage() {
                     id="username"
                     name="username"
                     type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     className="w-full rounded-2xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm outline-none transition focus:border-[#0a6ebd] focus:bg-white"
                     placeholder="Enter username"
                   />
@@ -63,6 +93,8 @@ export function LoginPage() {
                     id="password"
                     name="password"
                     type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     className="w-full rounded-2xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm outline-none transition focus:border-[#0a6ebd] focus:bg-white"
                     placeholder="Enter password"
                   />
@@ -70,9 +102,10 @@ export function LoginPage() {
 
                 <button
                   type="submit"
-                  className="w-full rounded-2xl bg-[#0a6ebd] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#084f8a]"
+                  disabled={isSubmitting}
+                  className="w-full rounded-2xl bg-[#0a6ebd] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#084f8a] disabled:opacity-60"
                 >
-                  Sign in
+                  {isSubmitting ? 'Signing in...' : 'Sign in'}
                 </button>
               </form>
 

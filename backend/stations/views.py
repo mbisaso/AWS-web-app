@@ -1,17 +1,24 @@
+import csv
+import datetime
+import math
+import os
+
+import requests
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import render
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.utils.dateparse import parse_datetime
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
-
-from .models import Station, StationStatus, SensorReading
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
+from .models import Station, StationStatus, SensorReading
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
@@ -20,11 +27,6 @@ from .serializers import (
     StationSerializer,
 )
 
-import csv
-import math
-import os
-import requests
-from django.http import HttpResponse
 
 def api_response(data=None, message=None, error=None, status_code=200):
     """
@@ -161,9 +163,6 @@ def call_ml_service(reading, station_code):
     Returns the prediction dict on success, None on any failure.
     Ingest always succeeds regardless of what this returns.
     """
-    from django.utils import timezone
-    from datetime import timedelta
-
     # All four base fields must be present to form valid features
     if any(v is None for v in [
         reading.temperature, reading.humidity,
@@ -176,7 +175,7 @@ def call_ml_service(reading, station_code):
 
     # Pull the last 3 hours of readings for this station where all
     # required fields are present, oldest-first for trend computation
-    since  = timezone.now() - timedelta(hours=3)
+    since  = timezone.now() - datetime.timedelta(hours=3)
     recent = list(
         SensorReading.objects.filter(
             station_code=station_code,
@@ -409,6 +408,7 @@ def latest(request):
             results.append(SensorReadingLatestSerializer(reading).data)
 
     return api_response(data=results)
+
 # ─────────────────────────────────────────────────────────
 # API: Historical readings for a station
 # ─────────────────────────────────────────────────────────
@@ -416,13 +416,10 @@ def latest(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def history(request, station_id):
-    from django.utils import timezone
-    from datetime import timedelta
-
     hours      = int(request.query_params.get('hours', 24))
     limit      = int(request.query_params.get('limit', 200))
     chart_type = request.query_params.get('type', 'sensor')
-    since      = timezone.now() - timedelta(hours=hours)
+    since      = timezone.now() - datetime.timedelta(hours=hours)
 
     readings = SensorReading.objects.filter(
         station_code=station_id,
@@ -474,15 +471,12 @@ def station_detail(request, station_id):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def export(request):
-    from django.utils import timezone
-    from datetime import timedelta
-
     station_id = request.query_params.get('station_id')
     hours      = int(request.query_params.get('hours', 168))
     fmt        = request.query_params.get('output', 'json')
     fields     = request.query_params.get('fields', 'all')
 
-    since    = timezone.now() - timedelta(hours=hours)
+    since    = timezone.now() - datetime.timedelta(hours=hours)
     readings = SensorReading.objects.filter(
         timestamp__gte=since
     ).order_by('timestamp')
