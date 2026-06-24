@@ -1,17 +1,14 @@
 import { useMemo, useRef, useState } from 'react'
-import type { HistoricalReading, SensorType } from '../../services/api'
-import { SENSOR_CONFIG } from '../../services/api'
-
-const STATION_COLORS = [
-  '#0EA5E9', '#F97316', '#22C55E', '#8B5CF6', '#E11D48',
-  '#F59E0B', '#06B6D4', '#84CC16', '#D946EF', '#14B8A6',
-]
+import type { SensorMetricKey, SensorReadingChart } from '../../types'
+import { SENSOR_METRIC_CONFIG } from '../../types'
 
 const PAD = { top: 24, bottom: 44, left: 55, right: 20 }
+const SVG_W = 800
+const SVG_H = 300
 
 interface HistoricalChartProps {
-  readings: HistoricalReading[]
-  sensorType: SensorType
+  readings: SensorReadingChart[]
+  metricKey: SensorMetricKey
   isLoading?: boolean
 }
 
@@ -19,181 +16,142 @@ interface TooltipData {
   x: number
   y: number
   value: number
-  stationName: string
   time: string
-  isAnomaly: boolean
-  anomalyReason?: string
 }
 
-export function HistoricalChart({ readings, sensorType, isLoading }: HistoricalChartProps) {
-  const cfg = SENSOR_CONFIG[sensorType]
+function buildSeg(
+  readings: SensorReadingChart[],
+  key: SensorMetricKey,
+  from: number,
+  to: number,
+  sx: (t: number) => number,
+  sy: (v: number) => number,
+): string {
+  const pts: string[] = []
+  for (let i = from; i < to; i++) {
+    const v = readings[i][key]
+    if (v === null) continue
+    pts.push(`${sx(new Date(readings[i].timestamp).getTime())},${sy(v)}`)
+  }
+  return pts.length ? `M ${pts.join(' L ')}` : ''
+}
+
+function buildPath(
+  sorted: SensorReadingChart[],
+  key: SensorMetricKey,
+  sx: (t: number) => number,
+  sy: (v: number) => number,
+  gapMs: number,
+): string {
+  if (!sorted.length) return ''
+  const segs: string[] = []
+  let start = 0
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = new Date(sorted[i].timestamp).getTime() - new Date(sorted[i - 1].timestamp).getTime()
+    if (gap > gapMs) {
+      segs.push(buildSeg(sorted, key, start, i, sx, sy))
+      start = i
+    }
+  }
+  segs.push(buildSeg(sorted, key, start, sorted.length, sx, sy))
+  return segs.filter(Boolean).join(' ')
+}
+
+export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalChartProps) {
+  const cfg = SENSOR_METRIC_CONFIG[metricKey]
   const [tooltip, setTooltip] = useState<TooltipData | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
-  const SVG_W = 800
 
-  const groups = useMemo(() => {
-    const map = new Map<number, HistoricalReading[]>()
-    for (const r of readings) {
-      if (!map.has(r.station_id)) map.set(r.station_id, [])
-      map.get(r.station_id)!.push(r)
-    }
-    for (const [, arr] of map) {
-      arr.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-    }
-    return Array.from(map.entries())
-  }, [readings])
+  const sorted = useMemo(
+    () => [...readings].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
+    [readings],
+  )
 
-  const { lines, yMin, yMax, xMin, xMax, anomalies } = useMemo(() => {
-    if (!readings.length) {
-      return { lines: [], yMin: 0, yMax: 100, xMin: 0, xMax: 1, anomalies: [] as HistoricalReading[] }
+  const computed = useMemo(() => {
+    const cW = SVG_W - PAD.left - PAD.right
+    const cH = SVG_H - PAD.top - PAD.bottom
+
+    if (!sorted.length) {
+      return { path: '', yMin: 0, yMax: 1, xMin: 0, xMax: 1, yTicks: [], xTicks: [], cW, cH }
     }
 
     let yLo = Infinity, yHi = -Infinity
     let xLo = Infinity, xHi = -Infinity
-    const anoms: HistoricalReading[] = []
 
-    for (const r of readings) {
+    for (const r of sorted) {
       const t = new Date(r.timestamp).getTime()
-      if (r.value < yLo) yLo = r.value
-      if (r.value > yHi) yHi = r.value
       if (t < xLo) xLo = t
       if (t > xHi) xHi = t
-      if (r.is_anomaly) anoms.push(r)
+      const v = r[metricKey]
+      if (v !== null) {
+        if (v < yLo) yLo = v
+        if (v > yHi) yHi = v
+      }
     }
 
+    if (!isFinite(yLo)) { yLo = 0; yHi = 1 }
     const yPad = (yHi - yLo) * 0.1 || 5
-    const yLoScaled = yLo - yPad
-    const yHiScaled = yHi + yPad
-    const chartW = SVG_W - PAD.left - PAD.right
-    const chartH = 300 - PAD.top - PAD.bottom
+    const yLoS = yLo - yPad
+    const yHiS = yHi + yPad
+    const xRange = xHi - xLo || 1
 
-    const sx = (t: number) => PAD.left + ((t - xLo) / (xHi - xLo)) * chartW
-    const sy = (v: number) => PAD.top + chartH - ((v - yLoScaled) / (yHiScaled - yLoScaled)) * chartH
+    const sx = (t: number) => PAD.left + ((t - xLo) / xRange) * cW
+    const sy = (v: number) => PAD.top + cH - ((v - yLoS) / (yHiS - yLoS)) * cH
 
-    const medianGap = xHi - xLo > 0
-      ? (xHi - xLo) / readings.length * 2
-      : 3 * 60 * 60 * 1000
-    const gapThreshold = medianGap * 2.5
+    const gapMs = (sorted.length > 1 ? (xHi - xLo) / sorted.length : 3 * 60 * 60 * 1000) * 2.5
 
-    const result = groups.map(([stationId, group], idx) => {
-      const color = STATION_COLORS[idx % STATION_COLORS.length]
-      const name = group[0].station_name
-      const segments: string[] = []
-      let segStart = 0
+    const range = yHiS - yLoS
+    const rough = range / 5
+    const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)))
+    const res = rough / mag
+    let nice = mag
+    if (res > 7.5) nice = 10 * mag
+    else if (res > 3.5) nice = 5 * mag
+    else if (res > 1.5) nice = 2 * mag
+    const yTicksArr: number[] = []
+    for (let v = Math.ceil(yLoS / nice) * nice; v <= yHiS; v += nice) {
+      yTicksArr.push(parseFloat(v.toFixed(2)))
+    }
 
-      for (let i = 1; i < group.length; i++) {
-        const gap = new Date(group[i].timestamp).getTime() - new Date(group[i - 1].timestamp).getTime()
-        if (gap > gapThreshold) {
-          segments.push(buildLine(group, segStart, i, sx, sy))
-          segStart = i
-        }
-      }
-      segments.push(buildLine(group, segStart, group.length, sx, sy))
-
-      return { stationId, name, color, d: segments.join(' ') }
-    })
+    const xTicksArr = xHi > xLo
+      ? Array.from({ length: 7 }, (_, i) => new Date(xLo + (i / 6) * xRange))
+      : [new Date(xLo)]
 
     return {
-      lines: result,
-      yMin: yLoScaled,
-      yMax: yHiScaled,
-      xMin: xLo,
-      xMax: xHi,
-      anomalies: anoms,
+      path: buildPath(sorted, metricKey, sx, sy, gapMs),
+      yMin: yLoS, yMax: yHiS, xMin: xLo, xMax: xHi,
+      yTicks: yTicksArr, xTicks: xTicksArr, cW, cH,
     }
-  }, [readings, groups])
+  }, [sorted, metricKey])
 
-  const chartW = SVG_W - PAD.left - PAD.right
-  const chartH = 300 - PAD.top - PAD.bottom
+  const { path, yMin, yMax, xMin, xMax, yTicks, xTicks, cW, cH } = computed
 
-  const yTicks = useMemo(() => {
-    const range = yMax - yMin
-    const rough = range / 5
-    const mag = Math.pow(10, Math.floor(Math.log10(rough)))
-    const res = rough / mag
-    let nice: number
-    if (res <= 1.5) nice = mag
-    else if (res <= 3.5) nice = 2 * mag
-    else if (res <= 7.5) nice = 5 * mag
-    else nice = 10 * mag
-    const start = Math.ceil(yMin / nice) * nice
-    const ticks: number[] = []
-    for (let v = start; v <= yMax; v += nice) {
-      ticks.push(parseFloat(v.toFixed(2)))
-    }
-    return ticks
-  }, [yMin, yMax])
+  function sxVal(t: number) { return PAD.left + ((t - xMin) / (xMax - xMin || 1)) * cW }
+  function syVal(v: number) { return PAD.top + cH - ((v - yMin) / (yMax - yMin || 1)) * cH }
 
-  const xTicks = useMemo(() => {
-    if (xMax <= xMin) return [new Date(xMin)]
-    const count = 6
-    const step = (xMax - xMin) / count
-    return Array.from({ length: count + 1 }, (_, i) => new Date(xMin + i * step))
-  }, [xMin, xMax])
-
-  function buildLine(
-    group: HistoricalReading[],
-    start: number,
-    end: number,
-    sx: (t: number) => number,
-    sy: (v: number) => number,
-  ) {
-    if (start >= end || start >= group.length) return ''
-    const pts = group.slice(start, end).map((r) => {
-      const x = sx(new Date(r.timestamp).getTime())
-      const y = sy(r.value)
-      return `${x},${y}`
-    })
-    return `M ${pts.join(' L ')}`
-  }
-
-  function sxVal(t: number) { return PAD.left + ((t - xMin) / (xMax - xMin)) * chartW }
-  function syVal(v: number) { return PAD.top + chartH - ((v - yMin) / (yMax - yMin)) * chartH }
-
-  function findClosest(clientX: number) {
-    if (!svgRef.current || !readings.length) return null
+  function handlePointer(e: React.MouseEvent<SVGSVGElement>) {
+    if (!svgRef.current || !sorted.length) return
     const rect = svgRef.current.getBoundingClientRect()
-    const mx = clientX - rect.left
-    const xRange = xMax - xMin
-    const mouseTime = xMin + ((mx - PAD.left) / chartW) * xRange
-
-    let closest: HistoricalReading | null = null
-    let closestDist = Infinity
-    for (const r of readings) {
-      const t = new Date(r.timestamp).getTime()
-      const dist = Math.abs(t - mouseTime)
-      if (dist < closestDist) {
-        closestDist = dist
-        closest = r
-      }
+    const mx = e.clientX - rect.left
+    const mouseTime = xMin + ((mx - PAD.left) / cW) * (xMax - xMin)
+    let best: SensorReadingChart | null = null
+    let bestDist = Infinity
+    for (const r of sorted) {
+      const dist = Math.abs(new Date(r.timestamp).getTime() - mouseTime)
+      if (dist < bestDist) { bestDist = dist; best = r }
     }
-    return closest
-  }
-
-  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
-    const closest = findClosest(e.clientX)
-    if (!closest) return
-
-    const x = sxVal(new Date(closest.timestamp).getTime())
-    const y = syVal(closest.value)
-    const time = new Date(closest.timestamp).toLocaleString(undefined, {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    if (!best) return
+    const v = best[metricKey]
+    if (v === null) return
+    const t = new Date(best.timestamp).getTime()
+    setTooltip({
+      x: sxVal(t),
+      y: syVal(v),
+      value: v,
+      time: new Date(best.timestamp).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      }),
     })
-
-    setTooltip({ x, y, value: closest.value, stationName: closest.station_name, time, isAnomaly: closest.is_anomaly, anomalyReason: closest.anomaly_reason })
-  }
-
-  function handleClick(e: React.MouseEvent<SVGSVGElement>) {
-    const closest = findClosest(e.clientX)
-    if (!closest) return
-
-    const x = sxVal(new Date(closest.timestamp).getTime())
-    const y = syVal(closest.value)
-    const time = new Date(closest.timestamp).toLocaleString(undefined, {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    })
-
-    setTooltip({ x, y, value: closest.value, stationName: closest.station_name, time, isAnomaly: closest.is_anomaly, anomalyReason: closest.anomaly_reason })
   }
 
   if (isLoading) {
@@ -205,12 +163,10 @@ export function HistoricalChart({ readings, sensorType, isLoading }: HistoricalC
     )
   }
 
-  if (!readings.length) {
+  if (!sorted.length) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h3 className="mb-4 text-sm font-semibold text-midnight font-display">
-          {cfg.label} — Historical
-        </h3>
+        <h3 className="mb-4 text-sm font-semibold text-midnight font-display">{cfg.label} — Historical</h3>
         <div className="flex h-[260px] items-center justify-center rounded-xl bg-slate-50">
           <p className="text-sm text-storm/40">No readings available for this selection</p>
         </div>
@@ -223,112 +179,69 @@ export function HistoricalChart({ readings, sensorType, isLoading }: HistoricalC
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-midnight font-display">
           {cfg.label} — Historical{' '}
-          <span className="text-xs font-normal text-storm/40">({readings.length} readings)</span>
+          <span className="text-xs font-normal text-storm/40">({sorted.length} readings)</span>
         </h3>
-        {groups.length > 1 && (
-          <div className="flex flex-wrap gap-3">
-            {groups.map(([id, group], idx) => (
-              <span key={id} className="inline-flex items-center gap-1 text-[10px] text-storm/50">
-                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: STATION_COLORS[idx % STATION_COLORS.length] }} />
-                {group[0].station_name.split(' ').slice(0, 2).join(' ')}
-              </span>
-            ))}
-          </div>
-        )}
+        <span className="inline-flex items-center gap-1 text-[10px] text-storm/50">
+          <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
+          {cfg.label}
+        </span>
       </div>
 
       <div className="relative" style={{ maxWidth: '100%' }}>
         <svg
           ref={svgRef}
-          viewBox={`0 0 ${SVG_W} 300`}
+          viewBox={`0 0 ${SVG_W} ${SVG_H}`}
           className="w-full select-none"
           style={{ height: 'auto', touchAction: 'none' }}
-          onMouseMove={handleMouseMove}
+          onMouseMove={handlePointer}
           onMouseLeave={() => setTooltip(null)}
-          onClick={handleClick}
+          onClick={handlePointer}
           role="img"
           aria-label={`${cfg.label} chart`}
         >
-          {/* Grid lines */}
           {yTicks.map((v) => {
             const y = syVal(v)
             return (
               <g key={v}>
                 <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="#E2E8F0" strokeWidth="0.5" />
-                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#94A3B8">
-                  {v}
-                </text>
+                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#94A3B8">{v}</text>
               </g>
             )
           })}
-
-          {/* X-axis time labels */}
           {xTicks.map((d, i) => {
             const x = sxVal(d.getTime())
             const label = d.toLocaleString(undefined, { month: 'short', day: 'numeric' })
             return (
               <g key={i}>
-                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + chartH} stroke="#F1F5F9" strokeWidth="0.5" />
-                <text x={x} y={300 - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="#94A3B8">
-                  {label}
-                </text>
+                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + cH} stroke="#F1F5F9" strokeWidth="0.5" />
+                <text x={x} y={SVG_H - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="#94A3B8">{label}</text>
               </g>
             )
           })}
-
-          {/* Y-axis label */}
-          <text x={14} y={PAD.top + chartH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 14, ${PAD.top + chartH / 2})`}>
+          <text x={14} y={PAD.top + cH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 14, ${PAD.top + cH / 2})`}>
             {cfg.unit}
           </text>
-
-          {/* Lines */}
-          {lines.map((l) => (
-            <path key={l.stationId} d={l.d} fill="none" stroke={l.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-          ))}
-
-          {/* Anomaly markers — simple filled circles on the line */}
-          {anomalies.map((r) => {
-            const x = sxVal(new Date(r.timestamp).getTime())
-            const y = syVal(r.value)
-            return (
-              <g key={`anom-${r.id}`}>
-                <circle cx={x} cy={y} r="5" fill="#F59E0B" stroke="#FFFFFF" strokeWidth="1.5" />
-                <circle cx={x} cy={y} r="2" fill="#FFFFFF" opacity="0.8" />
-              </g>
-            )
-          })}
-
-          {/* Vertical cursor line */}
+          {path && (
+            <path d={path} fill="none" stroke={cfg.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          )}
           {tooltip && (
-            <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + chartH} stroke="#94A3B8" strokeWidth="0.5" strokeDasharray="3,3" />
+            <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + cH} stroke="#94A3B8" strokeWidth="0.5" strokeDasharray="3,3" />
           )}
         </svg>
 
-        {/* Tooltip */}
         {tooltip && (
           <div
             className="pointer-events-none absolute z-10 -translate-x-1/2"
             style={{
               left: `${(tooltip.x / SVG_W) * 100}%`,
-              top: `${(tooltip.y / 300) * 100}%`,
+              top: `${Math.min(tooltip.y / SVG_H, 0.85) * 100}%`,
             }}
           >
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg -translate-y-full">
-              <div className="flex items-baseline gap-2">
-                <span className="text-sm font-bold text-midnight font-display">
-                  {tooltip.value}{cfg.unit}
-                </span>
-                {tooltip.isAnomaly && (
-                  <span className="text-[10px] font-medium text-amber-600">
-                    Flagged
-                  </span>
-                )}
-              </div>
-              <p className="text-[10px] text-storm/50">{tooltip.stationName}</p>
+              <span className="text-sm font-bold text-midnight font-display">
+                {tooltip.value}{cfg.unit}
+              </span>
               <p className="text-[10px] text-storm/40">{tooltip.time}</p>
-              {tooltip.isAnomaly && tooltip.anomalyReason && (
-                <p className="text-[10px] text-amber-600">{tooltip.anomalyReason}</p>
-              )}
             </div>
           </div>
         )}

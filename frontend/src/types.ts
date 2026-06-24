@@ -111,6 +111,27 @@ export interface LoginResult {
   role: UserRole
 }
 
+export type SensorMetricKey =
+  | 'temperature'
+  | 'humidity'
+  | 'pressure'
+  | 'wind_speed'
+  | 'wind_direction'
+  | 'rain'
+  | 'light'
+  | 'soil_moisture'
+
+export const SENSOR_METRIC_CONFIG: Record<SensorMetricKey, { label: string; unit: string; color: string }> = {
+  temperature:    { label: 'Temperature',    unit: '°C',   color: '#F97316' },
+  humidity:       { label: 'Humidity',       unit: '%',    color: '#0EA5E9' },
+  pressure:       { label: 'Atm. Pressure',  unit: 'hPa',  color: '#8B5CF6' },
+  wind_speed:     { label: 'Wind Speed',     unit: 'm/s',  color: '#22C55E' },
+  wind_direction: { label: 'Wind Direction', unit: '°',    color: '#94A3B8' },
+  rain:           { label: 'Rainfall',       unit: 'mm',   color: '#38BDF8' },
+  light:          { label: 'Solar Radiation',unit: 'W/m²', color: '#F59E0B' },
+  soil_moisture:  { label: 'Soil Moisture',  unit: '%',    color: '#84CC16' },
+}
+
 export type PowerMetricKey =
   | 'volt_3v3'
   | 'volt_5v'

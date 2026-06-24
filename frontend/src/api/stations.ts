@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { ApiEnvelope, PowerChart, Station } from '../types'
+import type { ApiEnvelope, PowerChart, SensorReadingChart, Station } from '../types'
 
 export async function fetchStations(): Promise<Station[]> {
   const res = await apiClient.get<ApiEnvelope<Station[]>>('/api/stations/')
@@ -21,6 +21,25 @@ export async function fetchPowerHistory(
   const res = await apiClient.get<ApiEnvelope<PowerHistoryData>>(
     `/api/stations/${stationId}/history/`,
     { params: { type: 'power', hours, limit } },
+  )
+  return res.data.data.readings
+}
+
+interface SensorHistoryData {
+  station_id: string
+  hours: number
+  count: number
+  readings: SensorReadingChart[]
+}
+
+export async function fetchSensorHistory(
+  stationId: string,
+  hours: number,
+  limit = 200,
+): Promise<SensorReadingChart[]> {
+  const res = await apiClient.get<ApiEnvelope<SensorHistoryData>>(
+    `/api/stations/${stationId}/history/`,
+    { params: { type: 'sensor', hours, limit } },
   )
   return res.data.data.readings
 }
