@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useCurrentUser } from '../../hooks/useCurrentUser'
 import { MenuIcon, CloseIcon } from '../landing/Icons'
 
@@ -79,7 +79,6 @@ function Brand() {
 
 /* ── Shared nav ── */
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
-  const pathname = useLocation().pathname
   const { user } = useCurrentUser()
   const isAdmin = user?.role === 'admin'
 
@@ -87,24 +86,23 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav className="mt-6 space-y-1" aria-label="Main navigation">
-      {visibleItems.map((item) => {
-        const isActive = pathname === item.href || (item.href !== '#' && pathname.startsWith(item.href))
-        return (
-          <a
-            key={item.label}
-            href={item.href}
-            onClick={onNavigate}
-            className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors duration-200 cursor-pointer ${
+      {visibleItems.map((item) => (
+        <NavLink
+          key={item.label}
+          to={item.href}
+          onClick={onNavigate}
+          end
+          className={({ isActive }) =>
+            `flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors duration-200 cursor-pointer ${
               isActive
                 ? 'bg-white/10 text-white'
                 : 'text-white/50 hover:bg-white/5 hover:text-white/80'
-            }`}
-            aria-current={isActive ? 'page' : undefined}
-          >
-            {item.label}
-          </a>
-        )
-      })}
+            }`
+          }
+        >
+          {item.label}
+        </NavLink>
+      ))}
     </nav>
   )
 }

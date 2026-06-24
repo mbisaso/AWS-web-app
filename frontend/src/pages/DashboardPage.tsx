@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sidebar } from '../components/Sidebar'
+import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { fetchStations } from '../api/stations'
 import type { Station, StationOperationalStatus } from '../types'
 
@@ -42,7 +42,7 @@ export function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#f2f6fa] text-slate-900">
       <div className="mx-auto flex min-h-screen max-w-[1600px]">
-        <Sidebar />
+        <DashboardSidebar />
 
         <main className="flex-1 px-5 py-5 sm:px-6 lg:px-8">
           <div className="rounded-[28px] border border-slate-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.06)]">

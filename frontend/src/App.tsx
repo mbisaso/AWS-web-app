@@ -13,10 +13,12 @@ import {
   SimManagementPage,
   ReportsPage,
 } from './pages'
+import { AuthProvider } from './context/AuthContext'
 
 function App() {
   return (
     <BrowserRouter>
+      <AuthProvider>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
@@ -32,6 +34,7 @@ function App() {
         <Route path="/stations/map" element={<StationMapPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </AuthProvider>
     </BrowserRouter>
   )
 }
