@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState } from 'react'
-import type { PowerMetricType } from '../services/api'
-import { POWER_METRIC_CONFIG } from '../services/api'
-import { useDashboardData } from '../hooks/useDashboardData'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { PowerMetricKey, Station } from '../types'
+import { POWER_METRIC_CONFIG } from '../types'
+import { fetchStations } from '../api/stations'
 import { usePowerData } from '../hooks/usePowerData'
 import { Sidebar } from '../components/Sidebar'
 import { PowerStationSelector } from '../components/powerData/PowerStationSelector'
@@ -10,11 +10,14 @@ import { PowerHistoricalChart } from '../components/powerData/PowerHistoricalCha
 import { PowerReadingsTable } from '../components/powerData/PowerReadingsTable'
 import { PowerSummaryCharts } from '../components/powerData/PowerSummaryCharts'
 
-const SECONDARY_MAP: Partial<Record<PowerMetricType, PowerMetricType>> = {
-  battery_level: 'voltage',
-  voltage: 'solar_input',
-  current_draw: 'solar_input',
-  solar_input: 'voltage',
+const SECONDARY_MAP: Partial<Record<PowerMetricKey, PowerMetricKey>> = {
+  volt_batt:  'volt_solar',
+  volt_solar: 'curr_solar',
+  curr_batt:  'curr_solar',
+  curr_solar: 'volt_solar',
+  volt_3v3:   'volt_5v',
+  volt_5v:    'volt_3v3',
+  volt_dc:    'volt_batt',
 }
 
 function daysAgo(days: number): string {
@@ -28,41 +31,35 @@ function today(): string {
 }
 
 export function PowerDataPage() {
-  const { data: dashData, isLoading: dashLoading } = useDashboardData()
+  const [stations, setStations] = useState<Station[]>([])
+  const [stationsLoading, setStationsLoading] = useState(true)
 
-  const [stationId, setStationId] = useState<number | null>(null)
-  const [metric, setMetric] = useState<PowerMetricType>('battery_level')
+  useEffect(() => {
+    fetchStations()
+      .then(setStations)
+      .finally(() => setStationsLoading(false))
+  }, [])
+
+  const [stationId, setStationId] = useState<string | null>(null)
+  const [metric, setMetric] = useState<PowerMetricKey>('volt_batt')
   const [dateFrom, setDateFrom] = useState(() => daysAgo(7))
   const [dateTo, setDateTo] = useState(() => today())
   const [showSecondary, setShowSecondary] = useState(false)
 
-  const stations = dashData?.stations ?? []
-
-  const primaryParams = useMemo(
-    () => ({ stationId, metric, dateFrom, dateTo }),
-    [stationId, metric, dateFrom, dateTo],
+  const hours = useMemo(
+    () => Math.max(1, Math.ceil((Date.parse(dateTo) - Date.parse(dateFrom)) / 3600000)),
+    [dateFrom, dateTo],
   )
 
-  const secondaryMetric = SECONDARY_MAP[metric]
+  const { data: readings, isLoading, error, retry } = usePowerData({ stationId, hours })
 
-  const secondaryParams = useMemo(
-    () => secondaryMetric ? { stationId, metric: secondaryMetric, dateFrom, dateTo } : null,
-    [stationId, secondaryMetric, dateFrom, dateTo],
-  )
-
-  const { data: powerData, isLoading, error, retry } = usePowerData(primaryParams)
-  const { data: secondaryData } = usePowerData(secondaryParams ?? primaryParams)
-
-  const currentReading = powerData?.current ?? null
-  const readings = powerData?.readings ?? []
-  const secondaryReadings = showSecondary && secondaryData ? secondaryData.readings : []
+  const currentReading = readings.length ? readings[readings.length - 1] : null
+  const secondaryKey = SECONDARY_MAP[metric] ?? null
 
   const handleDateChange = useCallback((from: string, to: string) => {
     setDateFrom(from)
     setDateTo(to)
   }, [])
-
-  const secondaryConfig = secondaryMetric ? POWER_METRIC_CONFIG[secondaryMetric] : null
 
   const chartIsLoading = isLoading && !readings.length
 
@@ -79,7 +76,7 @@ export function PowerDataPage() {
               Power system telemetry
             </h1>
             <p className="text-sm text-white/50">
-              {dashLoading
+              {stationsLoading
                 ? 'Loading stations...'
                 : `${stations.length} stations · ${POWER_METRIC_CONFIG[metric].label} · ${readings.length} readings`}
             </p>
@@ -100,7 +97,7 @@ export function PowerDataPage() {
           />
         </section>
 
-        {/* ── Error state (scoped) ── */}
+        {/* ── Error state ── */}
         {error && (
           <div className="mb-6 flex items-center gap-4 rounded-2xl border border-rose-200 bg-rose-50/50 p-4">
             <svg className="h-5 w-5 shrink-0 text-rose" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -122,7 +119,7 @@ export function PowerDataPage() {
           </div>
         )}
 
-        {/* ── Current power status summary cards ── */}
+        {/* ── Current status cards ── */}
         <section aria-label="Current power status" className="mb-6">
           <PowerStatusCard
             reading={currentReading}
@@ -133,12 +130,9 @@ export function PowerDataPage() {
         {/* ── Historical chart ── */}
         <section aria-label="Historical chart" className="mb-6">
           <PowerHistoricalChart
-            primary={{ metric, readings: readings as any, color: POWER_METRIC_CONFIG[metric].color }}
-            secondary={secondaryConfig && secondaryReadings.length ? {
-              metric: secondaryMetric!,
-              readings: secondaryReadings as any,
-              color: secondaryConfig.color,
-            } : null}
+            readings={readings}
+            primaryKey={metric}
+            secondaryKey={secondaryKey}
             showSecondary={showSecondary}
             onToggleSecondary={() => setShowSecondary((s) => !s)}
             isLoading={chartIsLoading}
@@ -149,16 +143,16 @@ export function PowerDataPage() {
         <section aria-label="Power readings data table">
           <PowerReadingsTable
             readings={readings}
-            metric={metric}
+            metricKey={metric}
             isLoading={chartIsLoading}
           />
         </section>
 
-        {/* ── Summary charts (cross-station overview) ── */}
+        {/* ── Summary charts ── */}
         <section aria-label="Power summary" className="mt-6">
           <PowerSummaryCharts
             readings={readings}
-            metric={metric}
+            metricKey={metric}
             isLoading={chartIsLoading}
           />
         </section>

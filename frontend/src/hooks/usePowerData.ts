@@ -1,39 +1,42 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { PowerMetricType, PowerDataResponse } from '../services/api'
-import { fetchPowerData } from '../services/api'
+import type { PowerChart } from '../types'
+import { fetchPowerHistory } from '../api/stations'
 
 export interface UsePowerDataResult {
-  data: PowerDataResponse | null
+  data: PowerChart[]
   isLoading: boolean
   error: string | null
   retry: () => void
 }
 
 export function usePowerData(params: {
-  stationId: number | null
-  metric: PowerMetricType
-  dateFrom: string
-  dateTo: string
+  stationId: string | null
+  hours: number
 }): UsePowerDataResult {
-  const [data, setData] = useState<PowerDataResponse | null>(null)
+  const [data, setData] = useState<PowerChart[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
-  const hasDataRef = useRef(false)
   const paramsRef = useRef(params)
   paramsRef.current = params
 
   useEffect(() => {
+    if (!paramsRef.current.stationId) {
+      setData([])
+      setIsLoading(false)
+      setError(null)
+      return
+    }
+
     const abort = new AbortController()
     const p = paramsRef.current
 
     async function load() {
       try {
-        const result = await fetchPowerData(p)
+        const result = await fetchPowerHistory(p.stationId!, p.hours)
         if (abort.signal.aborted) return
         setData(result)
         setError(null)
-        hasDataRef.current = true
       } catch (err) {
         if (abort.signal.aborted) return
         setError(err instanceof Error ? err.message : 'Failed to load power data')
@@ -44,11 +47,10 @@ export function usePowerData(params: {
 
     async function backgroundLoad() {
       try {
-        const result = await fetchPowerData(paramsRef.current)
+        const result = await fetchPowerHistory(paramsRef.current.stationId!, paramsRef.current.hours)
         if (abort.signal.aborted) return
         setData(result)
         setError(null)
-        hasDataRef.current = true
       } catch {
         /* silent */
       }
@@ -57,7 +59,6 @@ export function usePowerData(params: {
     setIsLoading(true)
     setError(null)
     const startTimer = setTimeout(() => load(), 0)
-
     const interval = window.setInterval(() => backgroundLoad(), 30_000)
 
     return () => {
@@ -65,7 +66,7 @@ export function usePowerData(params: {
       clearInterval(interval)
       abort.abort()
     }
-  }, [params.stationId, params.metric, params.dateFrom, params.dateTo, retryCount])
+  }, [params.stationId, params.hours, retryCount])
 
   const retry = useCallback(() => {
     setIsLoading(true)

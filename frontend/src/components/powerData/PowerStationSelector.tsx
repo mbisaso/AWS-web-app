@@ -1,16 +1,16 @@
-import type { PowerMetricType, StationReading } from '../../services/api'
-import { POWER_METRIC_CONFIG } from '../../services/api'
+import type { PowerMetricKey, Station } from '../../types'
+import { POWER_METRIC_CONFIG } from '../../types'
 import { StationDropdown } from '../shared/StationDropdown'
 import { DateRangePicker } from '../shared/DateRangePicker'
 
-const POWER_METRICS = Object.keys(POWER_METRIC_CONFIG) as PowerMetricType[]
+const POWER_METRICS = Object.keys(POWER_METRIC_CONFIG) as PowerMetricKey[]
 
 interface PowerStationSelectorProps {
-  stations: StationReading[]
-  selectedStationId: number | null
-  onStationChange: (id: number | null) => void
-  selectedMetric: PowerMetricType
-  onMetricChange: (metric: PowerMetricType) => void
+  stations: Station[]
+  selectedStationId: string | null
+  onStationChange: (id: string | null) => void
+  selectedMetric: PowerMetricKey
+  onMetricChange: (metric: PowerMetricKey) => void
   dateFrom: string
   dateTo: string
   onDateChange: (from: string, to: string) => void

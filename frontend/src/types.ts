@@ -1,5 +1,14 @@
 export type StationOperationalStatus = 'full' | 'partial' | 'down'
 
+export interface StationSummary {
+  id: number
+  stationId: string
+  name: string
+  expectedIntervalMinutes: number
+  status: StationOperationalStatus
+  lastUpdated: string
+}
+
 export interface StationStatus {
   status: StationOperationalStatus
   last_updated: string
@@ -100,4 +109,23 @@ export interface LoginResult {
   refresh: string
   username: string
   role: UserRole
+}
+
+export type PowerMetricKey =
+  | 'volt_3v3'
+  | 'volt_5v'
+  | 'volt_batt'
+  | 'volt_solar'
+  | 'volt_dc'
+  | 'curr_batt'
+  | 'curr_solar'
+
+export const POWER_METRIC_CONFIG: Record<PowerMetricKey, { label: string; unit: string; color: string }> = {
+  volt_batt:  { label: 'Battery Voltage', unit: 'V', color: '#0EA5E9' },
+  volt_solar: { label: 'Solar Voltage',   unit: 'V', color: '#F59E0B' },
+  volt_3v3:   { label: '3.3V Rail',       unit: 'V', color: '#22C55E' },
+  volt_5v:    { label: '5V Rail',         unit: 'V', color: '#8B5CF6' },
+  volt_dc:    { label: 'DC Voltage',      unit: 'V', color: '#94A3B8' },
+  curr_batt:  { label: 'Battery Current', unit: 'A', color: '#F97316' },
+  curr_solar: { label: 'Solar Current',   unit: 'A', color: '#EAB308' },
 }

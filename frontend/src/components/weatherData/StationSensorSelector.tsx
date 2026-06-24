@@ -1,6 +1,5 @@
 import type { SensorType, StationReading } from '../../services/api'
 import { SENSOR_CONFIG } from '../../services/api'
-import { StationDropdown } from '../shared/StationDropdown'
 import { DateRangePicker } from '../shared/DateRangePicker'
 
 const SENSOR_TYPES = Object.keys(SENSOR_CONFIG) as SensorType[]
@@ -29,11 +28,24 @@ export function StationSensorSelector({
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-        <StationDropdown
-          stations={stations}
-          selectedStationId={selectedStationId}
-          onChange={onStationChange}
-        />
+        <div className="min-w-0 sm:w-56">
+          <label htmlFor="weather-station-select" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-storm/40">
+            Station
+          </label>
+          <select
+            id="weather-station-select"
+            value={selectedStationId ?? ''}
+            onChange={(e) => onStationChange(e.target.value ? Number(e.target.value) : null)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-midnight transition-colors focus:border-sky-200 focus:ring-2 focus:ring-sky-soft focus:outline-none"
+          >
+            <option value="">All stations</option>
+            {stations.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
         <DateRangePicker
           dateFrom={dateFrom}
           dateTo={dateTo}

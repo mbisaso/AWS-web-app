@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react'
-import type { PowerMetricType, PowerReading } from '../../services/api'
-import { POWER_METRIC_CONFIG } from '../../services/api'
+import type { PowerChart, PowerMetricKey } from '../../types'
+import { POWER_METRIC_CONFIG } from '../../types'
 
 type SortKey = 'timestamp' | 'value'
 
 interface PowerReadingsTableProps {
-  readings: PowerReading[]
-  metric: PowerMetricType
+  readings: PowerChart[]
+  metricKey: PowerMetricKey
   isLoading?: boolean
 }
 
-export function PowerReadingsTable({ readings, metric, isLoading }: PowerReadingsTableProps) {
-  const cfg = POWER_METRIC_CONFIG[metric]
+export function PowerReadingsTable({ readings, metricKey, isLoading }: PowerReadingsTableProps) {
+  const cfg = POWER_METRIC_CONFIG[metricKey]
   const [sortKey, setSortKey] = useState<SortKey>('timestamp')
   const [sortAsc, setSortAsc] = useState(false)
   const [page, setPage] = useState(0)
@@ -25,47 +25,34 @@ export function PowerReadingsTable({ readings, metric, isLoading }: PowerReading
           ? new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
           : new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       }
-      return sortAsc ? a.value - b.value : b.value - a.value
+      const av = a[metricKey] ?? -Infinity
+      const bv = b[metricKey] ?? -Infinity
+      return sortAsc ? av - bv : bv - av
     })
     return copy
-  }, [readings, sortKey, sortAsc])
+  }, [readings, sortKey, sortAsc, metricKey])
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / PER_PAGE))
   const paged = sorted.slice(page * PER_PAGE, (page + 1) * PER_PAGE)
 
   function toggleSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortAsc((prev) => !prev)
-    } else {
-      setSortKey(key)
-      setSortAsc(key === 'value')
-    }
+    if (sortKey === key) setSortAsc((p) => !p)
+    else { setSortKey(key); setSortAsc(key === 'value') }
     setPage(0)
   }
 
   function exportCSV() {
-    const header = 'Timestamp,Station,Metric,Value,Unit,Flagged,Reason'
-    const rows = readings.map((r) =>
-      [
-        r.timestamp,
-        r.station_name,
-        r.metric,
-        r.value,
-        r.unit,
-        r.is_anomaly ? 'Yes' : '',
-        r.is_anomaly ? (r.anomaly_reason ?? '') : '',
-      ].join(','),
-    )
+    const header = `Timestamp,${cfg.label} (${cfg.unit})`
+    const rows = sorted.map((r) => `${r.timestamp},${r[metricKey] ?? ''}`)
     const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `power-${metric}-readings.csv`
+    a.download = `power-${metricKey}-readings.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
 
-  /* ── Loading skeleton ── */
   if (isLoading) {
     return (
       <div className="animate-pulse rounded-2xl border border-slate-200 bg-white p-5" aria-hidden="true">
@@ -79,14 +66,11 @@ export function PowerReadingsTable({ readings, metric, isLoading }: PowerReading
     )
   }
 
-  /* ── Empty state ── */
   if (!readings.length) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-midnight font-display">
-            {cfg.label} — Readings
-          </h3>
+          <h3 className="text-sm font-semibold text-midnight font-display">{cfg.label} — Readings</h3>
         </div>
         <div className="flex flex-col items-center py-12">
           <svg className="mb-3 h-10 w-10 text-storm/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -96,7 +80,7 @@ export function PowerReadingsTable({ readings, metric, isLoading }: PowerReading
             <path d="M9 15l3-3 3 3" />
           </svg>
           <p className="text-sm font-medium text-storm/40">No readings match the current filters</p>
-          <p className="mt-1 text-xs text-storm/30">Try adjusting the station, metric, or date range.</p>
+          <p className="mt-1 text-xs text-storm/30">Select a station and date range to load data.</p>
         </div>
       </div>
     )
@@ -104,7 +88,6 @@ export function PowerReadingsTable({ readings, metric, isLoading }: PowerReading
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-      {/* Header + CSV export */}
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-midnight font-display">
           {cfg.label} — Readings
@@ -124,65 +107,46 @@ export function PowerReadingsTable({ readings, metric, isLoading }: PowerReading
         </button>
       </div>
 
-      {/* Table */}
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs" role="table">
           <colgroup>
-            <col className="w-[22%]" />
-            <col className="w-[18%]" />
-            <col className="w-[14%]" />
-            <col className="w-[14%]" />
-            <col className="w-[14%]" />
-            <col className="w-[18%]" />
+            <col className="w-[45%]" />
+            <col className="w-[35%]" />
+            <col className="w-[20%]" />
           </colgroup>
           <thead>
             <tr className="border-b border-slate-100">
               <ThSortable label="Timestamp" col="timestamp" current={sortKey} asc={sortAsc} onToggle={toggleSort} />
-              <Th>Station</Th>
-              <Th>Metric</Th>
-              <ThSortable label="Value" col="value" current={sortKey} asc={sortAsc} onToggle={toggleSort} />
+              <ThSortable label={cfg.label} col="value" current={sortKey} asc={sortAsc} onToggle={toggleSort} />
               <Th>Unit</Th>
-              <Th>Flags</Th>
             </tr>
           </thead>
           <tbody>
-            {paged.map((r) => (
-              <tr
-                key={r.id}
-                className={`border-b border-slate-50 transition-colors hover:bg-slate-50/50 ${r.is_anomaly ? 'bg-amber-50/40' : ''}`}
-              >
-                <td className="py-2.5 pr-3 font-medium text-midnight tabular-nums">
-                  {new Date(r.timestamp).toLocaleString(undefined, {
-                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                  })}
-                </td>
-                <td className="py-2.5 pr-3 text-storm/70">{r.station_name}</td>
-                <td className="py-2.5 pr-3 text-storm/70">{POWER_METRIC_CONFIG[r.metric]?.label ?? r.metric}</td>
-                <td className={`py-2.5 pr-3 font-semibold tabular-nums ${r.is_anomaly ? 'text-amber-700' : 'text-midnight'}`}>
-                  {r.value}
-                </td>
-                <td className="py-2.5 pr-3 text-storm/40">{r.unit}</td>
-                <td className="py-2.5">
-                  {r.is_anomaly && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700" title={r.anomaly_reason}>
-                      <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                        <polygon points="12,2 2,22 22,22" />
-                      </svg>
-                      Flagged
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {paged.map((r, idx) => {
+              const val = r[metricKey]
+              return (
+                <tr
+                  key={r.timestamp + idx}
+                  className="border-b border-slate-50 transition-colors hover:bg-slate-50/50"
+                >
+                  <td className="py-2.5 pr-3 font-medium text-midnight tabular-nums">
+                    {new Date(r.timestamp).toLocaleString(undefined, {
+                      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                    })}
+                  </td>
+                  <td className="py-2.5 pr-3 font-semibold tabular-nums text-midnight">
+                    {val ?? <span className="text-storm/30">—</span>}
+                  </td>
+                  <td className="py-2.5 pr-3 text-storm/40">{cfg.unit}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
 
-      {/* Pagination */}
       <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-        <p className="text-[10px] text-storm/40">
-          Page {page + 1} of {totalPages}
-        </p>
+        <p className="text-[10px] text-storm/40">Page {page + 1} of {totalPages}</p>
         <div className="flex gap-1">
           <button
             type="button"
@@ -206,8 +170,6 @@ export function PowerReadingsTable({ readings, metric, isLoading }: PowerReading
   )
 }
 
-/* ── Sub-components ── */
-
 function Th({ children }: { children: React.ReactNode }) {
   return (
     <th className="py-2.5 pr-3 text-left text-[10px] font-semibold uppercase tracking-wider text-storm/40">
@@ -217,11 +179,7 @@ function Th({ children }: { children: React.ReactNode }) {
 }
 
 function ThSortable({
-  label,
-  col,
-  current,
-  asc,
-  onToggle,
+  label, col, current, asc, onToggle,
 }: {
   label: string
   col: SortKey
@@ -239,7 +197,7 @@ function ThSortable({
       >
         {label}
         <span className="ml-1 text-storm/20" aria-hidden="true">
-          {isActive ? (asc ? '\u2191' : '\u2193') : '\u2195'}
+          {isActive ? (asc ? '↑' : '↓') : '↕'}
         </span>
       </button>
     </th>
