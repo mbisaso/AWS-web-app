@@ -31,11 +31,11 @@ SECRET_KEY = os.environ.get('SECRET_KEY', '26k@jq%=17n(r86e^atmailv0e&yjfc%qh@2w
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = [
-     'localhost',
+    'localhost',
     '127.0.0.1',
-    '.trycloudflare.com', 
-    '.lhr.life', 
-     '.ngrok-free.dev',    # ← add this
+    '.trycloudflare.com',
+    '.lhr.life',
+    '.ngrok-free.dev',
     '.ngrok-free.app',
     '.onrender.com',
 ]
@@ -58,7 +58,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'corsheaders',
     'accounts',
     'stations',
     'rest_framework_simplejwt',
@@ -100,17 +99,15 @@ LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware', 
-    'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware', 
-    
+    'whitenoise.middleware.WhiteNoiseMiddleware',
 ]
 
 ROOT_URLCONF = 'aws_dashboard.urls'
@@ -138,7 +135,7 @@ WSGI_APPLICATION = 'aws_dashboard.wsgi.application'
 
 DATABASES = {
     'default': dj_database_url.config(
-        default='postgresql://postgres:aws@2026@localhost:5433/aws_db'
+        default='postgresql://aws_user:aws%402026@localhost:5432/aws-db'
     )
 }
 
@@ -183,7 +180,3 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-]
