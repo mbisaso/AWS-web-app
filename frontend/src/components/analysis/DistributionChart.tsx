@@ -1,29 +1,29 @@
-import { useMemo } from 'react'
-import type { HistoricalReading, SensorType } from '../../services/api'
-import { SENSOR_CONFIG } from '../../services/api'
+﻿import { useMemo } from 'react'
+import type { MetricReading, SensorMetricKey } from '../../types'
+import { SENSOR_METRIC_CONFIG } from '../../types'
 
 const PAD = { top: 20, bottom: 40, left: 55, right: 20 }
 const SVG_W = 600
 const SVG_H = 350
 
-const EXPECTED_RANGES: Partial<Record<SensorType, { min: number; max: number }>> = {
-  temperature: { min: 10, max: 40 },
-  humidity: { min: 20, max: 90 },
-  rainfall: { min: 0, max: 50 },
-  wind_speed: { min: 0, max: 20 },
-  wind_direction: { min: 0, max: 360 },
-  atmospheric_pressure: { min: 990, max: 1040 },
-  solar_radiation: { min: 0, max: 1000 },
+const EXPECTED_RANGES: Partial<Record<SensorMetricKey, { min: number; max: number }>> = {
+  temperature:    { min: 10, max: 40 },
+  humidity:       { min: 20, max: 90 },
+  rain:           { min: 0,  max: 50 },
+  wind_speed:     { min: 0,  max: 20 },
+  wind_direction: { min: 0,  max: 360 },
+  pressure:       { min: 990, max: 1040 },
+  light:          { min: 0,  max: 1000 },
 }
 
 interface DistributionChartProps {
-  readings: HistoricalReading[]
-  sensorType: SensorType
+  readings: MetricReading[]
+  metricKey: SensorMetricKey
   isLoading?: boolean
 }
 
-export function DistributionChart({ readings, sensorType, isLoading }: DistributionChartProps) {
-  const cfg = SENSOR_CONFIG[sensorType]
+export function DistributionChart({ readings, metricKey, isLoading }: DistributionChartProps) {
+  const cfg = SENSOR_METRIC_CONFIG[metricKey]
 
   const { bins, binWidth, rangeMin, rangeMax, total } = useMemo(() => {
     if (!readings.length) return { bins: [] as { x0: number; count: number }[], binWidth: 0, rangeMin: 0, rangeMax: 0, total: 0 }
@@ -46,7 +46,7 @@ export function DistributionChart({ readings, sensorType, isLoading }: Distribut
   }, [readings])
 
   const maxCount = Math.max(...bins.map((b) => b.count), 1)
-  const expectedRange = EXPECTED_RANGES[sensorType]
+  const expectedRange = EXPECTED_RANGES[metricKey]
 
   const chartW = SVG_W - PAD.left - PAD.right
   const chartH = SVG_H - PAD.top - PAD.bottom
@@ -59,9 +59,8 @@ export function DistributionChart({ readings, sensorType, isLoading }: Distribut
     if (res > 1.5) nice = 2 * mag
     if (res > 3.5) nice = 5 * mag
     if (res > 7.5) nice = 10 * mag
-    const start = 0
     const ticks: number[] = []
-    for (let v = start; v <= maxCount; v += nice) ticks.push(v)
+    for (let v = 0; v <= maxCount; v += nice) ticks.push(v)
     return ticks
   }, [maxCount])
 
@@ -117,12 +116,10 @@ export function DistributionChart({ readings, sensorType, isLoading }: Distribut
 
           <text x={PAD.left + chartW / 2} y={SVG_H - 6} textAnchor="middle" fontSize="10" fill="#94A3B8">{cfg.label} ({cfg.unit})</text>
 
-          {/* Expected range band */}
           {expectedRange && expectedMinX !== null && expectedMaxX !== null && (
             <rect x={expectedMinX} y={PAD.top} width={expectedMaxX - expectedMinX} height={chartH} fill="#22C55E" opacity="0.08" rx="2" aria-label={`Expected range: ${expectedRange.min}–${expectedRange.max}${cfg.unit}`} />
           )}
 
-          {/* Grid line for expected min/max */}
           {expectedRange && (
             <>
               {expectedMinX !== null && <line x1={expectedMinX} y1={PAD.top} x2={expectedMinX} y2={PAD.top + chartH} stroke="#22C55E" strokeWidth="0.5" strokeDasharray="3,2" />}
@@ -130,7 +127,6 @@ export function DistributionChart({ readings, sensorType, isLoading }: Distribut
             </>
           )}
 
-          {/* Bars */}
           {bins.map((bin, i) => {
             const x = barX(bin.x0)
             const w = Math.max(1, barX(bin.x0 + binWidth) - x - 1)
@@ -144,7 +140,6 @@ export function DistributionChart({ readings, sensorType, isLoading }: Distribut
             )
           })}
 
-          {/* X-axis labels (show a subset) */}
           {bins.filter((_, i) => i % Math.max(1, Math.floor(bins.length / 6)) === 0).map((bin, _, arr) => {
             const x = barX(bin.x0 + binWidth / 2)
             const label = arr.length > 1 ? bin.x0.toFixed(0) : ''

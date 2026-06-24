@@ -1,9 +1,11 @@
-import { useState, useRef, useEffect } from 'react'
-import type { StationReading, SensorType, ViewMode } from '../../services/api'
-import { SENSOR_CONFIG } from '../../services/api'
+﻿import { useState, useRef, useEffect } from 'react'
+import type { Station, SensorMetricKey } from '../../types'
+import { SENSOR_METRIC_CONFIG } from '../../types'
 import { DateRangePicker } from '../shared/DateRangePicker'
 
-const SENSOR_TYPES = Object.keys(SENSOR_CONFIG) as SensorType[]
+type ViewMode = 'trends' | 'comparison' | 'correlation' | 'distribution'
+
+const SENSOR_KEYS = Object.keys(SENSOR_METRIC_CONFIG) as SensorMetricKey[]
 
 const VIEW_TABS: { key: ViewMode; label: string }[] = [
   { key: 'trends', label: 'Trends' },
@@ -13,11 +15,13 @@ const VIEW_TABS: { key: ViewMode; label: string }[] = [
 ]
 
 interface AnalysisControlsProps {
-  stations: StationReading[]
-  selectedStationIds: number[]
-  onStationIdsChange: (ids: number[]) => void
-  selectedSensorTypes: SensorType[]
-  onSensorTypesChange: (types: SensorType[]) => void
+  stations: Station[]
+  selectedStationIds: string[]
+  onStationIdsChange: (ids: string[]) => void
+  selectedMetricKey: SensorMetricKey
+  onMetricKeyChange: (key: SensorMetricKey) => void
+  correlationMetricB: SensorMetricKey
+  onCorrelationMetricBChange: (key: SensorMetricKey) => void
   dateFrom: string
   dateTo: string
   onDateChange: (from: string, to: string) => void
@@ -29,8 +33,10 @@ export function AnalysisControls({
   stations,
   selectedStationIds,
   onStationIdsChange,
-  selectedSensorTypes,
-  onSensorTypesChange,
+  selectedMetricKey,
+  onMetricKeyChange,
+  correlationMetricB,
+  onCorrelationMetricBChange,
   dateFrom,
   dateTo,
   onDateChange,
@@ -52,7 +58,7 @@ export function AnalysisControls({
 
   const allSelected = selectedStationIds.length === 0
 
-  function toggleStation(id: number) {
+  function toggleStation(id: string) {
     if (allSelected) {
       onStationIdsChange([id])
     } else {
@@ -63,28 +69,15 @@ export function AnalysisControls({
     }
   }
 
-  function toggleAll() {
-    onStationIdsChange([])
-  }
-
-  function toggleSensor(type: SensorType) {
-    const next = selectedSensorTypes.includes(type)
-      ? selectedSensorTypes.filter((t) => t !== type)
-      : [...selectedSensorTypes, type]
-    onSensorTypesChange(next.length === 0 ? [type] : next)
-  }
-
   const stationLabel = allSelected
     ? `All (${stations.length})`
     : selectedStationIds.length === 1
-      ? stations.find((s) => s.id === selectedStationIds[0])?.name ?? '1 station'
+      ? stations.find((s) => s.station_id === selectedStationIds[0])?.name ?? '1 station'
       : `${selectedStationIds.length} stations`
 
   return (
     <div className="space-y-4">
-      {/* Row 1: Station multi-select + Date range + View tabs */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-wrap">
-        {/* Station multi-select dropdown */}
         <div className="relative min-w-0 sm:w-56" ref={stationRef}>
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-storm/40">Station</p>
           <button
@@ -107,20 +100,20 @@ export function AnalysisControls({
                 <input
                   type="checkbox"
                   checked={allSelected}
-                  onChange={toggleAll}
+                  onChange={() => onStationIdsChange([])}
                   className="h-4 w-4 rounded border-slate-300 text-midnight focus:ring-1 focus:ring-sky-soft"
                 />
                 All stations
               </label>
               {stations.map((s) => (
                 <label
-                  key={s.id}
+                  key={s.station_id}
                   className="flex cursor-pointer items-center gap-2.5 px-3 py-2.5 text-xs text-storm/70 hover:bg-slate-50"
                 >
                   <input
                     type="checkbox"
-                    checked={allSelected || selectedStationIds.includes(s.id)}
-                    onChange={() => toggleStation(s.id)}
+                    checked={allSelected || selectedStationIds.includes(s.station_id)}
+                    onChange={() => toggleStation(s.station_id)}
                     className="h-4 w-4 rounded border-slate-300 text-midnight focus:ring-1 focus:ring-sky-soft"
                   />
                   <span className="truncate">{s.name}</span>
@@ -132,7 +125,6 @@ export function AnalysisControls({
 
         <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={onDateChange} />
 
-        {/* View-mode tabs */}
         <div className="sm:ml-auto">
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-storm/40">View</p>
           <div className="flex gap-1" role="tablist" aria-label="Analysis view mode">
@@ -156,29 +148,61 @@ export function AnalysisControls({
         </div>
       </div>
 
-      {/* Row 2: Sensor type multi-select pills */}
-      <div className="flex flex-wrap gap-1" role="group" aria-label="Sensor types">
-        {SENSOR_TYPES.map((type) => {
-          const cfg = SENSOR_CONFIG[type]
-          const isActive = selectedSensorTypes.includes(type)
-          return (
-            <button
-              key={type}
-              type="button"
-              onClick={() => toggleSensor(type)}
-              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
-                isActive
-                  ? 'bg-midnight text-white shadow-xs'
-                  : 'bg-white text-storm/60 hover:bg-slate-100 hover:text-storm border border-slate-200'
-              }`}
-              aria-pressed={isActive}
-            >
-              <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
-              {cfg.label}
-            </button>
-          )
-        })}
+      <div>
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-storm/40">
+          {viewMode === 'correlation' ? 'Primary metric' : 'Metric'}
+        </p>
+        <div className="flex flex-wrap gap-1" role="group" aria-label="Sensor metric">
+          {SENSOR_KEYS.map((key) => {
+            const cfg = SENSOR_METRIC_CONFIG[key]
+            const isActive = selectedMetricKey === key
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onMetricKeyChange(key)}
+                className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
+                  isActive
+                    ? 'bg-midnight text-white shadow-xs'
+                    : 'bg-white text-storm/60 hover:bg-slate-100 hover:text-storm border border-slate-200'
+                }`}
+                aria-pressed={isActive}
+              >
+                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
+                {cfg.label}
+              </button>
+            )
+          })}
+        </div>
       </div>
+
+      {viewMode === 'correlation' && (
+        <div>
+          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-storm/40">Secondary metric</p>
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Secondary sensor metric">
+            {SENSOR_KEYS.map((key) => {
+              const cfg = SENSOR_METRIC_CONFIG[key]
+              const isActive = correlationMetricB === key
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onCorrelationMetricBChange(key)}
+                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
+                    isActive
+                      ? 'bg-ocean text-white shadow-xs'
+                      : 'bg-white text-storm/60 hover:bg-slate-100 hover:text-storm border border-slate-200'
+                  }`}
+                  aria-pressed={isActive}
+                >
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
+                  {cfg.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

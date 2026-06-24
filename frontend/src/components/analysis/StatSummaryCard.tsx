@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import type { AnalysisStats, SensorType } from '../../services/api'
-import { SENSOR_CONFIG } from '../../services/api'
+﻿import { useEffect, useRef, useState } from 'react'
+import type { SensorMetricKey, StatsResult } from '../../types'
+import { SENSOR_METRIC_CONFIG } from '../../types'
 
 interface StatSummaryCardProps {
-  stats: AnalysisStats | null
-  sensorType: SensorType
+  stats: StatsResult | null
+  metricKey: SensorMetricKey
   stationName: string
   isLoading?: boolean
 }
@@ -67,8 +67,8 @@ function Skeleton() {
   )
 }
 
-export function StatSummaryCard({ stats, sensorType, stationName, isLoading }: StatSummaryCardProps) {
-  const cfg = SENSOR_CONFIG[sensorType]
+export function StatSummaryCard({ stats, metricKey, stationName, isLoading }: StatSummaryCardProps) {
+  const cfg = SENSOR_METRIC_CONFIG[metricKey]
 
   if (isLoading) return <Skeleton />
 
@@ -123,7 +123,6 @@ export function StatSummaryCard({ stats, sensorType, stationName, isLoading }: S
         </div>
       </div>
 
-      {/* Trend indicator */}
       <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
         <span
           className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
@@ -149,18 +148,6 @@ export function StatSummaryCard({ stats, sensorType, stationName, isLoading }: S
           </span>
         )}
       </div>
-
-      {/* Compared to baseline */}
-      {stats.compared_to_baseline && (
-        <div className="mt-2 rounded-xl bg-sky-50 px-3 py-2">
-          <p className="text-[10px] font-medium text-sky-700">
-            {stats.compared_to_baseline.pct_above > 0 ? '+' : ''}{stats.compared_to_baseline.pct_above}% vs baseline
-          </p>
-          <p className="text-[10px] text-sky-500/70">
-            Baseline: {stats.compared_to_baseline.baseline_value}{cfg.unit}
-          </p>
-        </div>
-      )}
     </div>
   )
 }

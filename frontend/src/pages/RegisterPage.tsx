@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 export function RegisterPage() {
   return (
     <div className="min-h-screen bg-[#f2f6fa] px-4 py-10 text-slate-900">
@@ -70,14 +72,14 @@ export function RegisterPage() {
           <div className="mt-8 border-t border-slate-200 pt-6 text-sm text-slate-600">
             <p>
               Already have an account?{' '}
-              <a className="font-semibold text-[#0a6ebd] hover:underline" href="/login">
+              <Link className="font-semibold text-[#0a6ebd] hover:underline" to="/login">
                 Log in
-              </a>
+              </Link>
             </p>
             <p className="mt-3">
-              <a className="font-medium text-slate-500 hover:text-[#1a2332]" href="/">
+              <Link className="font-medium text-slate-500 hover:text-[#1a2332]" to="/">
                 Back to home
-              </a>
+              </Link>
             </p>
           </div>
         </div>

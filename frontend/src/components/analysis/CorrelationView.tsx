@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
-import type { HistoricalReading, SensorType } from '../../services/api'
-import { SENSOR_CONFIG } from '../../services/api'
+﻿import { useMemo, useRef, useState } from 'react'
+import type { TaggedSensorReading, SensorMetricKey } from '../../types'
+import { SENSOR_METRIC_CONFIG } from '../../types'
 
 const PAD = { top: 24, bottom: 44, left: 55, right: 20 }
 const SVG_W = 600
@@ -42,10 +42,9 @@ function correlationLabel(r: number): string {
 }
 
 interface CorrelationViewProps {
-  readingsA: HistoricalReading[]
-  readingsB: HistoricalReading[]
-  sensorTypeA: SensorType
-  sensorTypeB: SensorType
+  readings: TaggedSensorReading[]
+  metricKeyA: SensorMetricKey
+  metricKeyB: SensorMetricKey
   isLoading?: boolean
 }
 
@@ -58,33 +57,26 @@ interface TooltipData {
   time: string
 }
 
-export function CorrelationView({ readingsA, readingsB, sensorTypeA, sensorTypeB, isLoading }: CorrelationViewProps) {
-  const cfgA = SENSOR_CONFIG[sensorTypeA]
-  const cfgB = SENSOR_CONFIG[sensorTypeB]
+export function CorrelationView({ readings, metricKeyA, metricKeyB, isLoading }: CorrelationViewProps) {
+  const cfgA = SENSOR_METRIC_CONFIG[metricKeyA]
+  const cfgB = SENSOR_METRIC_CONFIG[metricKeyB]
   const [tooltip, setTooltip] = useState<TooltipData | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
 
-  const minLen = Math.min(readingsA.length, readingsB.length)
-
   const { points, xMin, xMax, yMin, yMax, r, regLine, label } = useMemo(() => {
-    if (minLen < 3) return { points: [], xMin: 0, xMax: 1, yMin: 0, yMax: 1, r: 0, regLine: '', label: 'Insufficient data' }
-
-    const paired: { x: number; y: number; name: string; time: string }[] = []
-    for (let i = 0; i < minLen; i++) {
-      if (readingsA[i].station_id === readingsB[i].station_id) {
-        paired.push({
-          x: readingsA[i].value,
-          y: readingsB[i].value,
-          name: readingsA[i].station_name,
-          time: readingsA[i].timestamp,
-        })
+    const pairs: { x: number; y: number; name: string; time: string }[] = []
+    for (const r of readings) {
+      const a = r[metricKeyA]
+      const b = r[metricKeyB]
+      if (a !== null && b !== null) {
+        pairs.push({ x: a, y: b, name: r.stationName, time: r.timestamp })
       }
     }
 
-    if (paired.length < 3) return { points: [], xMin: 0, xMax: 1, yMin: 0, yMax: 1, r: 0, regLine: '', label: 'Insufficient data' }
+    if (pairs.length < 3) return { points: [], xMin: 0, xMax: 1, yMin: 0, yMax: 1, r: 0, regLine: '', label: 'Insufficient data' }
 
-    const xVals = paired.map((p) => p.x)
-    const yVals = paired.map((p) => p.y)
+    const xVals = pairs.map((p) => p.x)
+    const yVals = pairs.map((p) => p.y)
     const xLo = Math.min(...xVals)
     const xHi = Math.max(...xVals)
     const yLo = Math.min(...yVals)
@@ -106,14 +98,14 @@ export function CorrelationView({ readingsA, readingsB, sensorTypeA, sensorTypeB
     const reg = `M ${sx(lineX1)},${sy(lineY1)} L ${sx(lineX2)},${sy(lineY2)}`
 
     return {
-      points: paired.map((p) => ({ cx: sx(p.x), cy: sy(p.y), name: p.name, time: p.time, xVal: p.x, yVal: p.y })),
+      points: pairs.map((p) => ({ cx: sx(p.x), cy: sy(p.y), name: p.name, time: p.time, xVal: p.x, yVal: p.y })),
       xMin: xLo - xPad, xMax: xHi + xPad,
-      yMin: yLo - yPad, yMax: yHi + xPad,
+      yMin: yLo - yPad, yMax: yHi + yPad,
       r: rVal,
       regLine: reg,
       label: `${correlationLabel(rVal)} ${rVal >= 0 ? 'positive' : 'negative'} correlation`,
     }
-  }, [readingsA, readingsB, minLen])
+  }, [readings, metricKeyA, metricKeyB])
 
   const chartW = SVG_W - PAD.left - PAD.right
   const chartH = SVG_H - PAD.top - PAD.bottom
@@ -174,13 +166,13 @@ export function CorrelationView({ readingsA, readingsB, sensorTypeA, sensorTypeB
     )
   }
 
-  if (minLen < 3 || points.length < 3) {
+  if (points.length < 3) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 className="mb-4 text-sm font-semibold text-midnight font-display">Correlation</h3>
         <div className="flex h-[400px] items-center justify-center rounded-xl bg-slate-50 flex-col gap-2">
-          <p className="text-sm text-storm/40">Select 2 sensor types with data to view correlation</p>
-          <p className="text-xs text-storm/30">Correlation needs paired readings across two sensors</p>
+          <p className="text-sm text-storm/40">Select 2 different metrics with data to view correlation</p>
+          <p className="text-xs text-storm/30">Correlation needs paired readings across two sensor fields</p>
         </div>
       </div>
     )
@@ -205,7 +197,6 @@ export function CorrelationView({ readingsA, readingsB, sensorTypeA, sensorTypeB
         </div>
       </div>
 
-      {/* Correlation coefficient display */}
       <div className="mb-4 rounded-xl bg-slate-50 px-4 py-3">
         <p className="text-lg font-bold text-midnight font-display">{r.toFixed(3)}</p>
         <p className="text-xs text-storm/50">{label} · {points.length} paired readings</p>
@@ -232,10 +223,8 @@ export function CorrelationView({ readingsA, readingsB, sensorTypeA, sensorTypeB
           <text x={PAD.left + chartW / 2} y={SVG_H - 6} textAnchor="middle" fontSize="10" fill="#94A3B8">{cfgA.label} ({cfgA.unit})</text>
           <text x={12} y={PAD.top + chartH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 12, ${PAD.top + chartH / 2})`}>{cfgB.label} ({cfgB.unit})</text>
 
-          {/* Regression line */}
           <path d={regLine} fill="none" stroke="#E11D48" strokeWidth="2" strokeDasharray="5,3" />
 
-          {/* Scatter dots */}
           {points.map((p, i) => (
             <circle key={i} cx={p.cx} cy={p.cy} r="3.5" fill="#0EA5E9" opacity="0.55" stroke="#FFFFFF" strokeWidth="0.5" />
           ))}

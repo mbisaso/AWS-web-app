@@ -150,3 +150,26 @@ export const POWER_METRIC_CONFIG: Record<PowerMetricKey, { label: string; unit: 
   curr_batt:  { label: 'Battery Current', unit: 'A', color: '#F97316' },
   curr_solar: { label: 'Solar Current',   unit: 'A', color: '#EAB308' },
 }
+
+export interface TaggedSensorReading extends SensorReadingChart {
+  stationId: string
+  stationName: string
+}
+
+export interface MetricReading {
+  station_id: string
+  station_name: string
+  timestamp: string
+  value: number
+}
+
+export interface StatsResult {
+  average: number
+  min: number
+  max: number
+  std_dev: number
+  count: number
+  trend: 'rising' | 'falling' | 'stable'
+  percent_change: number | null
+  sparkline: number[]
+}

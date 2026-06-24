@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
-import type { HistoricalReading, SensorType } from '../../services/api'
-import { SENSOR_CONFIG } from '../../services/api'
+﻿import { useMemo, useRef, useState } from 'react'
+import type { MetricReading, SensorMetricKey } from '../../types'
+import { SENSOR_METRIC_CONFIG } from '../../types'
 
 const STATION_COLORS = [
   '#0EA5E9', '#F97316', '#22C55E', '#8B5CF6', '#E11D48',
@@ -32,8 +32,8 @@ function buildLine(readings: { timestamp: string; value: number }[], start: numb
 }
 
 export interface TrendChartProps {
-  readings: HistoricalReading[]
-  sensorType: SensorType
+  readings: MetricReading[]
+  metricKey: SensorMetricKey
   showMovingAverage: boolean
   onToggleMovingAverage: () => void
   isLoading?: boolean
@@ -47,15 +47,15 @@ interface TooltipData {
   time: string
 }
 
-export function TrendChart({ readings, sensorType, showMovingAverage, onToggleMovingAverage, isLoading }: TrendChartProps) {
-  const cfg = SENSOR_CONFIG[sensorType]
+export function TrendChart({ readings, metricKey, showMovingAverage, onToggleMovingAverage, isLoading }: TrendChartProps) {
+  const cfg = SENSOR_METRIC_CONFIG[metricKey]
   const [tooltip, setTooltip] = useState<TooltipData | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
 
   const { lines, maLines, yMin, yMax, xMin, xMax } = useMemo(() => {
     if (!readings.length) return { lines: [], maLines: [], yMin: 0, yMax: 100, xMin: 0, xMax: 1 }
 
-    const grouped = new Map<number, HistoricalReading[]>()
+    const grouped = new Map<string, MetricReading[]>()
     for (const r of readings) {
       if (!grouped.has(r.station_id)) grouped.set(r.station_id, [])
       grouped.get(r.station_id)!.push(r)
@@ -82,8 +82,8 @@ export function TrendChart({ readings, sensorType, showMovingAverage, onToggleMo
     const medianGap = xHi - xLo > 0 ? (xHi - xLo) / readings.length * 2 : 3 * 60 * 60 * 1000
     const gapThreshold = medianGap * 2.5
 
-    const resultLines: { stationId: number; stationName: string; color: string; d: string }[] = []
-    const resultMaLines: { stationId: number; color: string; d: string }[] = []
+    const resultLines: { stationId: string; stationName: string; color: string; d: string }[] = []
+    const resultMaLines: { stationId: string; color: string; d: string }[] = []
 
     Array.from(grouped.entries()).forEach(([stationId, group], idx) => {
       const color = STATION_COLORS[idx % STATION_COLORS.length]
@@ -154,7 +154,7 @@ export function TrendChart({ readings, sensorType, showMovingAverage, onToggleMo
     const mx = e.clientX - rect.left
     const xRange = xMax - xMin
     const mouseTime = xMin + ((mx - PAD.left) / chartW) * xRange
-    let closest: HistoricalReading | null = null
+    let closest: MetricReading | null = null
     let closestDist = Infinity
     for (const r of readings) {
       const t = new Date(r.timestamp).getTime()
@@ -245,12 +245,10 @@ export function TrendChart({ readings, sensorType, showMovingAverage, onToggleMo
           })}
           <text x={14} y={PAD.top + chartH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 14, ${PAD.top + chartH / 2})`}>{cfg.unit}</text>
 
-          {/* Moving average lines (behind main lines) */}
           {showMovingAverage && maLines.map((ml) => (
             <path key={`ma-${ml.stationId}`} d={ml.d} fill="none" stroke={ml.color} strokeWidth="1.5" strokeDasharray="4,3" opacity="0.6" />
           ))}
 
-          {/* Main lines */}
           {lines.map((l) => (
             <path key={l.stationId} d={l.d} fill="none" stroke={l.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
           ))}
