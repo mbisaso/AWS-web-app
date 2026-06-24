@@ -22,6 +22,7 @@ from .serializers import (
 
 import csv
 import math
+import requests
 from django.http import HttpResponse
 
 def api_response(data=None, message=None, error=None, status_code=200):
@@ -153,6 +154,92 @@ def get_or_none(station_code):
         return None
 
 
+def call_ml_service(reading, station_code):
+    """
+    Calls the FastAPI inference service with features derived from the reading.
+    Returns the prediction dict on success, None on any failure.
+    Ingest always succeeds regardless of what this returns.
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+
+    # All four base fields must be present to form valid features
+    if any(v is None for v in [
+        reading.temperature, reading.humidity,
+        reading.wind_speed,  reading.wind_direction,
+    ]):
+        return None
+
+    # Dew point for the current reading — Magnus approximation
+    dew_point = reading.temperature - ((100 - reading.humidity) / 5)
+
+    # Pull the last 3 hours of readings for this station where all
+    # required fields are present, oldest-first for trend computation
+    since  = timezone.now() - timedelta(hours=3)
+    recent = list(
+        SensorReading.objects.filter(
+            station_code=station_code,
+            timestamp__gte=since,
+            temperature__isnull=False,
+            humidity__isnull=False,
+            wind_speed__isnull=False,
+        ).order_by('timestamp').values('temperature', 'humidity', 'wind_speed')
+    )
+
+    if not recent:
+        return None
+
+    # Compute dew_point for every row in the window
+    entries = [
+        {
+            'temperature': r['temperature'],
+            'dew_point':   r['temperature'] - ((100 - r['humidity']) / 5),
+            'wind_speed':  r['wind_speed'],
+        }
+        for r in recent
+    ]
+
+    temp_vals = [e['temperature'] for e in entries]
+    dp_vals   = [e['dew_point']   for e in entries]
+    ws_vals   = [e['wind_speed']  for e in entries]
+
+    n = len(entries)
+    temperature_mean_3h  = sum(temp_vals) / n
+    dew_point_mean_3h    = sum(dp_vals)   / n
+    wind_speed_mean_3h   = sum(ws_vals)   / n
+
+    # Trend = change across the window (oldest → newest)
+    temperature_trend_3h = temp_vals[-1] - temp_vals[0]
+    dew_point_trend_3h   = dp_vals[-1]   - dp_vals[0]
+    wind_speed_trend_3h  = ws_vals[-1]   - ws_vals[0]
+
+    payload = {
+        'temperature':          reading.temperature,
+        'dew_point':            dew_point,
+        'wind_speed':           reading.wind_speed,
+        'wind_direction':       reading.wind_direction,
+        'temperature_mean_3h':  temperature_mean_3h,
+        'temperature_trend_3h': temperature_trend_3h,
+        'dew_point_mean_3h':    dew_point_mean_3h,
+        'dew_point_trend_3h':   dew_point_trend_3h,
+        'wind_speed_mean_3h':   wind_speed_mean_3h,
+        'wind_speed_trend_3h':  wind_speed_trend_3h,
+        'hour_of_day':          reading.timestamp.hour,
+    }
+
+    try:
+        resp = requests.post(
+            'http://localhost:8001/predict',
+            json=payload,
+            timeout=2,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        return None
+    except Exception:
+        return None
+
+
 # ─────────────────────────────────────────────────────────
 # API: Ingest endpoint — ESP32 posts data here
 # ─────────────────────────────────────────────────────────
@@ -251,15 +338,38 @@ def ingest(request):
 
     reading.save()
 
-    # Update StationStatus to FULL if station is registered
+    # Update StationStatus — ML prediction if available, rule-based fallback
     if station:
-        StationStatus.objects.update_or_create(
-            station=station,
-            defaults={
-                'status':  StationStatus.Status.FULL,
-                'details': {'last_reading_id': reading.id}
-            }
-        )
+        prediction = call_ml_service(reading, station_id)
+
+        if prediction:
+            ml_status = (
+                StationStatus.Status.FULL
+                if prediction['prediction'] == 'healthy'
+                else StationStatus.Status.PARTIAL
+            )
+            StationStatus.objects.update_or_create(
+                station=station,
+                defaults={
+                    'status':      ml_status,
+                    'computed_by': 'ml_model',
+                    'details': {
+                        'last_reading_id': reading.id,
+                        'prediction':      prediction['prediction'],
+                        'at_risk_proba':   prediction['at_risk_proba'],
+                        'threshold_used':  prediction['threshold_used'],
+                    }
+                }
+            )
+        else:
+            StationStatus.objects.update_or_create(
+                station=station,
+                defaults={
+                    'status':      StationStatus.Status.FULL,
+                    'computed_by': 'rule_based',
+                    'details':     {'last_reading_id': reading.id}
+                }
+            )
 
     return api_response(
         {'status': 'ok', 'id': reading.id},
