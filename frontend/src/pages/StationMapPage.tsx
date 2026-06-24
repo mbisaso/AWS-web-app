@@ -10,7 +10,7 @@ import {
 } from '@vis.gl/react-google-maps'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { type StationReading, formatRelativeTime } from '../services/api'
-import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
+import { Sidebar } from '../components/Sidebar'
 import { StatusBadge } from '../components/dashboard/StatusIndicator'
 import { StationMarker } from '../components/stationMap/StationMarker'
 import { StatusFilterBar, type StationFilter } from '../components/stationMap/StatusFilterBar'
@@ -85,7 +85,7 @@ export function StationMapPage() {
   if (isLoading && !data) {
     return (
       <div className="flex h-screen bg-mist">
-        <DashboardSidebar />
+        <Sidebar />
         <MapSkeleton />
       </div>
     )
@@ -95,7 +95,7 @@ export function StationMapPage() {
   if (error && !data) {
     return (
       <div className="flex h-screen bg-mist">
-        <DashboardSidebar />
+        <Sidebar />
         <div className="flex flex-1 items-center justify-center">
           <div className="max-w-md px-6 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-50">
@@ -122,7 +122,7 @@ export function StationMapPage() {
   if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
     return (
       <div className="flex h-screen bg-mist">
-        <DashboardSidebar />
+        <Sidebar />
         <div className="flex flex-1 items-center justify-center">
           <div className="max-w-md px-6 text-center">
             <h2 className="text-lg font-semibold text-midnight font-display">
@@ -153,7 +153,7 @@ export function StationMapPage() {
 
   return (
     <div className="flex h-screen bg-mist">
-      <DashboardSidebar />
+      <Sidebar />
 
       <main className="flex min-w-0 flex-1">
         <div className="relative flex-1">

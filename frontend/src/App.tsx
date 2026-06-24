@@ -1,5 +1,15 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { DashboardPage, LandingPage, LoginPage, RegisterPage } from './pages'
+import {
+  AlertsCenterPage,
+  DashboardPage,
+  LandingPage,
+  LoginPage,
+  PowerDataPage,
+  RegisterPage,
+  StationMapPage,
+  WeatherAnalysisPage,
+  WeatherDataPage,
+} from './pages'
 import { AuthProvider } from './context/AuthContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
@@ -16,6 +26,46 @@ function App() {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/weather-data"
+            element={
+              <ProtectedRoute>
+                <WeatherDataPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/power-data"
+            element={
+              <ProtectedRoute>
+                <PowerDataPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/weather-analysis"
+            element={
+              <ProtectedRoute>
+                <WeatherAnalysisPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/station-map"
+            element={
+              <ProtectedRoute>
+                <StationMapPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/alerts-center"
+            element={
+              <ProtectedRoute>
+                <AlertsCenterPage />
               </ProtectedRoute>
             }
           />

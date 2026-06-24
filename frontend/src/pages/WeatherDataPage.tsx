@@ -3,7 +3,7 @@ import type { SensorType } from '../services/api'
 import { SENSOR_CONFIG } from '../services/api'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { useWeatherData } from '../hooks/useWeatherData'
-import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
+import { Sidebar } from '../components/Sidebar'
 import { StationSensorSelector } from '../components/weatherData/StationSensorSelector'
 import { ReadingSummaryCard } from '../components/weatherData/ReadingSummaryCard'
 import { HistoricalChart } from '../components/weatherData/HistoricalChart'
@@ -52,7 +52,7 @@ export function WeatherDataPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-mist lg:h-screen lg:flex-row">
-      <DashboardSidebar />
+      <Sidebar />
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}
