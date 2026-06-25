@@ -1,18 +1,18 @@
-import { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { MenuIcon, CloseIcon } from './landing/Icons'
+import { useState } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { MenuIcon, CloseIcon } from "./landing/Icons";
 
 const ROUTED_NAV = [
-  { label: 'Dashboard',        to: '/dashboard' },
-  { label: 'Weather data',     to: '/weather-data' },
-  { label: 'Power data',       to: '/power-data' },
-  { label: 'Weather analysis', to: '/weather-analysis' },
-  { label: 'Station map',      to: '/station-map' },
-  { label: 'Alerts center',    to: '/alerts-center' },
-]
+  { label: "Dashboard", to: "/dashboard" },
+  { label: "Weather data", to: "/weather-data" },
+  { label: "Power data", to: "/power-data" },
+  { label: "Weather analysis", to: "/weather-analysis" },
+  { label: "Station map", to: "/station-map" },
+  { label: "Alerts center", to: "/alerts-center" },
+];
 
-const INERT_NAV = ['Set sleep time', 'Station manager']
+const INERT_NAV = ["Set sleep time", "Station manager"];
 
 function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   return (
@@ -25,8 +25,8 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
           className={({ isActive }) =>
             `flex items-center rounded-2xl px-4 py-3 font-medium transition ${
               isActive
-                ? 'bg-white/10 text-white'
-                : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                ? "bg-white/10 text-white"
+                : "text-slate-300 hover:bg-white/5 hover:text-white"
             }`
           }
         >
@@ -45,21 +45,21 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
         </span>
       ))}
     </nav>
-  )
+  );
 }
 
 interface SidebarProps {
-  userLabel?: string
+  userLabel?: string;
 }
 
-export function Sidebar({ userLabel = 'Admin' }: SidebarProps) {
-  const [isMobileOpen, setIsMobileOpen] = useState(false)
-  const { logout } = useAuth()
-  const navigate = useNavigate()
+export function Sidebar({ userLabel = "Admin" }: SidebarProps) {
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const { logout } = useAuth();
+  const navigate = useNavigate();
 
   function handleLogout() {
-    logout()
-    navigate('/')
+    logout();
+    navigate("/");
   }
 
   const brand = (
@@ -68,15 +68,19 @@ export function Sidebar({ userLabel = 'Admin' }: SidebarProps) {
         A
       </div>
       <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-100">AWS Monitor</p>
+        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-sky-100">
+          AWS Monitor
+        </p>
         <p className="text-xs text-slate-300">Dashboard</p>
       </div>
     </div>
-  )
+  );
 
   const userCard = (
     <div className="mt-auto rounded-3xl border border-white/10 bg-white/5 p-4">
-      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Signed in as</p>
+      <p className="text-xs uppercase tracking-[0.18em] text-slate-400">
+        Signed in as
+      </p>
       <p className="mt-2 text-lg font-semibold text-white">{userLabel}</p>
       <button
         onClick={handleLogout}
@@ -85,7 +89,7 @@ export function Sidebar({ userLabel = 'Admin' }: SidebarProps) {
         Log out
       </button>
     </div>
-  )
+  );
 
   return (
     <>
@@ -94,9 +98,13 @@ export function Sidebar({ userLabel = 'Admin' }: SidebarProps) {
         type="button"
         onClick={() => setIsMobileOpen((o) => !o)}
         className="fixed left-4 top-4 z-50 flex items-center justify-center rounded-xl bg-[#1a2332] p-2.5 text-white shadow-lg lg:hidden"
-        aria-label={isMobileOpen ? 'Close sidebar' : 'Open sidebar'}
+        aria-label={isMobileOpen ? "Close sidebar" : "Open sidebar"}
       >
-        {isMobileOpen ? <CloseIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
+        {isMobileOpen ? (
+          <CloseIcon className="h-5 w-5" />
+        ) : (
+          <MenuIcon className="h-5 w-5" />
+        )}
       </button>
 
       {/* ── Mobile overlay ── */}
@@ -110,8 +118,8 @@ export function Sidebar({ userLabel = 'Admin' }: SidebarProps) {
 
       {/* ── Mobile drawer ── */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[270px] flex-col bg-[#1a2332] px-5 py-6 text-white shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
-          isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed inset-y-0 left-0 z-40 flex w-67.5 flex-col bg-[#1a2332] px-5 py-6 text-white shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
+          isMobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-label="Dashboard navigation (mobile)"
       >
@@ -122,7 +130,7 @@ export function Sidebar({ userLabel = 'Admin' }: SidebarProps) {
 
       {/* ── Desktop sidebar ── */}
       <aside
-        className="sticky top-0 hidden h-screen w-[290px] shrink-0 flex-col bg-[#1a2332] px-5 py-6 text-white lg:flex"
+        className="sticky top-0 hidden h-screen w-72.5 shrink-0 flex-col bg-[#1a2332] px-5 py-6 text-white lg:flex"
         aria-label="Dashboard navigation"
       >
         {brand}
@@ -130,5 +138,5 @@ export function Sidebar({ userLabel = 'Admin' }: SidebarProps) {
         {userCard}
       </aside>
     </>
-  )
+  );
 }
