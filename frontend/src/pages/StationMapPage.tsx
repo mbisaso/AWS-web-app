@@ -10,13 +10,12 @@ import {
 } from '@vis.gl/react-google-maps'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { type StationReading, formatRelativeTime } from '../services/api'
-import { Sidebar } from '../components/Sidebar'
+import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { StatusBadge } from '../components/dashboard/StatusIndicator'
 import { StationMarker } from '../components/stationMap/StationMarker'
 import { StatusFilterBar, type StationFilter } from '../components/stationMap/StatusFilterBar'
 import { StationListPanel } from '../components/stationMap/StationListPanel'
 
-const CUSTOM_MAP_ID = 'YOUR_MAP_ID'
 
 function hasActiveAlerts(
   station: StationReading,
@@ -85,7 +84,7 @@ export function StationMapPage() {
   if (isLoading && !data) {
     return (
       <div className="flex h-screen bg-mist">
-        <Sidebar />
+        <DashboardSidebar />
         <MapSkeleton />
       </div>
     )
@@ -95,7 +94,7 @@ export function StationMapPage() {
   if (error && !data) {
     return (
       <div className="flex h-screen bg-mist">
-        <Sidebar />
+        <DashboardSidebar />
         <div className="flex flex-1 items-center justify-center">
           <div className="max-w-md px-6 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-50">
@@ -122,7 +121,7 @@ export function StationMapPage() {
   if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
     return (
       <div className="flex h-screen bg-mist">
-        <Sidebar />
+        <DashboardSidebar />
         <div className="flex flex-1 items-center justify-center">
           <div className="max-w-md px-6 text-center">
             <h2 className="text-lg font-semibold text-midnight font-display">
@@ -153,7 +152,7 @@ export function StationMapPage() {
 
   return (
     <div className="flex h-screen bg-mist">
-      <Sidebar />
+      <DashboardSidebar />
 
       <main className="flex min-w-0 flex-1">
         <div className="relative flex-1">
@@ -252,7 +251,6 @@ function MapScreenContent({
       )}
 
       <Map
-        mapId={CUSTOM_MAP_ID}
         className="h-full w-full"
         defaultZoom={7}
         defaultCenter={{ lat: 1.5, lng: 32.5 }}

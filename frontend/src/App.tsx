@@ -6,6 +6,9 @@ import {
   LoginPage,
   PowerDataPage,
   RegisterPage,
+  ReportsPage,
+  SimManagementPage,
+  StationManagerPage,
   StationMapPage,
   WeatherAnalysisPage,
   WeatherDataPage,
@@ -18,9 +21,12 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
+          {/* Public */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+
+          {/* Protected dashboard */}
           <Route
             path="/dashboard"
             element={
@@ -30,7 +36,7 @@ function App() {
             }
           />
           <Route
-            path="/weather-data"
+            path="/dashboard/weather-data"
             element={
               <ProtectedRoute>
                 <WeatherDataPage />
@@ -38,7 +44,7 @@ function App() {
             }
           />
           <Route
-            path="/power-data"
+            path="/dashboard/power-data"
             element={
               <ProtectedRoute>
                 <PowerDataPage />
@@ -46,7 +52,7 @@ function App() {
             }
           />
           <Route
-            path="/weather-analysis"
+            path="/dashboard/weather-analysis"
             element={
               <ProtectedRoute>
                 <WeatherAnalysisPage />
@@ -54,21 +60,46 @@ function App() {
             }
           />
           <Route
-            path="/station-map"
-            element={
-              <ProtectedRoute>
-                <StationMapPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/alerts-center"
+            path="/dashboard/alerts-center"
             element={
               <ProtectedRoute>
                 <AlertsCenterPage />
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/dashboard/station-manager"
+            element={
+              <ProtectedRoute>
+                <StationManagerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/sim-management"
+            element={
+              <ProtectedRoute>
+                <SimManagementPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/reports"
+            element={
+              <ProtectedRoute>
+                <ReportsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/stations/map"
+            element={
+              <ProtectedRoute>
+                <StationMapPage />
+              </ProtectedRoute>
+            }
+          />
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

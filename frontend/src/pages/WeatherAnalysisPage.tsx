@@ -3,7 +3,7 @@ import type { SensorMetricKey, Station, MetricReading } from '../types'
 import { SENSOR_METRIC_CONFIG } from '../types'
 import { fetchStations } from '../api/stations'
 import { useAnalysisData } from '../hooks/useAnalysisData'
-import { Sidebar } from '../components/Sidebar'
+import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { AnalysisControls } from '../components/analysis/AnalysisControls'
 import { StatSummaryCard } from '../components/analysis/StatSummaryCard'
 import { TrendChart } from '../components/analysis/TrendChart'
@@ -77,7 +77,7 @@ export function WeatherAnalysisPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-mist lg:h-screen lg:flex-row">
-      <Sidebar />
+      <DashboardSidebar />
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}

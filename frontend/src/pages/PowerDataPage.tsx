@@ -3,7 +3,7 @@ import type { PowerMetricKey, Station } from '../types'
 import { POWER_METRIC_CONFIG } from '../types'
 import { fetchStations } from '../api/stations'
 import { usePowerData } from '../hooks/usePowerData'
-import { Sidebar } from '../components/Sidebar'
+import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { PowerStationSelector } from '../components/powerData/PowerStationSelector'
 import { PowerStatusCard } from '../components/powerData/PowerStatusCard'
 import { PowerHistoricalChart } from '../components/powerData/PowerHistoricalChart'
@@ -65,7 +65,7 @@ export function PowerDataPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-mist lg:h-screen lg:flex-row">
-      <Sidebar />
+      <DashboardSidebar />
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}

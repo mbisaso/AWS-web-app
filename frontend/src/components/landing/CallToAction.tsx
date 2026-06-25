@@ -5,7 +5,7 @@ export function CallToAction() {
   const { ref, isVisible } = useScrollReveal({ threshold: 0.2 })
 
   return (
-    <section className="relative overflow-hidden border-t border-sky-100">
+    <section id="access" className="relative overflow-hidden border-t border-sky-100">
       {/* Warm sunset gradient background */}
       <div className="absolute inset-0 bg-gradient-to-br from-sky-deep via-sky-primary to-ocean bg-[length:200%_200%] animate-gradient-shift" />
 

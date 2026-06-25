@@ -1,7 +1,5 @@
-import type { Station } from '../../types'
-
 interface StationDropdownProps {
-  stations: Station[]
+  stations: { station_id: string; name: string }[]
   selectedStationId: string | null
   onChange: (id: string | null) => void
 }
