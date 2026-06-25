@@ -163,68 +163,87 @@ def call_ml_service(reading, station_code):
     Returns the prediction dict on success, None on any failure.
     Ingest always succeeds regardless of what this returns.
     """
-    # All four base fields must be present to form valid features
-    if any(v is None for v in [
-        reading.temperature, reading.humidity,
-        reading.wind_speed,  reading.wind_direction,
-    ]):
+    # Only temperature and humidity are required — model tolerates null for everything else
+    if any(v is None for v in [reading.temperature, reading.humidity]):
         return None
 
-    # Dew point for the current reading — Magnus approximation
-    dew_point = reading.temperature - ((100 - reading.humidity) / 5)
-
-    # Pull the last 3 hours of readings for this station where all
-    # required fields are present, oldest-first for trend computation
-    since  = timezone.now() - datetime.timedelta(hours=3)
-    recent = list(
+    # Last 3 readings for this station, reversed to oldest-first for trend computation
+    recent = list(reversed(list(
         SensorReading.objects.filter(
             station_code=station_code,
-            timestamp__gte=since,
-            temperature__isnull=False,
-            humidity__isnull=False,
-            wind_speed__isnull=False,
-        ).order_by('timestamp').values('temperature', 'humidity', 'wind_speed')
-    )
+        ).order_by('-timestamp').values(
+            'temperature', 'wind_speed', 'soil_moisture',
+            'volt_batt', 'volt_solar', 'curr_batt', 'curr_solar',
+        )[:3]
+    )))
 
     if not recent:
         return None
 
-    # Compute dew_point for every row in the window
-    entries = [
-        {
-            'temperature': r['temperature'],
-            'dew_point':   r['temperature'] - ((100 - r['humidity']) / 5),
-            'wind_speed':  r['wind_speed'],
-        }
-        for r in recent
-    ]
+    # Rolling helpers — skip None values so a broken sensor doesn't block the call
+    def _mean(vals):
+        valid = [v for v in vals if v is not None]
+        return sum(valid) / len(valid) if valid else None
 
-    temp_vals = [e['temperature'] for e in entries]
-    dp_vals   = [e['dew_point']   for e in entries]
-    ws_vals   = [e['wind_speed']  for e in entries]
+    def _trend(vals):
+        first = next((v for v in vals           if v is not None), None)
+        last  = next((v for v in reversed(vals) if v is not None), None)
+        return (last - first) if first is not None and last is not None else None
 
-    n = len(entries)
-    temperature_mean_3h  = sum(temp_vals) / n
-    dew_point_mean_3h    = sum(dp_vals)   / n
-    wind_speed_mean_3h   = sum(ws_vals)   / n
+    temp_vals = [r['temperature']   for r in recent]
+    ws_vals   = [r['wind_speed']    for r in recent]
+    sm_vals   = [r['soil_moisture'] for r in recent]
+    vb_vals   = [r['volt_batt']     for r in recent]
+    vs_vals   = [r['volt_solar']    for r in recent]
+    cb_vals   = [r['curr_batt']     for r in recent]
+    cs_vals   = [r['curr_solar']    for r in recent]
 
-    # Trend = change across the window (oldest → newest)
-    temperature_trend_3h = temp_vals[-1] - temp_vals[0]
-    dew_point_trend_3h   = dp_vals[-1]   - dp_vals[0]
-    wind_speed_trend_3h  = ws_vals[-1]   - ws_vals[0]
+    # Time elapsed since the previous reading — 0.0 if this is the first reading
+    prev = SensorReading.objects.filter(
+        station_code=station_code,
+        timestamp__lt=reading.timestamp,
+    ).order_by('-timestamp').first()
+
+    hours_since_last = (
+        (reading.timestamp - prev.timestamp).total_seconds() / 3600
+        if prev else 0.0
+    )
 
     payload = {
-        'temperature':          reading.temperature,
-        'dew_point':            dew_point,
-        'wind_speed':           reading.wind_speed,
-        'wind_direction':       reading.wind_direction,
-        'temperature_mean_3h':  temperature_mean_3h,
-        'temperature_trend_3h': temperature_trend_3h,
-        'dew_point_mean_3h':    dew_point_mean_3h,
-        'dew_point_trend_3h':   dew_point_trend_3h,
-        'wind_speed_mean_3h':   wind_speed_mean_3h,
-        'wind_speed_trend_3h':  wind_speed_trend_3h,
-        'hour_of_day':          reading.timestamp.hour,
+        # Direct sensor readings from the current ESP32 post
+        'temperature':    reading.temperature,
+        'humidity':       reading.humidity,
+        'pressure':       reading.pressure,
+        'rain':           reading.rain,
+        'wind_speed':     reading.wind_speed,
+        'wind_direction': reading.wind_direction,
+        'light':          reading.light,
+        'soil_moisture':  reading.soil_moisture,
+        'volt_3v3':       reading.volt_3v3,
+        'volt_5v':        reading.volt_5v,
+        'volt_batt':      reading.volt_batt,
+        'volt_solar':     reading.volt_solar,
+        'volt_dc':        reading.volt_dc,
+        'curr_batt':      reading.curr_batt,
+        'curr_solar':     reading.curr_solar,
+        # Rolling features over the last 3 readings
+        'temperature_mean_3':    _mean(temp_vals),
+        'temperature_trend_3':   _trend(temp_vals),
+        'wind_speed_mean_3':     _mean(ws_vals),
+        'wind_speed_trend_3':    _trend(ws_vals),
+        'soil_moisture_mean_3':  _mean(sm_vals),
+        'soil_moisture_trend_3': _trend(sm_vals),
+        'volt_batt_mean_3':      _mean(vb_vals),
+        'volt_batt_trend_3':     _trend(vb_vals),
+        'volt_solar_mean_3':     _mean(vs_vals),
+        'volt_solar_trend_3':    _trend(vs_vals),
+        'curr_batt_mean_3':      _mean(cb_vals),
+        'curr_batt_trend_3':     _trend(cb_vals),
+        'curr_solar_mean_3':     _mean(cs_vals),
+        'curr_solar_trend_3':    _trend(cs_vals),
+        # Time features
+        'hour_of_day':      reading.timestamp.hour,
+        'hours_since_last': hours_since_last,
     }
 
     try:

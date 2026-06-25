@@ -18,17 +18,40 @@ features  = joblib.load(BASE_DIR / 'models' / 'feature_cols.pkl')
 app = FastAPI(title="AWS Station Health Predictor")
 
 class SensorInput(BaseModel):
-    temperature:          Optional[float] = None
-    dew_point:            Optional[float] = None
-    wind_speed:           Optional[float] = None
-    wind_direction:       Optional[float] = None
-    temperature_mean_3h:  Optional[float] = None
-    temperature_trend_3h: Optional[float] = None
-    dew_point_mean_3h:    Optional[float] = None
-    dew_point_trend_3h:   Optional[float] = None
-    wind_speed_mean_3h:   Optional[float] = None
-    wind_speed_trend_3h:  Optional[float] = None
-    hour_of_day:          Optional[int]   = None
+    # Direct sensor readings
+    temperature:    Optional[float] = None
+    humidity:       Optional[float] = None
+    pressure:       Optional[float] = None
+    rain:           Optional[float] = None
+    wind_speed:     Optional[float] = None
+    wind_direction: Optional[float] = None
+    light:          Optional[float] = None
+    soil_moisture:  Optional[float] = None
+    volt_3v3:       Optional[float] = None
+    volt_5v:        Optional[float] = None
+    volt_batt:      Optional[float] = None
+    volt_solar:     Optional[float] = None
+    volt_dc:        Optional[float] = None
+    curr_batt:      Optional[float] = None
+    curr_solar:     Optional[float] = None
+    # Rolling features over the last 3 readings
+    temperature_mean_3:    Optional[float] = None
+    temperature_trend_3:   Optional[float] = None
+    wind_speed_mean_3:     Optional[float] = None
+    wind_speed_trend_3:    Optional[float] = None
+    soil_moisture_mean_3:  Optional[float] = None
+    soil_moisture_trend_3: Optional[float] = None
+    volt_batt_mean_3:      Optional[float] = None
+    volt_batt_trend_3:     Optional[float] = None
+    volt_solar_mean_3:     Optional[float] = None
+    volt_solar_trend_3:    Optional[float] = None
+    curr_batt_mean_3:      Optional[float] = None
+    curr_batt_trend_3:     Optional[float] = None
+    curr_solar_mean_3:     Optional[float] = None
+    curr_solar_trend_3:    Optional[float] = None
+    # Time features
+    hour_of_day:      Optional[int]   = None
+    hours_since_last: Optional[float] = None
 
 @app.get("/")
 def root():
