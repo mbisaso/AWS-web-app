@@ -9,11 +9,18 @@ export interface StationSummary {
   lastUpdated: string
 }
 
+export interface StationHealthDetails {
+  prediction: string
+  at_risk_proba: number
+  threshold_used: number
+  last_reading_id: number
+}
+
 export interface StationStatus {
   status: StationOperationalStatus
   last_updated: string
   computed_by: string
-  details: Record<string, unknown>
+  details: StationHealthDetails
 }
 
 export interface Station {
