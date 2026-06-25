@@ -4,7 +4,7 @@ import type { Alert, AlertFilterParams, AlertSeverity, AlertType } from '../serv
 import { fetchAlertsData } from '../services/api'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { usePollingData } from '../hooks/usePollingData'
-import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
+import { Sidebar } from '../components/Sidebar'
 import { AlertSummaryCards } from '../components/alertsCenter/AlertSummaryCards'
 import { AlertFilterBar } from '../components/alertsCenter/AlertFilterBar'
 import type { AlertFilters } from '../components/alertsCenter/AlertFilterBar'
@@ -180,7 +180,7 @@ export function AlertsCenterPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-mist lg:h-screen lg:flex-row">
-      <DashboardSidebar />
+      <Sidebar />
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}

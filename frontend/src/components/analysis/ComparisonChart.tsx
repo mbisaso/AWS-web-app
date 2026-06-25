@@ -1,19 +1,19 @@
-import { useMemo, useState } from 'react'
-import type { HistoricalReading, SensorType } from '../../services/api'
-import { SENSOR_CONFIG } from '../../services/api'
+﻿import { useMemo, useState } from 'react'
+import type { MetricReading, SensorMetricKey } from '../../types'
+import { SENSOR_METRIC_CONFIG } from '../../types'
 
 const BAR_COLORS = ['#0EA5E9', '#22C55E', '#F59E0B']
 
 type SortBy = 'station' | 'avg' | 'min' | 'max'
 
 interface ComparisonChartProps {
-  readings: HistoricalReading[]
-  sensorType: SensorType
+  readings: MetricReading[]
+  metricKey: SensorMetricKey
   isLoading?: boolean
 }
 
-function groupReadings(readings: HistoricalReading[]): Map<number, { name: string; values: number[] }> {
-  const map = new Map<number, { name: string; values: number[] }>()
+function groupReadings(readings: MetricReading[]): Map<string, { name: string; values: number[] }> {
+  const map = new Map<string, { name: string; values: number[] }>()
   for (const r of readings) {
     if (!map.has(r.station_id)) map.set(r.station_id, { name: r.station_name, values: [] })
     map.get(r.station_id)!.values.push(r.value)
@@ -26,8 +26,8 @@ function computeBarStats(values: number[]) {
   return { avg: parseFloat(avg.toFixed(1)), min: parseFloat(Math.min(...values).toFixed(1)), max: parseFloat(Math.max(...values).toFixed(1)) }
 }
 
-export function ComparisonChart({ readings, sensorType, isLoading }: ComparisonChartProps) {
-  const cfg = SENSOR_CONFIG[sensorType]
+export function ComparisonChart({ readings, metricKey, isLoading }: ComparisonChartProps) {
+  const cfg = SENSOR_METRIC_CONFIG[metricKey]
   const [sortBy, setSortBy] = useState<SortBy>('avg')
   const [sortAsc, setSortAsc] = useState(false)
 
@@ -80,7 +80,7 @@ export function ComparisonChart({ readings, sensorType, isLoading }: ComparisonC
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 className="mb-2 text-sm font-semibold text-midnight font-display">{cfg.label} — Station Comparison</h3>
         <div className="flex h-[260px] items-center justify-center rounded-xl bg-slate-50">
-          <p className="text-sm text-storm/400">Select 2+ stations to enable comparison</p>
+          <p className="text-sm text-storm/40">Select 2+ stations to enable comparison</p>
         </div>
       </div>
     )
@@ -106,14 +106,13 @@ export function ComparisonChart({ readings, sensorType, isLoading }: ComparisonC
               }`}
               aria-pressed={sortBy === key}
             >
-                {key === 'station' ? 'Name' : key === 'avg' ? 'Avg' : key.charAt(0).toUpperCase() + key.slice(1)}
-              {sortBy === key && <span className="ml-0.5">{sortAsc ? '\u2191' : '\u2193'}</span>}
+              {key === 'station' ? 'Name' : key === 'avg' ? 'Avg' : key.charAt(0).toUpperCase() + key.slice(1)}
+              {sortBy === key && <span className="ml-0.5">{sortAsc ? '↑' : '↓'}</span>}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Legend */}
       <div className="mb-4 flex gap-4 text-[10px] text-storm/50">
         <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: BAR_COLORS[0] }} aria-hidden="true" /> Avg</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: BAR_COLORS[1] }} aria-hidden="true" /> Min</span>

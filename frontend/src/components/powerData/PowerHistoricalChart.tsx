@@ -1,20 +1,15 @@
 import { useMemo, useRef, useState } from 'react'
-import type { PowerMetricType, PowerReading } from '../../services/api'
-import { POWER_METRIC_CONFIG } from '../../services/api'
+import type { PowerChart, PowerMetricKey } from '../../types'
+import { POWER_METRIC_CONFIG } from '../../types'
 
 const PAD = { top: 24, bottom: 44, left: 55, right: 20 }
 const SVG_W = 800
 const SVG_H = 300
 
-interface ChartSeries {
-  metric: PowerMetricType
-  readings: PowerReading[]
-  color: string
-}
-
 interface PowerHistoricalChartProps {
-  primary: ChartSeries
-  secondary?: ChartSeries | null
+  readings: PowerChart[]
+  primaryKey: PowerMetricKey
+  secondaryKey?: PowerMetricKey | null
   showSecondary?: boolean
   onToggleSecondary?: () => void
   isLoading?: boolean
@@ -23,166 +18,157 @@ interface PowerHistoricalChartProps {
 interface TooltipData {
   x: number
   y: number
-  value: number
-  stationName: string
+  primaryValue: number | null
+  secondaryValue: number | null
   time: string
-  metric: PowerMetricType
-  isAnomaly: boolean
-  anomalyReason?: string
 }
 
-function buildLine(group: PowerReading[], start: number, end: number, sx: (t: number) => number, sy: (v: number) => number) {
-  if (start >= end || start >= group.length) return ''
-  const pts = group.slice(start, end).map((r) => {
-    const x = sx(new Date(r.timestamp).getTime())
-    const y = sy(r.value)
-    return `${x},${y}`
-  })
-  return `M ${pts.join(' L ')}`
+function buildSeg(
+  readings: PowerChart[],
+  key: PowerMetricKey,
+  from: number,
+  to: number,
+  sx: (t: number) => number,
+  sy: (v: number) => number,
+): string {
+  const pts: string[] = []
+  for (let i = from; i < to; i++) {
+    const v = readings[i][key]
+    if (v === null) continue
+    pts.push(`${sx(new Date(readings[i].timestamp).getTime())},${sy(v)}`)
+  }
+  return pts.length ? `M ${pts.join(' L ')}` : ''
 }
 
-export function PowerHistoricalChart({ primary, secondary, showSecondary, onToggleSecondary, isLoading }: PowerHistoricalChartProps) {
-  const cfg = POWER_METRIC_CONFIG[primary.metric]
+function buildPath(
+  sorted: PowerChart[],
+  key: PowerMetricKey,
+  sx: (t: number) => number,
+  sy: (v: number) => number,
+  gapMs: number,
+): string {
+  if (!sorted.length) return ''
+  const segs: string[] = []
+  let start = 0
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = new Date(sorted[i].timestamp).getTime() - new Date(sorted[i - 1].timestamp).getTime()
+    if (gap > gapMs) {
+      segs.push(buildSeg(sorted, key, start, i, sx, sy))
+      start = i
+    }
+  }
+  segs.push(buildSeg(sorted, key, start, sorted.length, sx, sy))
+  return segs.filter(Boolean).join(' ')
+}
+
+export function PowerHistoricalChart({
+  readings,
+  primaryKey,
+  secondaryKey,
+  showSecondary,
+  onToggleSecondary,
+  isLoading,
+}: PowerHistoricalChartProps) {
+  const cfg = POWER_METRIC_CONFIG[primaryKey]
+  const secondaryCfg = secondaryKey ? POWER_METRIC_CONFIG[secondaryKey] : null
   const [tooltip, setTooltip] = useState<TooltipData | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
 
-  const allReadings = useMemo(() => {
-    const combined = [...primary.readings]
-    if (showSecondary && secondary) combined.push(...secondary.readings)
-    return combined
-  }, [primary.readings, secondary, showSecondary])
+  const sorted = useMemo(
+    () => [...readings].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
+    [readings],
+  )
 
-  const { groups, yMin, yMax, xMin, xMax, anomalies } = useMemo(() => {
-    if (!primary.readings.length) {
-      return { groups: [], yMin: 0, yMax: 100, xMin: 0, xMax: 1, anomalies: [] as PowerReading[] }
+  const computed = useMemo(() => {
+    const cW = SVG_W - PAD.left - PAD.right
+    const cH = SVG_H - PAD.top - PAD.bottom
+
+    if (!sorted.length) {
+      return { primaryPath: '', secondaryPath: '', yMin: 0, yMax: 1, xMin: 0, xMax: 1, yTicks: [], xTicks: [], cW, cH }
     }
 
     let yLo = Infinity, yHi = -Infinity
     let xLo = Infinity, xHi = -Infinity
-    const anoms: PowerReading[] = []
 
-    const series = [{ readings: primary.readings }]
-    if (showSecondary && secondary) series.push({ readings: secondary.readings })
-
-    for (const s of series) {
-      for (const r of s.readings) {
-        const t = new Date(r.timestamp).getTime()
-        if (r.value < yLo) yLo = r.value
-        if (r.value > yHi) yHi = r.value
-        if (t < xLo) xLo = t
-        if (t > xHi) xHi = t
-        if (r.is_anomaly) anoms.push(r)
-      }
-    }
-
-    const yPad = (yHi - yLo) * 0.1 || 5
-    const yLoScaled = yLo - yPad
-    const yHiScaled = yHi + yPad
-    const chartW = SVG_W - PAD.left - PAD.right
-    const chartH = SVG_H - PAD.top - PAD.bottom
-
-    const sx = (t: number) => PAD.left + ((t - xLo) / (xHi - xLo)) * chartW
-    const sy = (v: number) => PAD.top + chartH - ((v - yLoScaled) / (yHiScaled - yLoScaled)) * chartH
-
-    const medianGap = xHi - xLo > 0 ? (xHi - xLo) / allReadings.length * 2 : 3 * 60 * 60 * 1000
-    const gapThreshold = medianGap * 2.5
-
-    const build = (readings: PowerReading[], color: string) => {
-      const map = new Map<number, PowerReading[]>()
-      for (const r of readings) {
-        if (!map.has(r.station_id)) map.set(r.station_id, [])
-        map.get(r.station_id)!.push(r)
-      }
-      for (const [, arr] of map) arr.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
-
-      return Array.from(map.entries()).map(([stationId, group]) => {
-        const segments: string[] = []
-        let segStart = 0
-        for (let i = 1; i < group.length; i++) {
-          const gap = new Date(group[i].timestamp).getTime() - new Date(group[i - 1].timestamp).getTime()
-          if (gap > gapThreshold) {
-            segments.push(buildLine(group, segStart, i, sx, sy))
-            segStart = i
-          }
+    for (const r of sorted) {
+      const t = new Date(r.timestamp).getTime()
+      if (t < xLo) xLo = t
+      if (t > xHi) xHi = t
+      const keys: PowerMetricKey[] = [primaryKey, ...(showSecondary && secondaryKey ? [secondaryKey] : [])]
+      for (const k of keys) {
+        const v = r[k]
+        if (v !== null) {
+          if (v < yLo) yLo = v
+          if (v > yHi) yHi = v
         }
-        segments.push(buildLine(group, segStart, group.length, sx, sy))
-        return { stationId, stationName: group[0].station_name, color, d: segments.join(' ') }
-      })
+      }
     }
 
-    const primaryLines = build(primary.readings, primary.color)
-    const secondaryLines = showSecondary && secondary ? build(secondary.readings, secondary.color) : []
+    if (!isFinite(yLo)) { yLo = 0; yHi = 1 }
+    const yPad = (yHi - yLo) * 0.1 || 1
+    const yLoS = yLo - yPad
+    const yHiS = yHi + yPad
+    const xRange = xHi - xLo || 1
 
-    return {
-      groups: [...primaryLines, ...secondaryLines],
-      yMin: yLoScaled,
-      yMax: yHiScaled,
-      xMin: xLo,
-      xMax: xHi,
-      anomalies: anoms,
-    }
-  }, [primary, secondary, showSecondary, allReadings.length])
+    const sx = (t: number) => PAD.left + ((t - xLo) / xRange) * cW
+    const sy = (v: number) => PAD.top + cH - ((v - yLoS) / (yHiS - yLoS)) * cH
 
-  const chartW = SVG_W - PAD.left - PAD.right
-  const chartH = SVG_H - PAD.top - PAD.bottom
+    const gapMs = (sorted.length > 1 ? (xHi - xLo) / sorted.length : 3 * 60 * 60 * 1000) * 2.5
 
-  const yTicks = useMemo(() => {
-    const range = yMax - yMin
+    // y-axis ticks
+    const range = yHiS - yLoS
     const rough = range / 5
     const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)))
     const res = rough / mag
-    let nice: number
-    if (res <= 1.5) nice = mag
-    else if (res <= 3.5) nice = 2 * mag
-    else if (res <= 7.5) nice = 5 * mag
-    else nice = 10 * mag
-    const start = Math.ceil(yMin / nice) * nice
-    const ticks: number[] = []
-    for (let v = start; v <= yMax; v += nice) {
-      ticks.push(parseFloat(v.toFixed(2)))
+    let nice = mag
+    if (res > 7.5) nice = 10 * mag
+    else if (res > 3.5) nice = 5 * mag
+    else if (res > 1.5) nice = 2 * mag
+    const yTicksArr: number[] = []
+    for (let v = Math.ceil(yLoS / nice) * nice; v <= yHiS; v += nice) {
+      yTicksArr.push(parseFloat(v.toFixed(2)))
     }
-    return ticks
-  }, [yMin, yMax])
 
-  const xTicks = useMemo(() => {
-    if (xMax <= xMin) return [new Date(xMin)]
-    const count = 6
-    const step = (xMax - xMin) / count
-    return Array.from({ length: count + 1 }, (_, i) => new Date(xMin + i * step))
-  }, [xMin, xMax])
+    const xTicksArr = xHi > xLo
+      ? Array.from({ length: 7 }, (_, i) => new Date(xLo + (i / 6) * xRange))
+      : [new Date(xLo)]
 
-  function sxVal(t: number) { return PAD.left + ((t - xMin) / (xMax - xMin)) * chartW }
-  function syVal(v: number) { return PAD.top + chartH - ((v - yMin) / (yMax - yMin)) * chartH }
-
-  function findClosest(clientX: number) {
-    if (!svgRef.current || !allReadings.length) return null
-    const rect = svgRef.current.getBoundingClientRect()
-    const mx = clientX - rect.left
-    const xRange = xMax - xMin
-    const mouseTime = xMin + ((mx - PAD.left) / chartW) * xRange
-
-    let closest: PowerReading | null = null
-    let closestDist = Infinity
-    for (const r of allReadings) {
-      const t = new Date(r.timestamp).getTime()
-      const dist = Math.abs(t - mouseTime)
-      if (dist < closestDist) {
-        closestDist = dist
-        closest = r
-      }
+    return {
+      primaryPath:   buildPath(sorted, primaryKey, sx, sy, gapMs),
+      secondaryPath: showSecondary && secondaryKey ? buildPath(sorted, secondaryKey, sx, sy, gapMs) : '',
+      yMin: yLoS, yMax: yHiS, xMin: xLo, xMax: xHi,
+      yTicks: yTicksArr, xTicks: xTicksArr, cW, cH,
     }
-    return closest
-  }
+  }, [sorted, primaryKey, secondaryKey, showSecondary])
+
+  const { primaryPath, secondaryPath, yMin, yMax, xMin, xMax, yTicks, xTicks, cW, cH } = computed
+
+  function sxVal(t: number) { return PAD.left + ((t - xMin) / (xMax - xMin || 1)) * cW }
+  function syVal(v: number) { return PAD.top + cH - ((v - yMin) / (yMax - yMin || 1)) * cH }
 
   function handlePointer(e: React.MouseEvent<SVGSVGElement>) {
-    const closest = findClosest(e.clientX)
-    if (!closest) return
-    const x = sxVal(new Date(closest.timestamp).getTime())
-    const y = syVal(closest.value)
-    const time = new Date(closest.timestamp).toLocaleString(undefined, {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    if (!svgRef.current || !sorted.length) return
+    const rect = svgRef.current.getBoundingClientRect()
+    const mx = e.clientX - rect.left
+    const mouseTime = xMin + ((mx - PAD.left) / cW) * (xMax - xMin)
+    let best: PowerChart | null = null
+    let bestDist = Infinity
+    for (const r of sorted) {
+      const dist = Math.abs(new Date(r.timestamp).getTime() - mouseTime)
+      if (dist < bestDist) { bestDist = dist; best = r }
+    }
+    if (!best) return
+    const t = new Date(best.timestamp).getTime()
+    const pv = best[primaryKey]
+    setTooltip({
+      x: sxVal(t),
+      y: pv !== null ? syVal(pv) : PAD.top + cH / 2,
+      primaryValue: pv,
+      secondaryValue: secondaryKey ? best[secondaryKey] : null,
+      time: new Date(best.timestamp).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      }),
     })
-    setTooltip({ x, y, value: closest.value, stationName: closest.station_name, time, metric: closest.metric, isAnomaly: closest.is_anomaly, anomalyReason: closest.anomaly_reason })
   }
 
   if (isLoading) {
@@ -194,12 +180,10 @@ export function PowerHistoricalChart({ primary, secondary, showSecondary, onTogg
     )
   }
 
-  if (!primary.readings.length) {
+  if (!sorted.length) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
-        <h3 className="mb-4 text-sm font-semibold text-midnight font-display">
-          {cfg.label} — Historical
-        </h3>
+        <h3 className="mb-4 text-sm font-semibold text-midnight font-display">{cfg.label} — Historical</h3>
         <div className="flex h-[260px] items-center justify-center rounded-xl bg-slate-50">
           <p className="text-sm text-storm/40">No readings available for this selection</p>
         </div>
@@ -212,10 +196,10 @@ export function PowerHistoricalChart({ primary, secondary, showSecondary, onTogg
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-midnight font-display">
           {cfg.label} — Historical{' '}
-          <span className="text-xs font-normal text-storm/40">({primary.readings.length} readings)</span>
+          <span className="text-xs font-normal text-storm/40">({sorted.length} readings)</span>
         </h3>
         <div className="flex items-center gap-3">
-          {secondary && (
+          {secondaryCfg && (
             <label className="inline-flex cursor-pointer items-center gap-1.5 text-[10px] text-storm/50 hover:text-storm/70">
               <input
                 type="checkbox"
@@ -224,13 +208,13 @@ export function PowerHistoricalChart({ primary, secondary, showSecondary, onTogg
                 className="h-3.5 w-3.5 rounded border-slate-300 text-midnight focus:ring-1 focus:ring-sky-soft"
               />
               <span className="inline-flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: secondary.color }} aria-hidden="true" />
-                {POWER_METRIC_CONFIG[secondary.metric].label}
+                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: secondaryCfg.color }} aria-hidden="true" />
+                {secondaryCfg.label}
               </span>
             </label>
           )}
           <span className="inline-flex items-center gap-1 text-[10px] text-storm/50">
-            <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: primary.color }} aria-hidden="true" />
+            <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
             {cfg.label}
           </span>
         </div>
@@ -257,39 +241,27 @@ export function PowerHistoricalChart({ primary, secondary, showSecondary, onTogg
               </g>
             )
           })}
-
           {xTicks.map((d, i) => {
             const x = sxVal(d.getTime())
             const label = d.toLocaleString(undefined, { month: 'short', day: 'numeric' })
             return (
               <g key={i}>
-                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + chartH} stroke="#F1F5F9" strokeWidth="0.5" />
+                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + cH} stroke="#F1F5F9" strokeWidth="0.5" />
                 <text x={x} y={SVG_H - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="#94A3B8">{label}</text>
               </g>
             )
           })}
-
-          <text x={14} y={PAD.top + chartH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 14, ${PAD.top + chartH / 2})`}>
+          <text x={14} y={PAD.top + cH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 14, ${PAD.top + cH / 2})`}>
             {cfg.unit}
           </text>
-
-          {groups.map((g) => (
-            <path key={`${g.stationId}-${g.color}`} d={g.d} fill="none" stroke={g.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-          ))}
-
-          {anomalies.map((r) => {
-            const x = sxVal(new Date(r.timestamp).getTime())
-            const y = syVal(r.value)
-            return (
-              <g key={`anom-${r.id}`}>
-                <circle cx={x} cy={y} r="5" fill="#F59E0B" stroke="#FFFFFF" strokeWidth="1.5" />
-                <circle cx={x} cy={y} r="2" fill="#FFFFFF" opacity="0.8" />
-              </g>
-            )
-          })}
-
+          {primaryPath && (
+            <path d={primaryPath} fill="none" stroke={cfg.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          )}
+          {showSecondary && secondaryCfg && secondaryPath && (
+            <path d={secondaryPath} fill="none" stroke={secondaryCfg.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" strokeDasharray="5,3" />
+          )}
           {tooltip && (
-            <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + chartH} stroke="#94A3B8" strokeWidth="0.5" strokeDasharray="3,3" />
+            <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + cH} stroke="#94A3B8" strokeWidth="0.5" strokeDasharray="3,3" />
           )}
         </svg>
 
@@ -304,15 +276,15 @@ export function PowerHistoricalChart({ primary, secondary, showSecondary, onTogg
             <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg -translate-y-full">
               <div className="flex items-baseline gap-2">
                 <span className="text-sm font-bold text-midnight font-display">
-                  {tooltip.value}{POWER_METRIC_CONFIG[tooltip.metric]?.unit ?? ''}
+                  {tooltip.primaryValue ?? '—'}{cfg.unit}
                 </span>
-                {tooltip.isAnomaly && <span className="text-[10px] font-medium text-amber-600">Flagged</span>}
               </div>
-              <p className="text-[10px] text-storm/50">{tooltip.stationName}</p>
-              <p className="text-[10px] text-storm/40">{tooltip.time}</p>
-              {tooltip.isAnomaly && tooltip.anomalyReason && (
-                <p className="text-[10px] text-amber-600">{tooltip.anomalyReason}</p>
+              {showSecondary && secondaryCfg && tooltip.secondaryValue !== null && (
+                <p className="text-[10px]" style={{ color: secondaryCfg.color }}>
+                  {secondaryCfg.label}: {tooltip.secondaryValue}{secondaryCfg.unit}
+                </p>
               )}
+              <p className="text-[10px] text-storm/40">{tooltip.time}</p>
             </div>
           </div>
         )}

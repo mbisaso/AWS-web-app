@@ -1,17 +1,17 @@
-import { useCallback, useMemo, useState } from 'react'
-import type { SensorType, ViewMode } from '../services/api'
-import { SENSOR_CONFIG } from '../services/api'
-import { useDashboardData } from '../hooks/useDashboardData'
-import { fetchAnalysisData } from '../services/api'
-import type { AnalysisDataResponse } from '../services/api'
-import { usePollingData } from '../hooks/usePollingData'
-import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { SensorMetricKey, Station, MetricReading } from '../types'
+import { SENSOR_METRIC_CONFIG } from '../types'
+import { fetchStations } from '../api/stations'
+import { useAnalysisData } from '../hooks/useAnalysisData'
+import { Sidebar } from '../components/Sidebar'
 import { AnalysisControls } from '../components/analysis/AnalysisControls'
 import { StatSummaryCard } from '../components/analysis/StatSummaryCard'
 import { TrendChart } from '../components/analysis/TrendChart'
 import { ComparisonChart } from '../components/analysis/ComparisonChart'
 import { CorrelationView } from '../components/analysis/CorrelationView'
 import { DistributionChart } from '../components/analysis/DistributionChart'
+
+type ViewMode = 'trends' | 'comparison' | 'correlation' | 'distribution'
 
 function daysAgo(days: number): string {
   const d = new Date()
@@ -23,64 +23,61 @@ function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function useAnalysisData(params: {
-  sensorTypes: SensorType[]
-  stationIds: number[]
-  dateFrom: string
-  dateTo: string
-}) {
-  return usePollingData<AnalysisDataResponse>(
-    () => fetchAnalysisData(params),
-    [params.sensorTypes.join(','), params.stationIds.join(','), params.dateFrom, params.dateTo],
-  )
-}
-
 export function WeatherAnalysisPage() {
-  const { data: dashData, isLoading: dashLoading } = useDashboardData()
+  const [stations, setStations] = useState<Station[]>([])
+  const [stationsLoading, setStationsLoading] = useState(true)
 
-  const [stationIds, setStationIds] = useState<number[]>([])
-  const [sensorTypes, setSensorTypes] = useState<SensorType[]>(['temperature', 'humidity'])
+  useEffect(() => {
+    fetchStations()
+      .then(setStations)
+      .finally(() => setStationsLoading(false))
+  }, [])
+
+  const [stationIds, setStationIds] = useState<string[]>([])
+  const [metricKey, setMetricKey] = useState<SensorMetricKey>('temperature')
+  const [correlationMetricB, setCorrelationMetricB] = useState<SensorMetricKey>('humidity')
   const [dateFrom, setDateFrom] = useState(() => daysAgo(7))
   const [dateTo, setDateTo] = useState(() => today())
   const [viewMode, setViewMode] = useState<ViewMode>('trends')
   const [showMovingAverage, setShowMovingAverage] = useState(false)
 
-  const stations = dashData?.stations ?? []
-
-  const params = useMemo(
-    () => ({ sensorTypes, stationIds, dateFrom, dateTo }),
-    [sensorTypes, stationIds, dateFrom, dateTo],
+  const hours = useMemo(
+    () => Math.max(1, Math.ceil((Date.parse(dateTo) - Date.parse(dateFrom)) / 3600000)),
+    [dateFrom, dateTo],
   )
-
-  const { data, isLoading, error, retry } = useAnalysisData(params)
-  const readings = data?.readings ?? []
-  const stats = data?.stats ?? {}
 
   const handleDateChange = useCallback((from: string, to: string) => {
     setDateFrom(from)
     setDateTo(to)
   }, [])
 
-  const readingsBySensor = useMemo(() => {
-    const map = new Map<SensorType, typeof readings>()
-    for (const st of sensorTypes) {
-      map.set(st, readings.filter((r) => r.sensor_type === st))
+  const { readings, stats, isLoading, error, retry } = useAnalysisData({
+    stationIds,
+    allStations: stations,
+    hours,
+  })
+
+  const metricReadings = useMemo<MetricReading[]>(() => {
+    const out: MetricReading[] = []
+    for (const r of readings) {
+      const v = r[metricKey]
+      if (v !== null) {
+        out.push({ station_id: r.stationId, station_name: r.stationName, timestamp: r.timestamp, value: v })
+      }
     }
-    return map
-  }, [readings, sensorTypes])
+    return out
+  }, [readings, metricKey])
 
-  const primarySensor = sensorTypes[0]
-  const secondarySensor = sensorTypes.length > 1 ? sensorTypes[1] : sensorTypes[0]
-  const primaryReadings = readingsBySensor.get(primarySensor) ?? []
-  const secondaryReadings = readingsBySensor.get(secondarySensor) ?? []
-
-  const viewPanels: ViewMode[] = ['trends', 'comparison', 'correlation', 'distribution']
+  const visibleStations = stationIds.length
+    ? stations.filter((s) => stationIds.includes(s.station_id))
+    : stations
 
   const dataLoading = isLoading && !readings.length
+  const viewPanels: ViewMode[] = ['trends', 'comparison', 'correlation', 'distribution']
 
   return (
     <div className="flex min-h-screen flex-col bg-mist lg:h-screen lg:flex-row">
-      <DashboardSidebar />
+      <Sidebar />
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}
@@ -91,9 +88,9 @@ export function WeatherAnalysisPage() {
               Patterns &amp; comparisons
             </h1>
             <p className="text-sm text-white/50">
-              {dashLoading
+              {stationsLoading
                 ? 'Loading stations...'
-                : `${stations.length} stations · ${sensorTypes.map((st) => SENSOR_CONFIG[st].label).join(', ')} · ${readings.length} readings`}
+                : `${visibleStations.length} stations · ${SENSOR_METRIC_CONFIG[metricKey].label} · ${readings.length} readings`}
             </p>
           </div>
         </div>
@@ -104,8 +101,10 @@ export function WeatherAnalysisPage() {
             stations={stations}
             selectedStationIds={stationIds}
             onStationIdsChange={setStationIds}
-            selectedSensorTypes={sensorTypes}
-            onSensorTypesChange={setSensorTypes}
+            selectedMetricKey={metricKey}
+            onMetricKeyChange={setMetricKey}
+            correlationMetricB={correlationMetricB}
+            onCorrelationMetricBChange={setCorrelationMetricB}
             dateFrom={dateFrom}
             dateTo={dateTo}
             onDateChange={handleDateChange}
@@ -139,21 +138,17 @@ export function WeatherAnalysisPage() {
         {/* ── Summary stats cards ── */}
         <section aria-label="Summary statistics" className="mb-6">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {sensorTypes.map((st) => {
-              const stationList = stationIds.length ? stationIds : stations.map((s) => s.id)
-              return stationList.map((sid) => {
-                const key = `${sid}:${st}`
-                const stationName = stations.find((s) => s.id === sid)?.name ?? `Station ${sid}`
-                return (
-                  <StatSummaryCard
-                    key={key}
-                    stats={stats[key] ?? null}
-                    sensorType={st}
-                    stationName={stationName}
-                    isLoading={dataLoading && !stats[key]}
-                  />
-                )
-              })
+            {visibleStations.map((station) => {
+              const key = `${station.station_id}:${metricKey}`
+              return (
+                <StatSummaryCard
+                  key={key}
+                  stats={stats[key] ?? null}
+                  metricKey={metricKey}
+                  stationName={station.name}
+                  isLoading={dataLoading && !stats[key]}
+                />
+              )
             })}
           </div>
         </section>
@@ -181,8 +176,8 @@ export function WeatherAnalysisPage() {
                 >
                   {mode === 'trends' && (
                     <TrendChart
-                      readings={primaryReadings}
-                      sensorType={primarySensor}
+                      readings={metricReadings}
+                      metricKey={metricKey}
                       showMovingAverage={showMovingAverage}
                       onToggleMovingAverage={() => setShowMovingAverage((s) => !s)}
                       isLoading={dataLoading}
@@ -190,24 +185,23 @@ export function WeatherAnalysisPage() {
                   )}
                   {mode === 'comparison' && (
                     <ComparisonChart
-                      readings={primaryReadings}
-                      sensorType={primarySensor}
+                      readings={metricReadings}
+                      metricKey={metricKey}
                       isLoading={dataLoading}
                     />
                   )}
                   {mode === 'correlation' && (
                     <CorrelationView
-                      readingsA={readingsBySensor.get(sensorTypes[0]) ?? []}
-                      readingsB={secondaryReadings}
-                      sensorTypeA={sensorTypes[0]}
-                      sensorTypeB={secondarySensor}
+                      readings={readings}
+                      metricKeyA={metricKey}
+                      metricKeyB={correlationMetricB}
                       isLoading={dataLoading}
                     />
                   )}
                   {mode === 'distribution' && (
                     <DistributionChart
-                      readings={primaryReadings}
-                      sensorType={primarySensor}
+                      readings={metricReadings}
+                      metricKey={metricKey}
                       isLoading={dataLoading}
                     />
                   )}
@@ -217,9 +211,8 @@ export function WeatherAnalysisPage() {
           </div>
         </section>
 
-        {/* ── View-mode indicator (visually hidden description for screen readers) ── */}
         <div className="sr-only" role="status" aria-live="polite">
-          Showing {viewMode} view with {sensorTypes.length} sensor type{sensorTypes.length !== 1 ? 's' : ''} across {stationIds.length || stations.length} stations
+          Showing {viewMode} view for {SENSOR_METRIC_CONFIG[metricKey].label} across {visibleStations.length} stations
         </div>
       </main>
     </div>
