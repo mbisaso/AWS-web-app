@@ -66,7 +66,7 @@ export function LoginPage() {
               </div>
 
               <p className="mt-3 text-sm leading-7 text-slate-600">
-                Use your credentials to enter the monitoring dashboard.
+                Use your credentials to enter the monitoring dashboard
               </p>
 
               <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
