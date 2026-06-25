@@ -6,7 +6,7 @@ interface MapLocationPickerProps {
   onChange: (lat: number, lng: number) => void
 }
 
-const MAP_ID = 'YOUR_MAP_ID'
+const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as string | undefined
 
 export function MapLocationPicker({ latitude, longitude, onChange }: MapLocationPickerProps) {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
