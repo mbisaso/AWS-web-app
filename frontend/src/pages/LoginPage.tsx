@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export function LoginPage() {
@@ -9,6 +9,8 @@ export function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const justRegistered = (location.state as { registered?: boolean } | null)?.registered === true
 
   async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault()
@@ -67,6 +69,11 @@ export function LoginPage() {
               </p>
 
               <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+                {justRegistered && (
+                  <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    Account created — log in with your new credentials.
+                  </p>
+                )}
                 {error && (
                   <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>
                 )}
