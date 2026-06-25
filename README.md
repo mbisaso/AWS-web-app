@@ -164,6 +164,7 @@ Frontend runs at `http://localhost:5173`
 | POST   | `/api/ingest/`                        | None       | Receives sensor data from ESP32         |
 | POST   | `/api/token/`                         | None       | Login — returns access + refresh tokens |
 | POST   | `/api/token/refresh/`                 | None       | Renew access token                      |
+| GET    | `/api/export/`                        | JWT Bearer | Export historical sensor data for ML (supports ?station_id, ?hours, ?output=csv, ?fields) |
 | GET    | `/api/latest/`                        | JWT Bearer | Latest reading per station              |
 | GET    | `/api/stations/`                      | JWT Bearer | All registered stations with status     |
 | GET    | `/api/stations/<station_id>/`         | JWT Bearer | One station + its latest reading        |
@@ -211,6 +212,72 @@ All API responses follow this structure:
 
 ---
 
+## ML Pipeline
+
+The platform includes a machine learning pipeline that predicts station health based on incoming sensor readings.
+
+**How it works:** When the `/api/ingest/` endpoint receives a new reading, Django automatically calls the FastAPI inference service, which runs a trained Random Forest classifier and returns a health prediction. The result is stored in `StationStatus.computed_by` (set to `ml_model`) and `StationStatus.details` (includes prediction, probability, and threshold used).
+
+**Model:** Random Forest classifier trained on 2 years of hourly weather data from Entebbe Airport (NOAA ISD-Lite). Predicts `healthy` or `at_risk`. Will be retrained on real AdEMNEA sensor data once stations are actively transmitting — power rail readings (battery voltage, solar current) will significantly improve accuracy.
+
+**ML folder structure:**
+
+```
+ml/
+├── data/                       Raw and prepared datasets
+├── models/                     Saved model, threshold, feature list
+├── notebooks/
+│   ├── 01_eda_entebbe.ipynb    Exploratory data analysis
+│   └── 02_model_training.ipynb Model training and evaluation
+└── fastapi_service/
+    └── main.py                 FastAPI inference service
+```
+
+**Starting the ML inference service:**
+
+```bash
+cd ml/fastapi_service
+uvicorn main:app --reload --port 8001
+```
+
+Service runs at `http://localhost:8001`
+
+**Prediction endpoint:**
+
+```
+POST http://localhost:8001/predict
+```
+
+Request body:
+
+```json
+{
+  "temperature": 17.5,
+  "dew_point": 12.0,
+  "wind_speed": 1.1,
+  "wind_direction": 45,
+  "temperature_mean_3h": 18.0,
+  "temperature_trend_3h": -0.5,
+  "dew_point_mean_3h": 12.2,
+  "dew_point_trend_3h": -0.3,
+  "wind_speed_mean_3h": 1.3,
+  "wind_speed_trend_3h": -0.2,
+  "hour_of_day": 3
+}
+```
+
+Response:
+
+```json
+{
+  "prediction": "healthy",
+  "at_risk_proba": 0.1462,
+  "threshold_used": 0.396
+}
+```
+
+---
+
 ## Data Models
 
 ### `accounts.User`
@@ -238,7 +305,7 @@ One-to-one with Station. Tracks station health.
 | `status`       | enum     | `full` / `partial` / `down`                                |
 | `last_updated` | datetime | Auto-updated on save                                       |
 | `details`      | JSON     | Arbitrary metadata                                         |
-| `computed_by`  | string   | Who set the status — `rule_based` now, ML model name later |
+| `computed_by`  | string   | `rule_based` (fallback) or `ml_model` (when FastAPI service is running) |
 
 ### `stations.SensorReading`
 
@@ -274,7 +341,6 @@ DB indexes exist on `timestamp`, `station_code`, and the composite `(station_cod
 - **No REST registration endpoint** — the accounts app only has a template-based register view. React has no JSON API to call for signup.
 - **No current user endpoint** — once logged in, React has no way to fetch the logged-in user's profile or role.
 - **Frontend is static** — the dashboard and auth pages show hardcoded data with no real API calls yet.
-- **Bug in ingest view** — `stations/views.py` line ~195 uses `status_code=400` instead of `status=400` in a DRF `Response()` call. This raises a `TypeError` at runtime if an ESP32 sends a malformed timestamp on Format 1.
 - **Secrets hardcoded** — the Django secret key and database password are in `settings.py`. Must be moved to environment variables before any deployment.
 
 ---

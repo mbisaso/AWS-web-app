@@ -1,4 +1,32 @@
+import { useState } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+
 export function LoginPage() {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { login } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const justRegistered = (location.state as { registered?: boolean } | null)?.registered === true
+
+  async function handleSubmit(e: { preventDefault(): void }) {
+    e.preventDefault()
+    setError(null)
+    setIsSubmitting(true)
+    try {
+      await login(username, password)
+      navigate('/dashboard')
+    } catch {
+      setError('Invalid username or password.')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#f2f6fa] px-4 py-10 text-slate-900">
       <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-7xl items-center justify-center">
@@ -38,10 +66,18 @@ export function LoginPage() {
               </div>
 
               <p className="mt-3 text-sm leading-7 text-slate-600">
-                Use your credentials to enter the monitoring dashboard.
+                Use your credentials to enter the monitoring dashboard
               </p>
 
-              <form className="mt-8 space-y-5" method="post">
+              <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
+                {justRegistered && (
+                  <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                    Account created — log in with your new credentials.
+                  </p>
+                )}
+                {error && (
+                  <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>
+                )}
                 <div>
                   <label className="mb-2 block text-sm font-medium text-[#1a2332]" htmlFor="username">
                     Username
@@ -50,6 +86,8 @@ export function LoginPage() {
                     id="username"
                     name="username"
                     type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
                     className="w-full rounded-2xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm outline-none transition focus:border-[#0a6ebd] focus:bg-white"
                     placeholder="Enter username"
                   />
@@ -59,34 +97,58 @@ export function LoginPage() {
                   <label className="mb-2 block text-sm font-medium text-[#1a2332]" htmlFor="password">
                     Password
                   </label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    className="w-full rounded-2xl border border-slate-200 bg-[#f8fafc] px-4 py-3 text-sm outline-none transition focus:border-[#0a6ebd] focus:bg-white"
-                    placeholder="Enter password"
-                  />
+                  <div className="relative">
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full rounded-2xl border border-slate-200 bg-[#f8fafc] px-4 py-3 pr-11 text-sm outline-none transition focus:border-[#0a6ebd] focus:bg-white"
+                      placeholder="Enter password"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((s) => !s)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full rounded-2xl bg-[#0a6ebd] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#084f8a]"
+                  disabled={isSubmitting}
+                  className="w-full rounded-2xl bg-[#0a6ebd] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#084f8a] disabled:opacity-60"
                 >
-                  Sign in
+                  {isSubmitting ? 'Signing in...' : 'Sign in'}
                 </button>
               </form>
 
               <div className="mt-8 border-t border-slate-200 pt-6 text-sm text-slate-600">
                 <p>
                   Don&apos;t have an account?{' '}
-                  <a className="font-semibold text-[#0a6ebd] hover:underline" href="/register">
+                  <Link className="font-semibold text-[#0a6ebd] hover:underline" to="/register">
                     Register
-                  </a>
+                  </Link>
                 </p>
                 <p className="mt-3">
-                  <a className="font-medium text-slate-500 hover:text-[#1a2332]" href="/">
+                  <Link className="font-medium text-slate-500 hover:text-[#1a2332]" to="/">
                     Back to home
-                  </a>
+                  </Link>
                 </p>
               </div>
             </div>

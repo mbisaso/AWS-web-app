@@ -10,43 +10,36 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-from pathlib import Path
 import os
-from dotenv import load_dotenv
-import dj_database_url
+from datetime import timedelta
+from pathlib import Path
 
-load_dotenv()
+import dj_database_url
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+# Load environment variables from backend/.env
+load_dotenv(BASE_DIR / '.env')
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', '26k@jq%=17n(r86e^atmailv0e&yjfc%qh@2w$*2)6+8onbt*!*')
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-fallback-do-not-use-in-production')
+
 # SECURITY WARNING: don't run with debug turned on in production!
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+ALLOWED_HOSTS = os.environ.get(
+    'DJANGO_ALLOWED_HOSTS',
+    'localhost,127.0.0.1,.ngrok-free.dev,.ngrok-free.app,.onrender.com,.trycloudflare.com,.lhr.life'
+).split(',')
 
-ALLOWED_HOSTS = [
-     'localhost',
-    '127.0.0.1',
-    '.trycloudflare.com', 
-    '.lhr.life', 
-     '.ngrok-free.dev',    # ← add this
-    '.ngrok-free.app',
-    '.onrender.com',
-]
+CSRF_TRUSTED_ORIGINS = os.environ.get(
+    'CSRF_TRUSTED_ORIGINS',
+    'https://*.ngrok-free.dev,https://*.ngrok-free.app,https://*.onrender.com,https://*.trycloudflare.com,https://*.lhr.life,http://localhost:5173'
+).split(',')
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://*.trycloudflare.com',
-    'https://*.lhr.life',
-    'https://*.ngrok-free.dev',
-    'https://*.ngrok-free.app',
-    'https://*.onrender.com',
-]
+CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173').split(',')
 
 # Application definition
 
@@ -57,20 +50,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',
     'corsheaders',
+    'rest_framework',
     'accounts',
     'stations',
     'rest_framework_simplejwt',
-] 
-
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",   # ← Vite dev server
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
 ]
-
 
 # ── REST Framework config ─────────────────────────────
 REST_FRAMEWORK = {
@@ -83,32 +68,28 @@ REST_FRAMEWORK = {
 }
 
 # ── JWT config ────────────────────────────────────────
-from datetime import timedelta
-
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME':  timedelta(minutes=60),  # token expires in 60 min
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),       # refresh token lasts 7 days
+    'ACCESS_TOKEN_LIFETIME':  timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS':  True,
     'AUTH_HEADER_TYPES':      ('Bearer',),
 }
 
 AUTH_USER_MODEL = "accounts.User"
 LOGIN_URL = "login"
-
 LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware', 
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware', 
-    
 ]
 
 ROOT_URLCONF = 'aws_dashboard.urls'
@@ -134,11 +115,21 @@ WSGI_APPLICATION = 'aws_dashboard.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default='postgresql://postgres:aws@2026@localhost:5433/aws_db'
-    )
-}
+DATABASE_URL = os.environ.get('DATABASE_URL')
+if DATABASE_URL:
+    DATABASES = {'default': dj_database_url.config(default=DATABASE_URL)}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME':     os.environ.get('DB_NAME',     'aws-db'),
+            'USER':     os.environ.get('DB_USER',     'aws_user'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST':     os.environ.get('DB_HOST',     'localhost'),
+            'PORT':     os.environ.get('DB_PORT',     '5432'),
+        }
+    }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -181,5 +172,3 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'

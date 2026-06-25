@@ -1,12 +1,16 @@
-import math
+import csv
 import datetime
+import math
+import os
 
+import requests
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
 from django.shortcuts import render
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.utils.dateparse import parse_datetime
-from django.utils import timezone
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -22,6 +26,7 @@ from .serializers import (
     PowerChartSerializer,
     StationSerializer,
 )
+
 
 def api_response(data=None, message=None, error=None, status_code=200):
     """
@@ -152,6 +157,108 @@ def get_or_none(station_code):
         return None
 
 
+def call_ml_service(reading, station_code):
+    """
+    Calls the FastAPI inference service with features derived from the reading.
+    Returns the prediction dict on success, None on any failure.
+    Ingest always succeeds regardless of what this returns.
+    """
+    # Only temperature and humidity are required — model tolerates null for everything else
+    if any(v is None for v in [reading.temperature, reading.humidity]):
+        return None
+
+    # Last 3 readings for this station, reversed to oldest-first for trend computation
+    recent = list(reversed(list(
+        SensorReading.objects.filter(
+            station_code=station_code,
+        ).order_by('-timestamp').values(
+            'temperature', 'wind_speed', 'soil_moisture',
+            'volt_batt', 'volt_solar', 'curr_batt', 'curr_solar',
+        )[:3]
+    )))
+
+    if not recent:
+        return None
+
+    # Rolling helpers — skip None values so a broken sensor doesn't block the call
+    def _mean(vals):
+        valid = [v for v in vals if v is not None]
+        return sum(valid) / len(valid) if valid else None
+
+    def _trend(vals):
+        first = next((v for v in vals           if v is not None), None)
+        last  = next((v for v in reversed(vals) if v is not None), None)
+        return (last - first) if first is not None and last is not None else None
+
+    temp_vals = [r['temperature']   for r in recent]
+    ws_vals   = [r['wind_speed']    for r in recent]
+    sm_vals   = [r['soil_moisture'] for r in recent]
+    vb_vals   = [r['volt_batt']     for r in recent]
+    vs_vals   = [r['volt_solar']    for r in recent]
+    cb_vals   = [r['curr_batt']     for r in recent]
+    cs_vals   = [r['curr_solar']    for r in recent]
+
+    # Time elapsed since the previous reading — 0.0 if this is the first reading
+    prev = SensorReading.objects.filter(
+        station_code=station_code,
+        timestamp__lt=reading.timestamp,
+    ).order_by('-timestamp').first()
+
+    hours_since_last = (
+        (reading.timestamp - prev.timestamp).total_seconds() / 3600
+        if prev else 0.0
+    )
+
+    payload = {
+        # Direct sensor readings from the current ESP32 post
+        'temperature':    reading.temperature,
+        'humidity':       reading.humidity,
+        'pressure':       reading.pressure,
+        'rain':           reading.rain,
+        'wind_speed':     reading.wind_speed,
+        'wind_direction': reading.wind_direction,
+        'light':          reading.light,
+        'soil_moisture':  reading.soil_moisture,
+        'volt_3v3':       reading.volt_3v3,
+        'volt_5v':        reading.volt_5v,
+        'volt_batt':      reading.volt_batt,
+        'volt_solar':     reading.volt_solar,
+        'volt_dc':        reading.volt_dc,
+        'curr_batt':      reading.curr_batt,
+        'curr_solar':     reading.curr_solar,
+        # Rolling features over the last 3 readings
+        'temperature_mean_3':    _mean(temp_vals),
+        'temperature_trend_3':   _trend(temp_vals),
+        'wind_speed_mean_3':     _mean(ws_vals),
+        'wind_speed_trend_3':    _trend(ws_vals),
+        'soil_moisture_mean_3':  _mean(sm_vals),
+        'soil_moisture_trend_3': _trend(sm_vals),
+        'volt_batt_mean_3':      _mean(vb_vals),
+        'volt_batt_trend_3':     _trend(vb_vals),
+        'volt_solar_mean_3':     _mean(vs_vals),
+        'volt_solar_trend_3':    _trend(vs_vals),
+        'curr_batt_mean_3':      _mean(cb_vals),
+        'curr_batt_trend_3':     _trend(cb_vals),
+        'curr_solar_mean_3':     _mean(cs_vals),
+        'curr_solar_trend_3':    _trend(cs_vals),
+        # Time features
+        'hour_of_day':      reading.timestamp.hour,
+        'hours_since_last': hours_since_last,
+    }
+
+    try:
+        resp = requests.post(
+            os.environ.get('ML_SERVICE_URL', 'http://localhost:8001/predict'),
+            json=payload,
+            timeout=2,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        return None
+    except Exception:
+        return None
+
+
 # ─────────────────────────────────────────────────────────
 # API: Ingest endpoint — ESP32 posts data here
 # ─────────────────────────────────────────────────────────
@@ -188,15 +295,16 @@ def ingest(request):
     if 'raw' in data:
         parsed = parse_esp32_string(data['raw'])
 
-        naive_dt = parse_datetime(parsed.get('Time', ''))
-        if naive_dt is None:
-            return Response({'error': 'Could not parse timestamp'}, status=400)
-
-        timestamp = timezone.make_aware(naive_dt, datetime.timezone.utc)
+        timestamp = parse_datetime(parsed.get('Time', ''))
+        if timestamp is None:
+            return Response(
+                {'error': 'Could not parse timestamp from raw string'},
+                status=400
+            )
 
         reading = SensorReading(
             station        = station,
-            station_code   = station_id,
+            station_code     = station_id,
             timestamp      = timestamp,
             pressure       = safe_float(parsed.get('Press')),
             altitude       = safe_float(parsed.get('Alt')),
@@ -218,14 +326,11 @@ def ingest(request):
 
     # ── Format 2: pre-parsed JSON ─────────────────────────
     else:
-        naive_dt = parse_datetime(str(data.get('timestamp', '')))
-        if naive_dt is None:
-            return api_response(error='timestamp is required and must be ISO format', status_code=400)
-        timestamp = timezone.make_aware(naive_dt, datetime.timezone.utc)
+        timestamp = parse_datetime(str(data.get('timestamp', '')))
         if timestamp is None:
             return api_response(
                 {'error': 'timestamp is required and must be ISO format'},
-                status=400
+                status_code=400
             )
 
         reading = SensorReading(
@@ -252,15 +357,38 @@ def ingest(request):
 
     reading.save()
 
-    # Update StationStatus to FULL if station is registered
+    # Update StationStatus — ML prediction if available, rule-based fallback
     if station:
-        StationStatus.objects.update_or_create(
-            station=station,
-            defaults={
-                'status':  StationStatus.Status.FULL,
-                'details': {'last_reading_id': reading.id}
-            }
-        )
+        prediction = call_ml_service(reading, station_id)
+
+        if prediction:
+            ml_status = (
+                StationStatus.Status.FULL
+                if prediction['prediction'] == 'healthy'
+                else StationStatus.Status.PARTIAL
+            )
+            StationStatus.objects.update_or_create(
+                station=station,
+                defaults={
+                    'status':      ml_status,
+                    'computed_by': 'ml_model',
+                    'details': {
+                        'last_reading_id': reading.id,
+                        'prediction':      prediction['prediction'],
+                        'at_risk_proba':   prediction['at_risk_proba'],
+                        'threshold_used':  prediction['threshold_used'],
+                    }
+                }
+            )
+        else:
+            StationStatus.objects.update_or_create(
+                station=station,
+                defaults={
+                    'status':      StationStatus.Status.FULL,
+                    'computed_by': 'rule_based',
+                    'details':     {'last_reading_id': reading.id}
+                }
+            )
 
     return api_response(
         {'status': 'ok', 'id': reading.id},
@@ -299,6 +427,7 @@ def latest(request):
             results.append(SensorReadingLatestSerializer(reading).data)
 
     return api_response(data=results)
+
 # ─────────────────────────────────────────────────────────
 # API: Historical readings for a station
 # ─────────────────────────────────────────────────────────
@@ -306,13 +435,10 @@ def latest(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def history(request, station_id):
-    from django.utils import timezone
-    from datetime import timedelta
-
     hours      = int(request.query_params.get('hours', 24))
     limit      = int(request.query_params.get('limit', 200))
     chart_type = request.query_params.get('type', 'sensor')
-    since      = timezone.now() - timedelta(hours=hours)
+    since      = timezone.now() - datetime.timedelta(hours=hours)
 
     readings = SensorReading.objects.filter(
         station_code=station_id,
@@ -354,4 +480,48 @@ def station_detail(request, station_id):
         'latest_reading': SensorReadingLatestSerializer(
                             latest_reading
                           ).data if latest_reading else None,
+    })
+
+
+# ─────────────────────────────────────────────────────────
+# API: Export endpoint — ML training data download
+# ─────────────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def export(request):
+    station_id = request.query_params.get('station_id')
+    hours      = int(request.query_params.get('hours', 168))
+    fmt        = request.query_params.get('output', 'json')
+    fields     = request.query_params.get('fields', 'all')
+
+    since    = timezone.now() - datetime.timedelta(hours=hours)
+    readings = SensorReading.objects.filter(
+        timestamp__gte=since
+    ).order_by('timestamp')
+
+    if station_id:
+        readings = readings.filter(station_code=station_id)
+
+    if fields == 'sensor':
+        serializer = SensorReadingChartSerializer(readings, many=True)
+    elif fields == 'power':
+        serializer = PowerChartSerializer(readings, many=True)
+    else:
+        serializer = SensorReadingSerializer(readings, many=True)
+
+    if fmt == 'csv':
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="aws_export.csv"'
+        fieldnames = list(serializer.child.fields.keys())
+        writer = csv.DictWriter(response, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in serializer.data:
+            writer.writerow(row)
+        return response
+
+    return Response({
+        'success': True,
+        'count':   len(serializer.data),
+        'data':    serializer.data,
     })
