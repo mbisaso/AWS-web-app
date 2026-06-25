@@ -16,7 +16,6 @@ import { StationMarker } from '../components/stationMap/StationMarker'
 import { StatusFilterBar, type StationFilter } from '../components/stationMap/StatusFilterBar'
 import { StationListPanel } from '../components/stationMap/StationListPanel'
 
-const CUSTOM_MAP_ID = 'YOUR_MAP_ID'
 
 function hasActiveAlerts(
   station: StationReading,
@@ -252,7 +251,6 @@ function MapScreenContent({
       )}
 
       <Map
-        mapId={CUSTOM_MAP_ID}
         className="h-full w-full"
         defaultZoom={7}
         defaultCenter={{ lat: 1.5, lng: 32.5 }}
