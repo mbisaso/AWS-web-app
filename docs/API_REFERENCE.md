@@ -38,10 +38,10 @@ The ESP32 sends its native comma-separated output wrapped in a JSON envelope.
 }
 ```
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `station_id` | string | No | Defaults to `"AWS-UG-001"` if omitted |
-| `raw` | string | Yes (this format) | Full ESP32 string including the `Time:Day, YYYY-MM-DD HH:MM:SS` prefix |
+| Field        | Type   | Required          | Notes                                                                  |
+| ------------ | ------ | ----------------- | ---------------------------------------------------------------------- |
+| `station_id` | string | No                | Defaults to `"AWS-UG-001"` if omitted                                  |
+| `raw`        | string | Yes (this format) | Full ESP32 string including the `Time:Day, YYYY-MM-DD HH:MM:SS` prefix |
 
 **Key parsing detail:** The timestamp field contains a weekday followed by a comma (e.g. `Time:Tuesday, 2026-06-24`). The backend strips the weekday before splitting on commas. Any sensor value of `nan` is stored as `null`.
 
@@ -55,43 +55,43 @@ Use this if the ESP32 or a proxy already parsed the string into fields.
 
 ```json
 {
-  "station_id":    "AWS-UG-001",
-  "timestamp":     "2026-06-24T12:47:00",
-  "pressure":      1013.2,
-  "altitude":      1137.0,
-  "temperature":   24.5,
-  "humidity":      78.2,
-  "light":         45230.0,
+  "station_id": "AWS-UG-001",
+  "timestamp": "2026-06-24T12:47:00",
+  "pressure": 1013.2,
+  "altitude": 1137.0,
+  "temperature": 24.5,
+  "humidity": 78.2,
+  "light": 45230.0,
   "soil_moisture": 2.85,
-  "rain":          0,
-  "wind_speed":    3.6,
+  "rain": 0,
+  "wind_speed": 3.6,
   "wind_direction": 180,
-  "volt_3v3":      3.32,
-  "volt_5v":       4.96,
-  "volt_batt":     12.40,
-  "volt_solar":    18.20,
-  "volt_dc":       5.10,
-  "curr_batt":     0.43,
-  "curr_solar":    1.24
+  "volt_3v3": 3.32,
+  "volt_5v": 4.96,
+  "volt_batt": 12.4,
+  "volt_solar": 18.2,
+  "volt_dc": 5.1,
+  "curr_batt": 0.43,
+  "curr_solar": 1.24
 }
 ```
 
 All fields except `station_id` and `timestamp` are optional — missing or `null` fields are stored as `null`.
 
-| Field | Type | Unit |
-|---|---|---|
-| `timestamp` | ISO 8601 string | Required — server rejects if missing or unparseable |
-| `temperature` | float | °C |
-| `humidity` | float | % |
-| `pressure` | float | hPa |
-| `altitude` | float | metres |
-| `light` | float | lux |
-| `soil_moisture` | float | voltage (raw ADC) |
-| `rain` | integer | tip count |
-| `wind_speed` | float | km/h |
-| `wind_direction` | integer | degrees (0–359) |
-| `volt_3v3` / `volt_5v` / `volt_batt` / `volt_solar` / `volt_dc` | float | volts |
-| `curr_batt` / `curr_solar` | float | amps |
+| Field                                                           | Type            | Unit                                                |
+| --------------------------------------------------------------- | --------------- | --------------------------------------------------- |
+| `timestamp`                                                     | ISO 8601 string | Required — server rejects if missing or unparseable |
+| `temperature`                                                   | float           | °C                                                  |
+| `humidity`                                                      | float           | %                                                   |
+| `pressure`                                                      | float           | hPa                                                 |
+| `altitude`                                                      | float           | metres                                              |
+| `light`                                                         | float           | lux                                                 |
+| `soil_moisture`                                                 | float           | voltage (raw ADC)                                   |
+| `rain`                                                          | integer         | tip count                                           |
+| `wind_speed`                                                    | float           | km/h                                                |
+| `wind_direction`                                                | integer         | degrees (0–359)                                     |
+| `volt_3v3` / `volt_5v` / `volt_batt` / `volt_solar` / `volt_dc` | float           | volts                                               |
+| `curr_batt` / `curr_solar`                                      | float           | amps                                                |
 
 ---
 
@@ -110,10 +110,10 @@ All fields except `station_id` and `timestamp` are optional — missing or `null
 
 **Error responses:**
 
-| HTTP | Condition | Body |
-|---|---|---|
-| 400 | `raw` string timestamp unparseable | `{"error": "Could not parse timestamp from raw string"}` |
-| 400 | Format 2 with missing/bad `timestamp` | `{"success": false, "error": {"error": "timestamp is required and must be ISO format"}}` |
+| HTTP | Condition                             | Body                                                                                     |
+| ---- | ------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 400  | `raw` string timestamp unparseable    | `{"error": "Could not parse timestamp from raw string"}`                                 |
+| 400  | Format 2 with missing/bad `timestamp` | `{"success": false, "error": {"error": "timestamp is required and must be ISO format"}}` |
 
 **Side effect:** If `station_id` matches a registered `Station`, the backend calls the ML inference service and updates `StationStatus` — either `ml_model` (if FastAPI is running) or `rule_based` fallback. This happens asynchronously within the request but never causes the ingest to fail.
 
@@ -303,7 +303,7 @@ Returns the single most recent reading from every station that has ever posted d
       "wind_direction": 90,
       "rain": 2,
       "light": 12400.0,
-      "soil_moisture": 3.10,
+      "soil_moisture": 3.1,
       "volt_batt": 11.8,
       "volt_solar": 14.6,
       "curr_batt": 0.31,
@@ -319,18 +319,18 @@ Returns the single most recent reading from every station that has ever posted d
 
 ### `GET /api/stations/<station_id>/history/`
 
-Returns time-series readings for one station for use in charts.
+Returns time-series readings for one station for use in charts
 
 **Auth:** JWT Bearer  
 **URL param:** `station_id` — e.g. `AWS-UG-001`
 
 **Query parameters:**
 
-| Param | Default | Description |
-|---|---|---|
-| `?hours=` | `24` | How many hours back to fetch |
-| `?limit=` | `200` | Max number of readings returned |
-| `?type=` | `sensor` | `sensor` returns weather fields; `power` returns power rail fields |
+| Param     | Default  | Description                                                        |
+| --------- | -------- | ------------------------------------------------------------------ |
+| `?hours=` | `24`     | How many hours back to fetch                                       |
+| `?limit=` | `200`    | Max number of readings returned                                    |
+| `?type=`  | `sensor` | `sensor` returns weather fields; `power` returns power rail fields |
 
 **Success response with `?type=sensor`** — HTTP 200:
 
@@ -408,7 +408,7 @@ Returns time-series readings for one station for use in charts.
         "volt_5v": 4.96,
         "volt_batt": 12.4,
         "volt_solar": 18.2,
-        "volt_dc": 5.10,
+        "volt_dc": 5.1,
         "curr_batt": 0.43,
         "curr_solar": 1.24
       }
@@ -429,12 +429,12 @@ Exports historical readings as JSON or a downloadable CSV file. Intended for ML 
 
 **Query parameters:**
 
-| Param | Default | Description |
-|---|---|---|
-| `?station_id=` | *(none)* | Filter to one station. Omit to export all stations |
-| `?hours=` | `168` | How many hours back (default is 7 days) |
-| `?output=` | `json` | `json` returns the standard envelope; `csv` triggers a file download |
-| `?fields=` | `all` | `all` — all 21 fields; `sensor` — timestamp + weather only; `power` — timestamp + power rails only |
+| Param          | Default  | Description                                                                                        |
+| -------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `?station_id=` | _(none)_ | Filter to one station. Omit to export all stations                                                 |
+| `?hours=`      | `168`    | How many hours back (default is 7 days)                                                            |
+| `?output=`     | `json`   | `json` returns the standard envelope; `csv` triggers a file download                               |
+| `?fields=`     | `all`    | `all` — all 21 fields; `sensor` — timestamp + weather only; `power` — timestamp + power rails only |
 
 **Success response with `?output=json&fields=all`** — HTTP 200:
 
@@ -462,8 +462,8 @@ Exports historical readings as JSON or a downloadable CSV file. Intended for ML 
       "volt_batt": 11.9,
       "volt_solar": 16.8,
       "volt_dc": 5.09,
-      "curr_batt": 0.40,
-      "curr_solar": 1.10
+      "curr_batt": 0.4,
+      "curr_solar": 1.1
     }
   ]
 }
@@ -502,11 +502,11 @@ Creates a new user account.
 }
 ```
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `username` | string | Yes | Must be unique |
-| `password` | string | Yes | Minimum 8 characters |
-| `role` | string | No | One of: `admin`, `meteorologist`, `viewer`, `farmer`. Defaults to `viewer` |
+| Field      | Type   | Required | Notes                                                                      |
+| ---------- | ------ | -------- | -------------------------------------------------------------------------- |
+| `username` | string | Yes      | Must be unique                                                             |
+| `password` | string | Yes      | Minimum 8 characters                                                       |
+| `role`     | string | No       | One of: `admin`, `meteorologist`, `viewer`, `farmer`. Defaults to `viewer` |
 
 **Success response** — HTTP 201:
 
@@ -559,10 +559,10 @@ Authenticates a user and returns JWT tokens plus the user's role. This is the pr
   "success": true,
   "message": "Login successful",
   "data": {
-    "access":   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "refresh":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "username": "henry",
-    "role":     "meteorologist"
+    "role": "meteorologist"
   }
 }
 ```
@@ -614,7 +614,7 @@ Replace the stored access token with this new value. The refresh token itself ro
 
 ```json
 {
-  "access":  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 }
 ```
@@ -634,14 +634,14 @@ When this happens, the user's session is fully expired. Redirect to `/login`.
 
 ## Quick Reference
 
-| Method | URL | Auth | Purpose |
-|---|---|---|---|
-| POST | `/api/ingest/` | None | ESP32 posts sensor data |
-| POST | `/api/register/` | None | Create user account |
-| POST | `/api/login/` | None | Login, get tokens + role |
-| POST | `/api/token/refresh/` | None | Renew expired access token |
-| GET | `/api/stations/` | Bearer | All stations + health status |
-| GET | `/api/stations/<id>/` | Bearer | One station + latest reading |
-| GET | `/api/latest/` | Bearer | Latest reading per station (all) |
-| GET | `/api/stations/<id>/history/` | Bearer | Time-series chart data |
-| GET | `/api/export/` | Bearer | Bulk data export (JSON or CSV) |
+| Method | URL                           | Auth   | Purpose                          |
+| ------ | ----------------------------- | ------ | -------------------------------- |
+| POST   | `/api/ingest/`                | None   | ESP32 posts sensor data          |
+| POST   | `/api/register/`              | None   | Create user account              |
+| POST   | `/api/login/`                 | None   | Login, get tokens + role         |
+| POST   | `/api/token/refresh/`         | None   | Renew expired access token       |
+| GET    | `/api/stations/`              | Bearer | All stations + health status     |
+| GET    | `/api/stations/<id>/`         | Bearer | One station + latest reading     |
+| GET    | `/api/latest/`                | Bearer | Latest reading per station (all) |
+| GET    | `/api/stations/<id>/history/` | Bearer | Time-series chart data           |
+| GET    | `/api/export/`                | Bearer | Bulk data export (JSON or CSV)   |
