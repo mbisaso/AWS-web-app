@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'accounts',
     'stations',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
 ]
 
 # ── REST Framework config ─────────────────────────────

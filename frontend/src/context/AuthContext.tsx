@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
-import { apiClient, setAuthToken } from '../api/client'
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import axios from 'axios'
+import { apiClient, setAuthToken, API_BASE_URL } from '../api/client'
 import type { ApiEnvelope, LoginResult, UserRole } from '../types'
 
 const STORAGE_KEY = 'auth'
@@ -7,16 +8,14 @@ const STORAGE_KEY = 'auth'
 const initial = (() => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return JSON.parse(raw) as { accessToken: string | null; username: string | null; role: UserRole | null }
+    if (raw) return JSON.parse(raw) as { refreshToken: string | null; username: string | null; role: UserRole | null }
   } catch { /* ignore */ }
-  return { accessToken: null, username: null, role: null } as const
+  return { refreshToken: null, username: null, role: null } as const
 })()
 
-if (initial.accessToken) setAuthToken(initial.accessToken)
-
-function persist(accessToken: string | null, username: string | null, role: UserRole | null) {
-  if (accessToken) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ accessToken, username, role }))
+function persist(refreshToken: string | null, username: string | null, role: UserRole | null) {
+  if (refreshToken) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ refreshToken, username, role }))
   } else {
     localStorage.removeItem(STORAGE_KEY)
   }
@@ -27,6 +26,7 @@ interface AuthContextValue {
   username: string | null
   role: UserRole | null
   isAuthenticated: boolean
+  isLoading: boolean
   login: (username: string, password: string) => Promise<void>
   logout: () => void
 }
@@ -34,34 +34,75 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [accessToken, setAccessToken] = useState<string | null>(initial.accessToken)
+  const [accessToken, setAccessToken] = useState<string | null>(null)
   const [username, setUsername] = useState<string | null>(initial.username)
   const [role, setRole] = useState<UserRole | null>(initial.role)
+  const [isLoading, setIsLoading] = useState<boolean>(!!initial.refreshToken)
+
+  useEffect(() => {
+    async function initAuth() {
+      if (initial.refreshToken) {
+        try {
+          const response = await axios.post(`${API_BASE_URL}/api/token/refresh/`, {
+            refresh: initial.refreshToken,
+          })
+          const newAccessToken = response.data.access
+          setAccessToken(newAccessToken)
+          setAuthToken(newAccessToken)
+        } catch (err) {
+          console.error('Initial silent auth refresh failed:', err)
+          logout()
+        }
+      }
+      setIsLoading(false)
+    }
+    initAuth()
+  }, [])
 
   async function login(usernameInput: string, password: string) {
     const response = await apiClient.post<ApiEnvelope<LoginResult>>('/api/login/', {
       username: usernameInput,
       password,
     })
-    const { access, role: userRole, username: returnedUsername } = response.data.data
+    const { access, refresh, role: userRole, username: returnedUsername } = response.data.data
     setAccessToken(access)
     setUsername(returnedUsername)
     setRole(userRole)
     setAuthToken(access)
-    persist(access, returnedUsername, userRole)
+    persist(refresh, returnedUsername, userRole)
   }
 
-  function logout() {
-    setAccessToken(null)
-    setUsername(null)
-    setRole(null)
-    setAuthToken(null)
-    persist(null, null, null)
+  async function logout() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const auth = JSON.parse(raw)
+        if (auth.refreshToken) {
+          await apiClient.post('/api/logout/', { refresh: auth.refreshToken })
+        }
+      }
+    } catch (e) {
+      console.error('Logout error blacklisting token:', e)
+    } finally {
+      setAccessToken(null)
+      setUsername(null)
+      setRole(null)
+      setAuthToken(null)
+      persist(null, null, null)
+    }
   }
 
   return (
     <AuthContext.Provider
-      value={{ accessToken, username, role, isAuthenticated: !!accessToken, login, logout }}
+      value={{
+        accessToken,
+        username,
+        role,
+        isAuthenticated: !!accessToken,
+        isLoading,
+        login,
+        logout,
+      }}
     >
       {children}
     </AuthContext.Provider>
@@ -73,3 +114,4 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')
   return ctx
 }
+
