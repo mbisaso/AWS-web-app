@@ -224,47 +224,75 @@ export function DashboardPage() {
 
             {!isLoading && !error && (
               <>
-                {/* ── All stations + Insights panel (top) ── */}
+                {/* ── Station summary ── */}
+                <section>
+                  <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Station summary</div>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {(Object.keys(STATUS_LABELS) as StationOperationalStatus[]).map((status) => (
+                      <article key={status} className="rounded-[28px] border border-slate-200 bg-[#f8fafc] p-5">
+                        <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${STATUS_LABELS[status].tone}`}>
+                          {String(counts[status]).padStart(2, '0')}
+                        </div>
+                        <h2 className="mt-4 text-xl font-semibold text-[#1a2332]">{STATUS_LABELS[status].title}</h2>
+                        <p className="mt-2 text-sm leading-7 text-slate-600">{STATUS_LABELS[status].description}</p>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                {/* ── All stations (list) + Insights panel ── */}
                 <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
                   <div>
                     <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">All stations</div>
                     {stations.length === 0 ? (
                       <p className="text-sm text-slate-500">No stations registered yet.</p>
                     ) : (
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {stations.map((station) => {
-                          const status = statusOf(station)
-                          const prediction = predictionOf(station)
-                          return (
-                            <button
-                              key={station.station_id}
-                              type="button"
-                              onClick={() => setSelectedStation(station)}
-                              className="cursor-pointer rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm text-left transition hover:border-slate-300 hover:shadow-md focus-visible:outline-2 focus-visible:outline-[#0a6ebd] w-full"
-                            >
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="min-w-0">
-                                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{station.station_id}</p>
-                                  <h3 className="mt-1 text-lg font-semibold text-[#1a2332] truncate">{station.name}</h3>
-                                </div>
-                                <div className="flex shrink-0 gap-1.5">
-                                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGE[status]}`}>
-                                    {status === 'full' ? 'Online' : status === 'partial' ? 'Partial' : 'Down'}
-                                  </span>
-                                </div>
-                              </div>
-                              <p className="mt-2 text-sm text-slate-500 truncate">{station.location || '—'}</p>
-                              <div className="mt-3 flex items-center gap-3 text-xs text-slate-400">
-                                {station.status?.last_updated && (
-                                  <span>Updated: {new Date(station.status.last_updated).toLocaleString()}</span>
-                                )}
-                                <span className={`rounded-full px-2 py-0.5 font-medium ${PREDICTION_BADGE[prediction] ?? PREDICTION_BADGE.unknown}`}>
-                                  {prediction === 'healthy' ? 'Healthy' : prediction === 'at_risk' ? 'At Risk' : 'Unknown'}
-                                </span>
-                              </div>
-                            </button>
-                          )
-                        })}
+                      <div className="overflow-hidden rounded-2xl border border-slate-200">
+                        <table className="w-full text-left text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-100 bg-slate-50/50">
+                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Station</th>
+                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Location</th>
+                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</th>
+                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Prediction</th>
+                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Last Updated</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {stations.map((station) => {
+                              const status = statusOf(station)
+                              const prediction = predictionOf(station)
+                              return (
+                                <tr
+                                  key={station.station_id}
+                                  onClick={() => setSelectedStation(station)}
+                                  className="cursor-pointer border-b border-slate-100 transition-colors last:border-b-0 hover:bg-slate-50"
+                                >
+                                  <td className="px-4 py-3.5">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{station.station_id}</p>
+                                    <p className="mt-0.5 font-semibold text-midnight">{station.name}</p>
+                                  </td>
+                                  <td className="px-4 py-3.5 text-sm text-slate-500">{station.location || '—'}</td>
+                                  <td className="px-4 py-3.5">
+                                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_BADGE[status]}`}>
+                                      {status === 'full' ? 'Online' : status === 'partial' ? 'Partial' : 'Down'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3.5">
+                                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${PREDICTION_BADGE[prediction] ?? PREDICTION_BADGE.unknown}`}>
+                                      {prediction === 'healthy' ? 'Healthy' : prediction === 'at_risk' ? 'At Risk' : 'Unknown'}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3.5 text-xs text-slate-400">
+                                    {station.status?.last_updated
+                                      ? new Date(station.status.last_updated).toLocaleString()
+                                      : '—'}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>
@@ -327,26 +355,10 @@ export function DashboardPage() {
                         )
                       })()}
                       <p className="text-xs leading-relaxed text-slate-500">
-                        Click a station card to view detailed AI diagnostics, including health predictions and risk probabilities.
+                        Click a station row to view detailed AI diagnostics, including health predictions and risk probabilities.
                       </p>
                     </div>
                   </aside>
-                </section>
-
-                {/* ── Station summary ── */}
-                <section>
-                  <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Station summary</div>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    {(Object.keys(STATUS_LABELS) as StationOperationalStatus[]).map((status) => (
-                      <article key={status} className="rounded-[28px] border border-slate-200 bg-[#f8fafc] p-5">
-                        <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${STATUS_LABELS[status].tone}`}>
-                          {String(counts[status]).padStart(2, '0')}
-                        </div>
-                        <h2 className="mt-4 text-xl font-semibold text-[#1a2332]">{STATUS_LABELS[status].title}</h2>
-                        <p className="mt-2 text-sm leading-7 text-slate-600">{STATUS_LABELS[status].description}</p>
-                      </article>
-                    ))}
-                  </div>
                 </section>
 
                 {/* ── Charts row: network health donut + temperature bars ── */}
