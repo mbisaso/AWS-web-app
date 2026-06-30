@@ -7,8 +7,9 @@ import {
   useApiLoadingStatus,
   useMap,
 } from '@vis.gl/react-google-maps'
-import { useDashboardData } from '../hooks/useDashboardData'
+import { fetchStations } from '../api/stations'
 import { type StationReading, formatRelativeTime } from '../services/api'
+import type { Station } from '../types'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { StatusBadge } from '../components/dashboard/StatusIndicator'
 import { StationMarker } from '../components/stationMap/StationMarker'
@@ -16,20 +17,62 @@ import { StatusFilterBar, type StationFilter } from '../components/stationMap/St
 import { StationListPanel } from '../components/stationMap/StationListPanel'
 
 
-function hasActiveAlerts(
-  station: StationReading,
-  alerts: { station_name: string }[],
-): boolean {
-  return alerts.some(
-    (a) =>
-      a.station_name.startsWith(station.station_code) ||
-      a.station_name.includes(station.name.split(' ')[0]),
-  )
+function toStationReading(stations: Station[]): StationReading[] {
+  const statusMap: Record<string, 'online' | 'partial' | 'offline'> = {
+    full: 'online', partial: 'partial', down: 'offline',
+  }
+
+  return stations.map((s) => {
+    const rawStatus = s.status?.status ?? 'down'
+    const lastSeen = s.status?.last_updated ?? new Date().toISOString()
+    const elapsed = Date.now() - new Date(lastSeen).getTime()
+    const isStale = elapsed > s.expected_interval_minutes * 60 * 1000 * 2
+
+    return {
+      id: s.id,
+      name: s.name,
+      station_code: s.station_id,
+      location: s.location,
+      latitude: s.latitude ?? 0,
+      longitude: s.longitude ?? 0,
+      status: statusMap[rawStatus] ?? 'offline',
+      temperature: null,
+      humidity: null,
+      rainfall: null,
+      wind_speed: null,
+      pressure: null,
+      last_seen: lastSeen,
+      expected_interval_minutes: s.expected_interval_minutes,
+      is_stale: isStale,
+    }
+  })
 }
 
 
 export function StationMapPage() {
-  const { data, isLoading, error, retry } = useDashboardData()
+  const [allStations, setAllStations] = useState<StationReading[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [retryTrigger, setRetryTrigger] = useState(0)
+
+  const retry = useCallback(() => setRetryTrigger((c) => c + 1), [])
+
+  /* ── Fetch real station data ── */
+  useEffect(() => {
+    async function load() {
+      setIsLoading(true)
+      try {
+        const stn = await fetchStations()
+        setAllStations(toStationReading(stn))
+        setError(null)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load station data')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    load()
+  }, [retryTrigger])
 
   const [filter, setFilter] = useState<StationFilter>('all')
   const [selectedStation, setSelectedStation] = useState<StationReading | null>(null)
@@ -37,36 +80,30 @@ export function StationMapPage() {
   const [isListOpen, setIsListOpen] = useState(true)
   const [recenterCount, setRecenterCount] = useState(0)
 
-  /* ── Determine which stations have alerts ── */
-  const alertStationIds = useMemo(() => {
-    if (!data) return new Set<number>()
-    return new Set(
-      data.stations.filter((s) => hasActiveAlerts(s, data.alerts)).map((s) => s.id),
-    )
-  }, [data])
+  /* ── Alerting not available (no real alerts API) ── */
+  const alertStationIds = useMemo(() => new Set<number>(), [])
 
   /* ── Filtered stations ── */
   const filteredStations = useMemo(() => {
-    if (!data) return []
-    let result = data.stations.filter((s) => s.latitude && s.longitude)
+    let result = allStations.filter((s) => s.latitude && s.longitude)
 
     if (filter === 'online') result = result.filter((s) => s.status === 'online')
     else if (filter === 'offline') result = result.filter((s) => s.status !== 'online')
     else if (filter === 'fault') result = result.filter((s) => alertStationIds.has(s.id))
 
     return result
-  }, [data, filter, alertStationIds])
+  }, [allStations, filter, alertStationIds])
 
   /* ── Filter counts ── */
   const filterCounts = useMemo(() => {
-    const allPlotted = data?.stations.filter((s) => s.latitude && s.longitude) ?? []
+    const allPlotted = allStations.filter((s) => s.latitude && s.longitude)
     return {
       all: allPlotted.length,
       online: allPlotted.filter((s) => s.status === 'online').length,
       offline: allPlotted.filter((s) => s.status !== 'online').length,
       fault: alertStationIds.size,
     }
-  }, [data, alertStationIds])
+  }, [allStations, alertStationIds])
 
   const handleSelect = useCallback((station: StationReading | null) => {
     setSelectedStation(station)
@@ -80,7 +117,7 @@ export function StationMapPage() {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
 
   /* ── Loading: no data yet ── */
-  if (isLoading && !data) {
+  if (isLoading && allStations.length === 0) {
     return (
       <div className="flex h-screen bg-mist">
         <DashboardSidebar />
@@ -90,7 +127,7 @@ export function StationMapPage() {
   }
 
   /* ── Error: fetch failed, no cached data ── */
-  if (error && !data) {
+  if (error && allStations.length === 0) {
     return (
       <div className="flex h-screen bg-mist">
         <DashboardSidebar />
@@ -147,7 +184,7 @@ export function StationMapPage() {
   }
 
   /* ── Main render ── */
-  const hasPlottedStations = data && data.stations.some((s) => s.latitude && s.longitude)
+  const hasPlottedStations = allStations.some((s) => s.latitude && s.longitude)
 
   return (
     <>
@@ -157,7 +194,7 @@ export function StationMapPage() {
         <main className="flex min-w-0 flex-1">
           <div className="relative flex-1">
             <APIProvider apiKey={apiKey}>
-              {!hasPlottedStations && data ? (
+              {!hasPlottedStations && !isLoading ? (
                 <EmptyMapState
                   onAdd={() => {
                     /* future: navigate to station registration */
@@ -166,7 +203,7 @@ export function StationMapPage() {
               ) : (
                 <MapScreenContent
                   stations={filteredStations}
-                  allStations={data?.stations ?? []}
+                  allStations={allStations}
                   alertStationIds={alertStationIds}
                   selectedStation={selectedStation}
                   onSelect={handleSelect}
@@ -184,7 +221,7 @@ export function StationMapPage() {
           <StationListPanel
             stations={filteredStations}
             totalCount={
-              data?.stations.filter((s) => s.latitude && s.longitude).length ?? 0
+              allStations.filter((s) => s.latitude && s.longitude).length
             }
             selectedId={selectedStation?.id ?? null}
             alertIds={alertStationIds}
