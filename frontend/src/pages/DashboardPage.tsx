@@ -35,9 +35,11 @@ function predictionOf(station: Station): string {
 
 function StationDetailDialog({
   station,
+  reading,
   onClose,
 }: {
   station: Station
+  reading?: DashStationReading | null
   onClose: () => void
 }) {
   const handleKeyDown = useCallback(
@@ -61,6 +63,14 @@ function StationDetailDialog({
   const details = station.status?.details
   const proba = details ? (details.at_risk_proba * 100).toFixed(1) : null
   const threshold = details ? (details.threshold_used * 100).toFixed(1) : null
+
+  const weatherReadings = [
+    { label: 'Temperature', value: reading?.temperature?.value, unit: reading?.temperature?.unit ?? '°C', color: '#F97316', bg: 'bg-orange-50' },
+    { label: 'Humidity', value: reading?.humidity?.value, unit: reading?.humidity?.unit ?? '%', color: '#0EA5E9', bg: 'bg-sky-50' },
+    { label: 'Pressure', value: reading?.pressure?.value, unit: reading?.pressure?.unit ?? 'hPa', color: '#8B5CF6', bg: 'bg-purple-50' },
+    { label: 'Wind Speed', value: reading?.wind_speed?.value, unit: reading?.wind_speed?.unit ?? 'm/s', color: '#22C55E', bg: 'bg-emerald-50' },
+    { label: 'Rainfall', value: reading?.rainfall?.value, unit: reading?.rainfall?.unit ?? 'mm', color: '#38BDF8', bg: 'bg-cyan-50' },
+  ]
 
   return (
     <div
@@ -89,6 +99,7 @@ function StationDetailDialog({
         </div>
 
         <div className="space-y-5 px-6 py-5">
+          {/* ── Status badges ── */}
           <div className="flex flex-wrap gap-2">
             <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGE[opStatus]}`}>
               {opStatus === 'full' ? 'Online' : opStatus === 'partial' ? 'Partial' : 'Down'}
@@ -98,33 +109,60 @@ function StationDetailDialog({
             </span>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl bg-[#f8fafc] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Location</p>
-              <p className="mt-1 text-sm text-midnight">{station.location || '—'}</p>
-            </div>
-            <div className="rounded-xl bg-[#f8fafc] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Coordinates</p>
-              <p className="mt-1 text-sm text-midnight">
-                {station.latitude != null && station.longitude != null
-                  ? `${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}`
-                  : '—'}
-              </p>
-            </div>
-            <div className="rounded-xl bg-[#f8fafc] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Expected Interval</p>
-              <p className="mt-1 text-sm text-midnight">{station.expected_interval_minutes} min</p>
-            </div>
-            <div className="rounded-xl bg-[#f8fafc] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Last Update</p>
-              <p className="mt-1 text-sm text-midnight">
-                {station.status?.last_updated
-                  ? new Date(station.status.last_updated).toLocaleString()
-                  : '—'}
-              </p>
+          {/* ── Weather data ── */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-3">Live Weather Data</p>
+            {reading ? (
+              <div className="grid grid-cols-2 gap-3">
+                {weatherReadings.map((w) => (
+                  <div key={w.label} className={`rounded-xl ${w.bg} p-3.5`}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: w.color }}>{w.label}</p>
+                    <p className="mt-1 text-xl font-bold text-midnight font-display">
+                      {w.value !== null && w.value !== undefined ? w.value.toFixed(1) : '—'}
+                      <span className="ml-0.5 text-sm font-normal text-storm/40">{w.unit}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-xl bg-slate-50 p-4 text-center">
+                <p className="text-xs text-storm/40">No weather data available for this station</p>
+              </div>
+            )}
+          </div>
+
+          {/* ── Station info ── */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-3">Station Info</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-xl bg-[#f8fafc] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Location</p>
+                <p className="mt-1 text-sm text-midnight">{station.location || '—'}</p>
+              </div>
+              <div className="rounded-xl bg-[#f8fafc] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Coordinates</p>
+                <p className="mt-1 text-sm text-midnight">
+                  {station.latitude != null && station.longitude != null
+                    ? `${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}`
+                    : '—'}
+                </p>
+              </div>
+              <div className="rounded-xl bg-[#f8fafc] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Expected Interval</p>
+                <p className="mt-1 text-sm text-midnight">{station.expected_interval_minutes} min</p>
+              </div>
+              <div className="rounded-xl bg-[#f8fafc] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Last Update</p>
+                <p className="mt-1 text-sm text-midnight">
+                  {station.status?.last_updated
+                    ? new Date(station.status.last_updated).toLocaleString()
+                    : '—'}
+                </p>
+              </div>
             </div>
           </div>
 
+          {/* ── AI analytics ── */}
           {station.status && (
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">AI Model Analytics</p>
@@ -453,6 +491,7 @@ export function DashboardPage() {
       {selectedStation && (
         <StationDetailDialog
           station={selectedStation}
+          reading={dashStations.find((r) => r.station_code === selectedStation.station_id) ?? null}
           onClose={() => setSelectedStation(null)}
         />
       )}
