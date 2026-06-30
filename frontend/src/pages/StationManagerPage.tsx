@@ -8,7 +8,6 @@ import { UserTable } from '../components/stationManager/UserTable'
 import { UserFormModal } from '../components/stationManager/UserFormModal'
 import { ConfirmDialog } from '../components/stationManager/ConfirmDialog'
 import {
-  fetchStations,
   createStation,
   updateStation,
   decommissionStation as apiDecommissionStation,
@@ -21,7 +20,33 @@ import {
   disableUser as apiDisableUser,
   deleteUser as apiDeleteUser,
 } from '../services/api'
+import { fetchStations } from '../api/stations'
 import type { StationManagementData, SimAccount, UserAccount } from '../services/api'
+import type { Station } from '../types'
+
+function toStationManagementData(s: Station): StationManagementData {
+  const statusMap: Record<string, 'online' | 'partial' | 'offline'> = {
+    full: 'online',
+    partial: 'partial',
+    down: 'offline',
+  }
+  return {
+    id: s.id,
+    name: s.name,
+    station_code: s.station_id,
+    location: s.location,
+    latitude: s.latitude ?? 0,
+    longitude: s.longitude ?? 0,
+    status: statusMap[s.status?.status ?? 'down'] ?? 'offline',
+    connectivity: 'gsm',
+    expected_interval_minutes: s.expected_interval_minutes,
+    sensors: [],
+    notes: '',
+    sim_id: null,
+    created_at: s.status?.last_updated ?? new Date().toISOString(),
+    is_active: true,
+  }
+}
 
 type Tab = 'stations' | 'sims' | 'users'
 
@@ -47,7 +72,7 @@ export function StationManagerPage() {
     setLoadingStations(true)
     setError(null)
     fetchStations()
-      .then(setStations)
+      .then((data) => setStations(data.map(toStationManagementData)))
       .catch((e) => setError(e.message))
       .finally(() => setLoadingStations(false))
   }, [isAdmin, refreshTrigger])

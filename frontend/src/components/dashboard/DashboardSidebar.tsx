@@ -6,18 +6,18 @@ import { MenuIcon, CloseIcon } from "../landing/Icons";
 
 const NAV_ITEMS: { label: string; href: string; adminOnly?: boolean }[] = [
   { label: "Dashboard", href: "/dashboard" },
-  { label: "Weather data", href: "/dashboard/weather-data" },
-  { label: "Power data", href: "/dashboard/power-data" },
-  { label: "Weather analysis", href: "/dashboard/weather-analysis" },
-  { label: "Station map", href: "/stations/map" },
-  { label: "Alerts center", href: "/dashboard/alerts-center" },
-  { label: "SIM management", href: "/dashboard/sim-management" },
-  { label: "Reports & Export", href: "/dashboard/reports" },
   {
     label: "Station manager",
     href: "/dashboard/station-manager",
     adminOnly: true,
   },
+  { label: "Weather data", href: "/dashboard/weather-data" },
+  { label: "Power data", href: "/dashboard/power-data" },
+  { label: "Weather analysis", href: "/dashboard/weather-analysis" },
+  { label: "Station map", href: "/stations/map" },
+  { label: "Notifications", href: "/dashboard/alerts-center" },
+  { label: "SIM management", href: "/dashboard/sim-management" },
+  { label: "Reports & Export", href: "/dashboard/reports" },
 ];
 
 export function DashboardSidebar() {
