@@ -298,7 +298,9 @@ function MapScreenContent({
         defaultZoom={7}
         defaultCenter={{ lat: 1.5, lng: 32.5 }}
         gestureHandling="greedy"
-        disableDefaultUI
+        streetViewControl={false}
+        fullscreenControl={false}
+        mapTypeControl={false}
         clickableIcons={false}
         onClick={() => onSelect(null)}
       >
@@ -421,12 +423,16 @@ function InfoWindowContent({ station, onViewDetails }: { station: StationReading
         {station.station_code} &middot; {station.location}
       </p>
 
-      {station.temperature && (
+      {station.temperature ? (
         <div className="mb-2 grid grid-cols-2 gap-x-4 gap-y-1">
-          <SensorReading label="Temp" value={station.temperature ? `${station.temperature.value.toFixed(1)}°C` : '—'} />
+          <SensorReading label="Temp" value={`${station.temperature.value.toFixed(1)}°C`} />
           <SensorReading label="Humidity" value={station.humidity ? `${station.humidity.value.toFixed(0)}%` : '—'} />
           <SensorReading label="Rainfall" value={station.rainfall ? `${station.rainfall.value.toFixed(1)}mm` : '—'} />
           <SensorReading label="Wind" value={station.wind_speed ? `${station.wind_speed.value.toFixed(1)}m/s` : '—'} />
+        </div>
+      ) : (
+        <div className="mb-2 rounded-md bg-slate-50 px-3 py-2 text-[11px] text-storm/50">
+          Awaiting sensor data…
         </div>
       )}
 
@@ -507,9 +513,9 @@ function StationDetailDialog({ station, onClose }: { station: StationReading; on
             </div>
           </div>
 
-          {station.temperature && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Latest Sensor Readings</p>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Latest Sensor Readings</p>
+            {station.temperature ? (
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
                   <p className="text-xs text-slate-500">Temperature</p>
@@ -532,8 +538,10 @@ function StationDetailDialog({ station, onClose }: { station: StationReading; on
                   <p className="mt-0.5 text-sm font-semibold text-midnight">{station.pressure ? `${station.pressure.value.toFixed(1)}hPa` : '—'}</p>
                 </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <p className="mt-3 text-xs text-storm/50">No sensor data available yet.</p>
+            )}
+          </div>
         </div>
       </div>
     </div>
