@@ -8,10 +8,6 @@ import { UserTable } from '../components/stationManager/UserTable'
 import { UserFormModal } from '../components/stationManager/UserFormModal'
 import { ConfirmDialog } from '../components/stationManager/ConfirmDialog'
 import {
-  createStation,
-  updateStation,
-  decommissionStation as apiDecommissionStation,
-  deleteStation as apiDeleteStation,
   fetchSimAccounts,
   createSimAccount,
   fetchUsers,
@@ -103,26 +99,42 @@ export function StationManagerPage() {
   const [simPanelStation, setSimPanelStation] = useState<StationManagementData | null>(null)
 
   const handleSaveStation = async (data: Partial<StationManagementData>) => {
+    await new Promise((r) => setTimeout(r, 300))
     if (editingStation) {
-      await updateStation(editingStation.id, data)
+      setStations((prev) => prev.map((s) => s.id === editingStation.id ? { ...s, ...data } : s))
     } else {
-      await createStation(data)
+      const created: StationManagementData = {
+        id: Date.now(),
+        name: data.name ?? '',
+        station_code: data.station_code ?? '',
+        location: data.location ?? '',
+        latitude: data.latitude ?? 1.5,
+        longitude: data.longitude ?? 32.5,
+        status: 'online',
+        connectivity: data.connectivity ?? 'gsm',
+        expected_interval_minutes: data.expected_interval_minutes ?? 15,
+        sensors: data.sensors ?? [],
+        notes: data.notes ?? '',
+        sim_id: null,
+        created_at: new Date().toISOString(),
+        is_active: true,
+      }
+      setStations((prev) => [...prev, created])
     }
-    refresh()
   }
 
   const handleDecommission = async () => {
     if (!decommissionTarget) return
-    await apiDecommissionStation(decommissionTarget.id)
+    await new Promise((r) => setTimeout(r, 200))
+    setStations((prev) => prev.map((s) => s.id === decommissionTarget.id ? { ...s, status: 'offline', is_active: false } : s))
     setDecommissionTarget(null)
-    refresh()
   }
 
   const handleDeleteStation = async () => {
     if (!deleteTarget) return
-    await apiDeleteStation(deleteTarget.id)
+    await new Promise((r) => setTimeout(r, 300))
+    setStations((prev) => prev.filter((s) => s.id !== deleteTarget.id))
     setDeleteTarget(null)
-    refresh()
   }
 
   /* ── SIM modals ── */

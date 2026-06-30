@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { SensorMetricKey, SensorReadingChart, Station } from '../types'
 import { SENSOR_METRIC_CONFIG } from '../types'
 import { fetchStations } from '../api/stations'
@@ -96,6 +97,7 @@ function WeatherContent({
 
 /* ── Main page ── */
 export function WeatherDataPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [stations, setStations] = useState<Station[]>([])
   const [stationsLoading, setStationsLoading] = useState(true)
 
@@ -105,7 +107,24 @@ export function WeatherDataPage() {
       .finally(() => setStationsLoading(false))
   }, [])
 
-  const [stationId, setStationId] = useState<string | null>(null)
+  const urlStation = searchParams.get('station')
+  const [stationId, setStationId] = useState<string | null>(urlStation)
+
+  // Sync URL param → state when navigating from another page
+  useEffect(() => {
+    if (urlStation && urlStation !== stationId) {
+      setStationId(urlStation)
+    }
+  }, [urlStation]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleStationChange = useCallback((id: string | null) => {
+    setStationId(id)
+    if (id) {
+      setSearchParams({ station: id }, { replace: true })
+    } else {
+      setSearchParams({}, { replace: true })
+    }
+  }, [setSearchParams])
   const [metricKey, setMetricKey] = useState<SensorMetricKey>('temperature')
   const [dateFrom, setDateFrom] = useState(() => daysAgo(7))
   const [dateTo, setDateTo] = useState(() => today())
@@ -143,7 +162,7 @@ export function WeatherDataPage() {
           <StationSensorSelector
             stations={stations}
             selectedStationId={stationId}
-            onStationChange={setStationId}
+            onStationChange={handleStationChange}
             selectedMetric={metricKey}
             onMetricChange={setMetricKey}
             dateFrom={dateFrom}

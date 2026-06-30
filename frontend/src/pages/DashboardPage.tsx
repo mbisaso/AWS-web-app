@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { SummaryCharts } from '../components/dashboard/SummaryCharts'
 import { RecentAlertsPreview } from '../components/dashboard/RecentAlertsPreview'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { fetchStations } from '../api/stations'
 import type { Station, StationOperationalStatus } from '../types'
-import type { StationReading as DashStationReading } from '../services/api'
-
 const STATUS_LABELS: Record<StationOperationalStatus, { title: string; tone: string; description: string }> = {
   full: { title: 'Fully transmitting', tone: 'bg-emerald-50 text-emerald-700', description: 'Stations reporting on schedule' },
   partial: { title: 'Partial transmission', tone: 'bg-amber-50 text-amber-700', description: 'Stations with delayed readings' },
@@ -33,179 +32,12 @@ function predictionOf(station: Station): string {
   return station.status?.details?.prediction ?? 'unknown'
 }
 
-function StationDetailDialog({
-  station,
-  reading,
-  onClose,
-}: {
-  station: Station
-  reading?: DashStationReading | null
-  onClose: () => void
-}) {
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    },
-    [onClose],
-  )
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown)
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.body.style.overflow = ''
-    }
-  }, [handleKeyDown])
-
-  const opStatus = statusOf(station)
-  const prediction = predictionOf(station)
-  const details = station.status?.details
-  const proba = details ? (details.at_risk_proba * 100).toFixed(1) : null
-  const threshold = details ? (details.threshold_used * 100).toFixed(1) : null
-
-  const weatherReadings = [
-    { label: 'Temperature', value: reading?.temperature?.value, unit: reading?.temperature?.unit ?? '°C', color: '#F97316', bg: 'bg-orange-50' },
-    { label: 'Humidity', value: reading?.humidity?.value, unit: reading?.humidity?.unit ?? '%', color: '#0EA5E9', bg: 'bg-sky-50' },
-    { label: 'Pressure', value: reading?.pressure?.value, unit: reading?.pressure?.unit ?? 'hPa', color: '#8B5CF6', bg: 'bg-purple-50' },
-    { label: 'Wind Speed', value: reading?.wind_speed?.value, unit: reading?.wind_speed?.unit ?? 'm/s', color: '#22C55E', bg: 'bg-emerald-50' },
-    { label: 'Rainfall', value: reading?.rainfall?.value, unit: reading?.rainfall?.unit ?? 'mm', color: '#38BDF8', bg: 'bg-cyan-50' },
-  ]
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-midnight/40 backdrop-blur-sm p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="detail-dialog-title"
-    >
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl animate-fade-in-up motion-reduce:animate-none">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{station.station_id}</p>
-            <h2 id="detail-dialog-title" className="mt-1 text-lg font-semibold text-midnight">{station.name}</h2>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="cursor-pointer rounded-lg p-1.5 text-storm/40 transition-colors hover:bg-slate-100 hover:text-storm/70"
-            aria-label="Close"
-          >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="space-y-5 px-6 py-5">
-          {/* ── Status badges ── */}
-          <div className="flex flex-wrap gap-2">
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_BADGE[opStatus]}`}>
-              {opStatus === 'full' ? 'Online' : opStatus === 'partial' ? 'Partial' : 'Down'}
-            </span>
-            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${PREDICTION_BADGE[prediction] ?? PREDICTION_BADGE.unknown}`}>
-              {prediction === 'healthy' ? 'Healthy' : prediction === 'at_risk' ? 'At Risk' : 'Unknown'}
-            </span>
-          </div>
-
-          {/* ── Weather data ── */}
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-3">Live Weather Data</p>
-            {reading ? (
-              <div className="grid grid-cols-2 gap-3">
-                {weatherReadings.map((w) => (
-                  <div key={w.label} className={`rounded-xl ${w.bg} p-3.5`}>
-                    <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: w.color }}>{w.label}</p>
-                    <p className="mt-1 text-xl font-bold text-midnight font-display">
-                      {w.value !== null && w.value !== undefined ? w.value.toFixed(1) : '—'}
-                      <span className="ml-0.5 text-sm font-normal text-storm/40">{w.unit}</span>
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl bg-slate-50 p-4 text-center">
-                <p className="text-xs text-storm/40">No weather data available for this station</p>
-              </div>
-            )}
-          </div>
-
-          {/* ── Station info ── */}
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 mb-3">Station Info</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl bg-[#f8fafc] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Location</p>
-                <p className="mt-1 text-sm text-midnight">{station.location || '—'}</p>
-              </div>
-              <div className="rounded-xl bg-[#f8fafc] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Coordinates</p>
-                <p className="mt-1 text-sm text-midnight">
-                  {station.latitude != null && station.longitude != null
-                    ? `${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}`
-                    : '—'}
-                </p>
-              </div>
-              <div className="rounded-xl bg-[#f8fafc] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Expected Interval</p>
-                <p className="mt-1 text-sm text-midnight">{station.expected_interval_minutes} min</p>
-              </div>
-              <div className="rounded-xl bg-[#f8fafc] p-4">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Last Update</p>
-                <p className="mt-1 text-sm text-midnight">
-                  {station.status?.last_updated
-                    ? new Date(station.status.last_updated).toLocaleString()
-                    : '—'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* ── AI analytics ── */}
-          {station.status && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">AI Model Analytics</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs text-slate-500">Prediction</p>
-                  <p className="mt-0.5 text-sm font-semibold text-midnight capitalize">{details?.prediction ?? '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">At-Risk Probability</p>
-                  <p className="mt-0.5 text-sm font-semibold text-midnight">{proba ? `${proba}%` : '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Threshold</p>
-                  <p className="mt-0.5 text-sm font-semibold text-midnight">{threshold ? `${threshold}%` : '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Computed By</p>
-                  <p className="mt-0.5 text-sm font-semibold text-midnight">{station.status.computed_by || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Last Reading ID</p>
-                  <p className="mt-0.5 text-sm font-semibold text-midnight">{details?.last_reading_id ?? '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Operational Status</p>
-                  <p className="mt-0.5 text-sm font-semibold text-midnight capitalize">{station.status.status}</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export function DashboardPage() {
+  const navigate = useNavigate()
   const { data: dashData, isLoading: dashLoading } = useDashboardData()
   const [stations, setStations] = useState<Station[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedStation, setSelectedStation] = useState<Station | null>(null)
 
   useEffect(() => {
     fetchStations()
@@ -303,7 +135,7 @@ export function DashboardPage() {
                               return (
                                 <tr
                                   key={station.station_id}
-                                  onClick={() => setSelectedStation(station)}
+                                  onClick={() => navigate(`/dashboard/weather-data?station=${station.station_id}`)}
                                   className="cursor-pointer border-b border-slate-100 transition-colors last:border-b-0 hover:bg-slate-50"
                                 >
                                   <td className="px-4 py-3.5">
@@ -393,7 +225,7 @@ export function DashboardPage() {
                         )
                       })()}
                       <p className="text-xs leading-relaxed text-slate-500">
-                        Click a station row to view detailed AI diagnostics, including health predictions and risk probabilities.
+                        Click a station row to view its detailed weather readings, charts, and AI diagnostics.
                       </p>
                     </div>
                   </aside>
@@ -488,13 +320,6 @@ export function DashboardPage() {
         </div>
       </main>
 
-      {selectedStation && (
-        <StationDetailDialog
-          station={selectedStation}
-          reading={dashStations.find((r) => r.station_code === selectedStation.station_id) ?? null}
-          onClose={() => setSelectedStation(null)}
-        />
-      )}
     </div>
   )
 }

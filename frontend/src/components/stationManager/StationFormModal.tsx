@@ -146,9 +146,9 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
           {/* ── Station Code (short name) ── */}
           <div>
             <label htmlFor="sf-code" className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-storm/40">Station Code *</label>
-            <input id="sf-code" type="text" value={stationCode} onChange={(e) => setStationCode(e.target.value)} placeholder="e.g. AWS-001" disabled={!!station} className={`w-full rounded-xl border bg-white px-3.5 py-2 text-sm text-midnight placeholder:text-storm/30 focus:outline-2 focus:outline-offset-2 focus:outline-sky-primary ${errors.stationCode ? 'border-red-300' : 'border-slate-200'} ${station ? 'opacity-60' : ''}`} />
+            <input id="sf-code" type="text" value={stationCode} onChange={(e) => setStationCode(e.target.value)} placeholder="e.g. AWS-001" className={`w-full rounded-xl border bg-white px-3.5 py-2 text-sm text-midnight placeholder:text-storm/30 focus:outline-2 focus:outline-offset-2 focus:outline-sky-primary ${errors.stationCode ? 'border-red-300' : 'border-slate-200'}`} />
             {errors.stationCode && <p className="mt-1 text-xs text-red-500">{errors.stationCode}</p>}
-            {!station && <p className="mt-1 text-[10px] text-storm/30">Short unique identifier for the station</p>}
+            <p className="mt-1 text-[10px] text-storm/30">Short unique identifier for the station</p>
           </div>
 
           {/* ── Name ── */}
