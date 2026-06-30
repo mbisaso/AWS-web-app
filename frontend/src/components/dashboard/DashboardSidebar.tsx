@@ -5,7 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { MenuIcon, CloseIcon } from "../landing/Icons";
 
 const NAV_ITEMS: { label: string; href: string; adminOnly?: boolean }[] = [
-  { label: "Overview", href: "/dashboard" },
+  { label: "Dashboard", href: "/dashboard" },
   { label: "Weather data", href: "/dashboard/weather-data" },
   { label: "Power data", href: "/dashboard/power-data" },
   { label: "Weather analysis", href: "/dashboard/weather-analysis" },
