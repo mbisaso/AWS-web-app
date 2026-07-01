@@ -37,6 +37,7 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
   const [expectedInterval, setExpectedInterval] = useState(15)
   const [sensors, setSensors] = useState<string[]>([])
   const [notes, setNotes] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -53,6 +54,7 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
         setExpectedInterval(station.expected_interval_minutes)
         setSensors(station.sensors)
         setNotes(station.notes)
+        setPhoneNumber(station.phone_number)
       } else {
         setStationCode('')
         setName('')
@@ -63,6 +65,7 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
         setExpectedInterval(15)
         setSensors([])
         setNotes('')
+        setPhoneNumber('')
       }
       setErrors({})
       setSaved(false)
@@ -104,6 +107,7 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
         expected_interval_minutes: expectedInterval,
         sensors,
         notes: notes.trim(),
+        phone_number: phoneNumber.trim(),
       })
       setSaved(true)
       setTimeout(() => onClose(), 1200)
@@ -185,6 +189,13 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
                 <option key={c} value={c}>{CONNECTIVITY_LABELS[c]}</option>
               ))}
             </select>
+          </div>
+
+          {/* ── Phone Number ── */}
+          <div>
+            <label htmlFor="sf-phone" className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-storm/40">Data Phone Number</label>
+            <input id="sf-phone" type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g. +256 712 345 678" className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-midnight placeholder:text-storm/30 focus:outline-2 focus:outline-offset-2 focus:outline-sky-primary" />
+            <p className="mt-1 text-[10px] text-storm/30">Phone number used for cellular data transmission</p>
           </div>
 
           {/* ── Expected interval ── */}

@@ -57,9 +57,10 @@ export function SimTable({ sims, isLoading, activeFilter, selectedSimId, onSelec
       const q = search.toLowerCase()
       list = list.filter(
         (s) =>
-          (s.station_name ?? '').toLowerCase().includes(q) ||
-          s.sim.carrier.toLowerCase().includes(q) ||
-          s.sim.iccid.includes(q),
+              (s.station_name ?? '').toLowerCase().includes(q) ||
+              s.sim.carrier.toLowerCase().includes(q) ||
+              s.sim.iccid.includes(q) ||
+              s.sim.phone_number.includes(q),
       )
     }
     if (carrierFilter !== 'all') list = list.filter((s) => s.sim.carrier === carrierFilter)
@@ -183,6 +184,7 @@ export function SimTable({ sims, isLoading, activeFilter, selectedSimId, onSelec
             <tr className="border-b border-slate-100 bg-slate-50/50">
               <Th>Station</Th>
               <Th>Carrier / ICCID</Th>
+              <Th>Phone</Th>
               <Th>Data usage</Th>
               <Th sortable onClick={() => toggleSort('remaining')}>
                 <SortArrow column="remaining" />Remaining
@@ -225,6 +227,9 @@ export function SimTable({ sims, isLoading, activeFilter, selectedSimId, onSelec
                       <p className="text-xs font-medium text-midnight">{entry.sim.carrier}</p>
                       <p className="text-[11px] text-storm/40 font-mono">…{entry.sim.iccid.slice(-6)}</p>
                     </div>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <span className="text-xs text-storm/60">{entry.sim.phone_number || <span className="text-storm/30 italic">—</span>}</span>
                   </td>
                   <td className="px-4 py-3 min-w-[200px]">
                     <SimUsageBar used={entry.sim.usage_mb} total={entry.sim.bundle_size_mb} />

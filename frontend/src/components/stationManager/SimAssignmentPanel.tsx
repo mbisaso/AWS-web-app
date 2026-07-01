@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { SimAccount, StationManagementData } from '../../services/api'
-import { fetchSimAccounts, createSimAccount, assignSimToStation, unassignSimFromStation } from '../../services/api'
+import { fetchSimAccounts, createSimAccount, updateSimAccount, assignSimToStation, unassignSimFromStation } from '../../services/api'
 
 interface SimAssignmentPanelProps {
   station: StationManagementData
@@ -17,8 +17,18 @@ export function SimAssignmentPanel({ station, onUpdate }: SimAssignmentPanelProp
   const [newPhone, setNewPhone] = useState('')
   const [newBundle, setNewBundle] = useState(500)
   const [newExpiry, setNewExpiry] = useState('')
+  const [editPhone, setEditPhone] = useState(false)
+  const [editPhoneValue, setEditPhoneValue] = useState('')
 
   const currentSim = sims.find((s) => s.id === station.sim_id)
+
+  const handleSavePhone = async () => {
+    if (!currentSim) return
+    await updateSimAccount(currentSim.id, { phone_number: editPhoneValue })
+    const updated = await fetchSimAccounts()
+    setSims(updated)
+    setEditPhone(false)
+  }
 
   useEffect(() => {
     fetchSimAccounts().then((data) => { setSims(data); setLoading(false) })
@@ -87,14 +97,48 @@ export function SimAssignmentPanel({ station, onUpdate }: SimAssignmentPanelProp
       {currentSim ? (
         <div className="rounded-xl border border-slate-200 bg-white p-3.5">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-storm/60">{currentSim.carrier}</p>
-              <p className="text-sm font-medium text-midnight font-mono text-xs">{currentSim.iccid}</p>
-              <p className="text-xs text-storm/40">{currentSim.phone_number}</p>
+              <p className="text-xs font-medium text-midnight font-mono">{currentSim.iccid}</p>
+              <div className="mt-0.5 flex items-center gap-1">
+                {editPhone ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={editPhoneValue}
+                      onChange={(e) => setEditPhoneValue(e.target.value)}
+                      className="w-32 rounded border border-sky-200 px-1.5 py-0.5 text-xs text-midnight focus:outline-2 focus:outline-offset-1 focus:outline-sky-primary"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSavePhone}
+                      className="cursor-pointer rounded bg-sky-primary px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-sky-deep"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditPhone(false)}
+                      className="cursor-pointer rounded px-1.5 py-0.5 text-[10px] text-storm/50 hover:text-storm/70"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setEditPhoneValue(currentSim.phone_number); setEditPhone(true) }}
+                    className="group flex items-center gap-1 text-xs text-storm/40 hover:text-storm/60"
+                  >
+                    <span>{currentSim.phone_number || <span className="italic">No phone</span>}</span>
+                    <svg className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
-            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${currentSim.status === 'active' ? 'bg-emerald-50 text-emerald-deep' : 'bg-rose-50 text-rose'}`}>
-              {currentSim.status}
-            </span>
           </div>
           <div className="mt-2">
             <div className="flex items-center justify-between text-xs text-storm/40">
