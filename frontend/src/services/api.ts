@@ -14,6 +14,8 @@ export type AlertType =
   | 'sensor_anomaly'
   | 'low_battery'
   | 'threshold_breach'
+  | 'sim_expiry'
+  | 'sim_low_data'
 
 export type AlertSeverity = 'critical' | 'warning' | 'info'
 
@@ -77,6 +79,8 @@ export const ALERT_TYPE_LABELS: Record<AlertType, string> = {
   sensor_anomaly: 'Sensor Anomaly',
   low_battery: 'Low Battery',
   threshold_breach: 'Threshold Breach',
+  sim_expiry: 'SIM Expiry',
+  sim_low_data: 'SIM Low Data',
 }
 
 export const SEVERITY_CONFIG: Record<AlertSeverity, { label: string; dot: string; text: string; bg: string; border: string }> = {
@@ -385,7 +389,17 @@ function generateMockData(): DashboardData {
 export async function fetchDashboardData(): Promise<DashboardData> {
   /* --- MOCK IMPLEMENTATION (development only) --- */
   await new Promise((resolve) => setTimeout(resolve, 600 + Math.random() * 400))
-  return generateMockData()
+  const data = generateMockData()
+
+  try {
+    const { sims } = await fetchSimManagementData()
+    const simAlerts = generateSimAlerts(sims)
+    if (simAlerts.length) {
+      data.alerts = [...simAlerts, ...data.alerts]
+    }
+  } catch { /* SIM alerts are best-effort */ }
+
+  return data
 
   /* --- PRODUCTION IMPLEMENTATION (uncomment when API is ready) ---
   const response = await fetch(`${API_BASE}/dashboard/overview/`, {
@@ -507,6 +521,15 @@ export async function fetchAlertsData(params?: AlertFilterParams): Promise<Alert
   await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 200))
 
   let filtered = getMockAlerts()
+
+  /* ── Merge live SIM alerts ── */
+  try {
+    const { sims } = await fetchSimManagementData()
+    const simAlerts = generateSimAlerts(sims)
+    if (simAlerts.length) {
+      filtered = [...simAlerts, ...filtered]
+    }
+  } catch { /* SIM alerts are best-effort */ }
 
   if (params) {
     if (params.severity && params.severity !== 'all') {
@@ -1312,7 +1335,138 @@ export async function topUpSim(simId: number, amountMb: number, _note: string): 
   const all = await fetchSimManagementData()
   const updated = all.sims.find((s) => s.sim.id === simId)
   if (!updated) throw new Error('SIM not found')
+  resetSimAlert(simId)
   return updated
+}
+
+/* ── SIM Alert Engine ──
+   Detects low-data and expiring-SIM conditions every poll cycle.
+   Tracks sent alerts in localStorage to avoid duplicates.
+   Re-alerts every 3 hours until the condition is resolved.
+   ───────────────────────────────────────────── */
+
+const SIM_ALERT_TRACKER_KEY = 'aws_sim_alert_sent'
+const SIM_ALERT_REPEAT_MS = 3 * 60 * 60 * 1000 // 3 hours
+const SIM_LOW_DATA_THRESHOLD = 0.10 // 10% remaining
+
+interface SimAlertTracker {
+  [key: string]: number // key: `${simId}_${type}`, value: last-sent timestamp
+}
+
+function loadSimAlertTracker(): SimAlertTracker {
+  try {
+    return JSON.parse(localStorage.getItem(SIM_ALERT_TRACKER_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function saveSimAlertTracker(t: SimAlertTracker): void {
+  localStorage.setItem(SIM_ALERT_TRACKER_KEY, JSON.stringify(t))
+}
+
+export function resetSimAlert(simId: number): void {
+  const tracker = loadSimAlertTracker()
+  Object.keys(tracker).forEach((key) => {
+    if (key.startsWith(`${simId}_`)) delete tracker[key]
+  })
+  saveSimAlertTracker(tracker)
+}
+
+let simAlertIdCounter = 1000
+
+export function generateSimAlerts(sims: SimManagementData[]): Alert[] {
+  const tracker = loadSimAlertTracker()
+  const now = Date.now()
+  const alerts: Alert[] = []
+
+  for (const entry of sims) {
+    if (entry.sim.status !== 'active') continue
+
+    const remaining = entry.sim.bundle_size_mb - entry.sim.usage_mb
+    const remainingPct = entry.sim.bundle_size_mb > 0
+      ? remaining / entry.sim.bundle_size_mb
+      : 0
+
+    const stationId = entry.station_id ?? 0
+    const station = stationName(stationId)
+    const simId = entry.sim.id
+
+    /* ── Low data check ── */
+    if (remainingPct <= SIM_LOW_DATA_THRESHOLD && remaining > 0) {
+      const key = `${simId}_sim_low_data`
+      const lastSent = tracker[key]
+      if (!lastSent || (now - lastSent) >= SIM_ALERT_REPEAT_MS) {
+        alerts.push({
+          id: ++simAlertIdCounter,
+          type: 'sim_low_data',
+          severity: remainingPct <= 0.05 ? 'critical' : 'warning',
+          station_name: station,
+          station_id: stationId,
+          message: `SIM data bundle critically low — ${remaining.toLocaleString()} MB remaining (${(remainingPct * 100).toFixed(0)}% of ${entry.sim.bundle_size_mb.toLocaleString()} MB bundle). Top up to maintain connectivity.`,
+          timestamp: new Date().toISOString(),
+          explanation: `Station "${station}" has used ${((1 - remainingPct) * 100).toFixed(0)}% of its data bundle. Only ${remaining.toLocaleString()} MB remain. Without a top-up, the station will lose cellular connectivity and stop transmitting weather data.`,
+          related_url: '/dashboard/sim-management',
+        })
+        tracker[key] = now
+      }
+    }
+
+    /* ── Expiry check — ≤ 7 days ── */
+    if (entry.sim.expiry_date) {
+      const daysToExpiry = Math.ceil(
+        (new Date(entry.sim.expiry_date).getTime() - now) / 86_400_000,
+      )
+      if (daysToExpiry <= 7 && daysToExpiry > 0) {
+        const key = `${simId}_sim_expiry`
+        const lastSent = tracker[key]
+        if (!lastSent || (now - lastSent) >= SIM_ALERT_REPEAT_MS) {
+          alerts.push({
+            id: ++simAlertIdCounter,
+            type: 'sim_expiry',
+            severity: daysToExpiry <= 2 ? 'critical' : 'warning',
+            station_name: station,
+            station_id: stationId,
+            message: `SIM data bundle expires in ${daysToExpiry} day${daysToExpiry !== 1 ? 's' : ''} (${new Date(entry.sim.expiry_date).toLocaleDateString()}). Renew to prevent service interruption.`,
+            timestamp: new Date().toISOString(),
+            explanation: `The data bundle for station "${station}" expires on ${new Date(entry.sim.expiry_date).toLocaleDateString()}. The SIM will stop transmitting once the plan expires unless renewed or topped up.`,
+            related_url: '/dashboard/sim-management',
+          })
+          tracker[key] = now
+        }
+      }
+    }
+  }
+
+  if (alerts.length) saveSimAlertTracker(tracker)
+  return alerts
+}
+
+export function sendSimEmailAlert(alert: Alert): void {
+  /* Store sent email in localStorage for the UI to show */
+  const key = 'aws_sim_email_log'
+  try {
+    const log = JSON.parse(localStorage.getItem(key) || '[]')
+    log.push({
+      alert_id: alert.id,
+      type: alert.type,
+      station_name: alert.station_name,
+      message: alert.message,
+      sent_at: new Date().toISOString(),
+    })
+    localStorage.setItem(key, JSON.stringify(log))
+  } catch { /* ignore */ }
+
+  /* Attempt to send via backend email endpoint — fire-and-forget */
+  import('../api/client').then(({ apiClient }) => {
+    apiClient.post('/api/sim-alert-email/', {
+      type: alert.type,
+      station_name: alert.station_name,
+      station_id: alert.station_id,
+      message: alert.message,
+      explanation: alert.explanation,
+    }).catch(() => { /* email sending is best-effort */ })
+  })
 }
 
 const SENSOR_OPTIONS = ['temperature', 'humidity', 'rainfall', 'wind_speed', 'pressure', 'solar_radiation']

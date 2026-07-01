@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { SimManagementData, SimFleetSummary } from '../services/api'
-import { fetchSimManagementData, topUpSim } from '../services/api'
+import { fetchSimManagementData, generateSimAlerts, sendSimEmailAlert, topUpSim } from '../services/api'
 import { usePollingData } from '../hooks/usePollingData'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { SimFleetSummaryCard } from '../components/simManagement/SimFleetSummaryCard'
@@ -33,6 +33,27 @@ export function SimManagementPage() {
     expired_count: 0,
     total_remaining_mb: 0,
   }
+
+  /* ── SIM alerts ── */
+  const simAlerts = useMemo(() => generateSimAlerts(sims), [sims])
+  const [dismissedAlerts, setDismissedAlerts] = useState<Set<number>>(new Set())
+  const [emailLog, setEmailLog] = useState<{ alert_id: number; sent_at: string }[]>([])
+
+  const visibleAlerts = useMemo(
+    () => simAlerts.filter((a) => !dismissedAlerts.has(a.id)),
+    [simAlerts, dismissedAlerts],
+  )
+
+  const handleDismissAlert = useCallback((alertId: number) => {
+    setDismissedAlerts((prev) => new Set(prev).add(alertId))
+  }, [])
+
+  const handleSendEmail = useCallback(async (alertId: number) => {
+    const alert = simAlerts.find((a) => a.id === alertId)
+    if (!alert) return
+    sendSimEmailAlert(alert)
+    setEmailLog((prev) => [...prev, { alert_id: alertId, sent_at: new Date().toISOString() }])
+  }, [simAlerts])
 
   /* ── Detail panel state ── */
   const [selectedSim, setSelectedSim] = useState<SimManagementData | null>(null)
@@ -155,6 +176,95 @@ export function SimManagementPage() {
               Retry
             </button>
           </div>
+        )}
+
+        {/* ── SIM alert notifications ── */}
+        {visibleAlerts.length > 0 && (
+          <section aria-label="SIM alerts" className="mb-4 space-y-3">
+            {visibleAlerts.map((alert) => {
+              const isCritical = alert.severity === 'critical'
+              const isExpiry = alert.type === 'sim_expiry'
+              const emailSent = emailLog.find((e) => e.alert_id === alert.id)
+
+              return (
+                <div
+                  key={alert.id}
+                  className={`flex items-start gap-3 rounded-2xl border p-4 shadow-xs animate-fade-in-up motion-reduce:animate-none ${
+                    isCritical
+                      ? 'border-rose-200 bg-rose-50'
+                      : 'border-amber-200 bg-amber-50'
+                  }`}
+                  role="alert"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white shadow-xs">
+                    {isExpiry ? (
+                      <svg className={`h-4 w-4 ${isCritical ? 'text-rose' : 'text-amber'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                        <path d="M16 2v4M8 2v4M3 10h18" />
+                      </svg>
+                    ) : (
+                      <svg className={`h-4 w-4 ${isCritical ? 'text-rose' : 'text-amber'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                        <path d="M12 9v4" />
+                        <circle cx="12" cy="17" r="0.5" fill="currentColor" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-semibold ${isCritical ? 'text-rose-800' : 'text-amber-800'}`}>
+                      {alert.station_name}
+                    </p>
+                    <p className={`mt-0.5 text-xs ${isCritical ? 'text-rose-700' : 'text-amber-700'}`}>
+                      {alert.message}
+                    </p>
+                    {alert.explanation && (
+                      <p className={`mt-1 text-[11px] ${isCritical ? 'text-rose-600/60' : 'text-amber-600/60'}`}>
+                        {alert.explanation}
+                      </p>
+                    )}
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleDismissAlert(alert.id)}
+                        className="cursor-pointer rounded-lg bg-white px-3 py-1 text-[10px] font-semibold text-storm/60 shadow-xs transition-colors hover:bg-slate-100 hover:text-storm/80"
+                      >
+                        Dismiss
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSendEmail(alert.id)}
+                        className="cursor-pointer rounded-lg bg-white px-3 py-1 text-[10px] font-semibold text-sky-deep shadow-xs transition-colors hover:bg-sky-soft"
+                      >
+                        {emailSent ? 'Email sent' : 'Send email alert'}
+                      </button>
+                      {alert.related_url && (
+                        <a
+                          href={alert.related_url}
+                          className="text-[10px] font-medium text-sky-deep underline underline-offset-2 transition-colors hover:text-sky-primary"
+                        >
+                          View in Alerts Center →
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-start gap-1.5">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      isCritical
+                        ? 'bg-rose-200 text-rose-700'
+                        : 'bg-amber-200 text-amber-700'
+                    }`}>
+                      {isExpiry ? 'Expiry' : 'Low Data'}
+                    </span>
+                    {emailSent && (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        Notified
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </section>
         )}
 
         {/* ── SIM table ── */}
