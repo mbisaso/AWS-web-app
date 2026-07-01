@@ -1469,6 +1469,57 @@ export function sendSimEmailAlert(alert: Alert): void {
   })
 }
 
+/* ── Shared notification badge counter ──
+   SimManagementPage publishes the count into localStorage.
+   DashboardSidebar reads it to show a badge on the nav link.   */
+
+const SIM_BADGE_KEY = 'aws_sim_alert_badge'
+const SIM_DISMISSED_KEY = 'aws_sim_dismissed_alerts'
+
+export function publishSimAlertCount(count: number): void {
+  try {
+    localStorage.setItem(SIM_BADGE_KEY, String(Math.max(0, count)))
+  } catch { /* ignore */ }
+}
+
+export function getSimAlertCount(): number {
+  try {
+    return Number(localStorage.getItem(SIM_BADGE_KEY)) || 0
+  } catch {
+    return 0
+  }
+}
+
+/* ── Dismissed-alert tracking (survives page refresh) ── */
+
+export function loadDismissedAlertIds(): Set<number> {
+  try {
+    const raw = localStorage.getItem(SIM_DISMISSED_KEY)
+    return new Set<number>(raw ? JSON.parse(raw) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+export function saveDismissedAlertIds(ids: Set<number>): void {
+  try {
+    localStorage.setItem(SIM_DISMISSED_KEY, JSON.stringify(Array.from(ids)))
+  } catch { /* ignore */ }
+}
+
+export function dismissAlert(id: number): Set<number> {
+  const ids = loadDismissedAlertIds()
+  ids.add(id)
+  saveDismissedAlertIds(ids)
+  return ids
+}
+
+export function clearAllDismissedAlerts(): void {
+  try {
+    localStorage.removeItem(SIM_DISMISSED_KEY)
+  } catch { /* ignore */ }
+}
+
 const SENSOR_OPTIONS = ['temperature', 'humidity', 'rainfall', 'wind_speed', 'pressure', 'solar_radiation']
 
 /* ── In-memory mock database ── */

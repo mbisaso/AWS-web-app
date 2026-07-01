@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { SimManagementData, SimFleetSummary } from '../services/api'
-import { fetchSimManagementData, generateSimAlerts, sendSimEmailAlert, topUpSim } from '../services/api'
+import {
+  clearAllDismissedAlerts,
+  dismissAlert,
+  fetchSimManagementData,
+  generateSimAlerts,
+  loadDismissedAlertIds,
+  publishSimAlertCount,
+  sendSimEmailAlert,
+  topUpSim,
+} from '../services/api'
 import { usePollingData } from '../hooks/usePollingData'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { SimFleetSummaryCard } from '../components/simManagement/SimFleetSummaryCard'
@@ -36,16 +45,33 @@ export function SimManagementPage() {
 
   /* ── SIM alerts ── */
   const simAlerts = useMemo(() => generateSimAlerts(sims), [sims])
-  const [dismissedAlerts, setDismissedAlerts] = useState<Set<number>>(new Set())
+  const [dismissedAlerts, setDismissedAlerts] = useState<Set<number>>(loadDismissedAlertIds)
   const [emailLog, setEmailLog] = useState<{ alert_id: number; sent_at: string }[]>([])
+
+  /* Only count alerts that haven't been dismissed */
+  const undismissedCount = useMemo(
+    () => simAlerts.filter((a) => !dismissedAlerts.has(a.id)).length,
+    [simAlerts, dismissedAlerts],
+  )
 
   const visibleAlerts = useMemo(
     () => simAlerts.filter((a) => !dismissedAlerts.has(a.id)),
     [simAlerts, dismissedAlerts],
   )
 
+  /* Publish badge count for the sidebar — only undismissed alerts */
+  useEffect(() => {
+    publishSimAlertCount(undismissedCount)
+  }, [undismissedCount])
+
   const handleDismissAlert = useCallback((alertId: number) => {
-    setDismissedAlerts((prev) => new Set(prev).add(alertId))
+    const updated = dismissAlert(alertId)
+    setDismissedAlerts(new Set(updated))
+  }, [])
+
+  const handleDismissAll = useCallback(() => {
+    clearAllDismissedAlerts()
+    setDismissedAlerts(new Set())
   }, [])
 
   const handleSendEmail = useCallback(async (alertId: number) => {
@@ -180,7 +206,20 @@ export function SimManagementPage() {
 
         {/* ── SIM alert notifications ── */}
         {visibleAlerts.length > 0 && (
-          <section aria-label="SIM alerts" className="mb-4 space-y-3">
+          <section aria-label="SIM alerts" className="mb-4">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">
+                {undismissedCount} unhandled SIM notification{undismissedCount !== 1 ? 's' : ''}
+              </p>
+              <button
+                type="button"
+                onClick={handleDismissAll}
+                className="cursor-pointer rounded-lg bg-white px-3 py-1 text-[10px] font-semibold text-storm/50 shadow-xs transition-colors hover:bg-slate-100 hover:text-storm/70"
+              >
+                Clear all
+              </button>
+            </div>
+            <div className="space-y-3">
             {visibleAlerts.map((alert) => {
               const isCritical = alert.severity === 'critical'
               const isExpiry = alert.type === 'sim_expiry'
@@ -264,6 +303,7 @@ export function SimManagementPage() {
                 </div>
               )
             })}
+            </div>
           </section>
         )}
 
