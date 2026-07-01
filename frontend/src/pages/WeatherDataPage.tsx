@@ -108,6 +108,10 @@ export function WeatherDataPage() {
   }, [])
 
   const urlStation = searchParams.get('station')
+  const urlMetric = searchParams.get('metric') as SensorMetricKey | null
+  const urlDateFrom = searchParams.get('from')
+  const urlDateTo = searchParams.get('to')
+
   const [stationId, setStationId] = useState<string | null>(urlStation)
 
   // Sync URL param → state when navigating from another page
@@ -117,22 +121,41 @@ export function WeatherDataPage() {
     }
   }, [urlStation]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const [metricKey, setMetricKey] = useState<SensorMetricKey>(
+    urlMetric && SENSOR_METRICS.includes(urlMetric) ? urlMetric : 'temperature',
+  )
+  const [dateFrom, setDateFrom] = useState(urlDateFrom ?? daysAgo(7))
+  const [dateTo, setDateTo] = useState(urlDateTo ?? today())
+
   const handleStationChange = useCallback((id: string | null) => {
     setStationId(id)
-    if (id) {
-      setSearchParams({ station: id }, { replace: true })
-    } else {
-      setSearchParams({}, { replace: true })
-    }
-  }, [setSearchParams])
-  const [metricKey, setMetricKey] = useState<SensorMetricKey>('temperature')
-  const [dateFrom, setDateFrom] = useState(() => daysAgo(7))
-  const [dateTo, setDateTo] = useState(() => today())
+    const next = new URLSearchParams()
+    if (id) next.set('station', id)
+    if (metricKey !== 'temperature') next.set('metric', metricKey)
+    if (dateFrom !== daysAgo(7)) next.set('from', dateFrom)
+    if (dateTo !== today()) next.set('to', dateTo)
+    setSearchParams(next, { replace: true })
+  }, [setSearchParams, metricKey, dateFrom, dateTo])
 
   const hours = useMemo(
     () => Math.max(1, Math.ceil((Date.parse(dateTo) - Date.parse(dateFrom)) / 3600000)),
     [dateFrom, dateTo],
   )
+
+  /* ── Sync metric/date to URL ── */
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    if (stationId) next.set('station', stationId)
+    else { next.delete('station') }
+    if (metricKey !== 'temperature') next.set('metric', metricKey)
+    else { next.delete('metric') }
+    if (dateFrom !== daysAgo(7)) next.set('from', dateFrom)
+    else { next.delete('from') }
+    if (dateTo !== today()) next.set('to', dateTo)
+    else { next.delete('to') }
+    setSearchParams(next, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metricKey, dateFrom, dateTo])
 
   const handleDateChange = useCallback((from: string, to: string) => {
     setDateFrom(from)

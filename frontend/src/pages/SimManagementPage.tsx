@@ -27,11 +27,15 @@ export function SimManagementPage() {
     urlFilter ?? 'all',
   )
 
-  /* ── Data fetching ── */
+  /* ── URL-synced selected SIM detail panel ── */
+  const selectedSimId = searchParams.get('selected')
+
+  /* ── Data fetching (cached) ── */
   const { data, isLoading, error, retry } = usePollingData(
     () => fetchSimManagementData(),
     ['sim-management'],
     30_000,
+    'sim_management',
   )
 
   const sims = data?.sims ?? []
@@ -81,16 +85,27 @@ export function SimManagementPage() {
     setEmailLog((prev) => [...prev, { alert_id: alertId, sent_at: new Date().toISOString() }])
   }, [simAlerts])
 
-  /* ── Detail panel state ── */
-  const [selectedSim, setSelectedSim] = useState<SimManagementData | null>(null)
+  /* ── Detail panel state (synced with ?selected= URL param) ── */
+  const selectedSim = useMemo<SimManagementData | null>(() => {
+    if (!selectedSimId) return null
+    return sims.find((s) => s.sim.id === Number(selectedSimId)) ?? null
+  }, [sims, selectedSimId])
 
   const handleSelectSim = useCallback((s: SimManagementData) => {
-    setSelectedSim(s)
-  }, [])
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.set('selected', String(s.sim.id))
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   const handleCloseDetail = useCallback(() => {
-    setSelectedSim(null)
-  }, [])
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      next.delete('selected')
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   /* ── Top-up state ── */
   const [topUpTarget, setTopUpTarget] = useState<SimManagementData | null>(null)
