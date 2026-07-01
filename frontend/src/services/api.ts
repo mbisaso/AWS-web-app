@@ -1147,16 +1147,112 @@ export interface SimFleetSummary {
   total_remaining_mb: number
 }
 
+/* ── localStorage-backed SIM persistence ── */
+
+const SIM_STORAGE_KEY = 'aws_sim_metadata'
+
+interface SimMetadata {
+  phone_number: string
+  bundle_size_mb: number
+  expiry_date: string
+}
+
+function loadSimMetadata(): Record<number, SimMetadata> {
+  try {
+    const raw = localStorage.getItem(SIM_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveSimMetadata(meta: Record<number, SimMetadata>): void {
+  localStorage.setItem(SIM_STORAGE_KEY, JSON.stringify(meta))
+}
+
+let simIdCounter = 1000
+
+function generateDailyUsage(days: number): DailyUsage[] {
+  const now = new Date()
+  const usage: DailyUsage[] = []
+  for (let i = days; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i)
+    usage.push({
+      date: d.toISOString().split('T')[0],
+      usage_mb: Math.round((Math.random() * 8 + 2) * 10) / 10,
+    })
+  }
+  return usage
+}
+
+function estimateProjection(usage: DailyUsage[], remaining: number) {
+  if (usage.length < 3 || remaining <= 0) {
+    return { days: null, date: null, note: 'Insufficient data for projection' }
+  }
+  const vals = usage.map((d) => d.usage_mb)
+  const avg = vals.reduce((s, v) => s + v, 0) / vals.length
+  if (avg <= 0) return { days: null, date: null, note: 'No usage data available' }
+
+  const days = Math.round(remaining / avg)
+  const projDate = new Date()
+  projDate.setDate(projDate.getDate() + days)
+  const variance = vals.reduce((s, v) => s + (v - avg) ** 2, 0) / vals.length
+  const confidence = variance / avg < 3 ? 'stable' : 'fluctuating'
+
+  return {
+    days,
+    date: projDate.toISOString().split('T')[0],
+    note: `Based on average daily consumption of ${avg.toFixed(1)} MB/day (${confidence} usage pattern)`,
+  }
+}
+
 export async function fetchSimAccounts(): Promise<SimAccount[]> {
-  return []
+  const meta = loadSimMetadata()
+  const stations = await getStationsForSims()
+  return stations.map((s) => {
+    const m = meta[s.id] ?? { phone_number: '', bundle_size_mb: 512, expiry_date: '' }
+    return {
+      id: s.id + 1000,
+      carrier: 'Airtel',
+      iccid: `896101${String(s.id).padStart(13, '0')}`,
+      phone_number: m.phone_number || `+2567${String(70 + (s.id % 10)).padStart(2, '0')}${String(s.id).padStart(6, '0')}`,
+      bundle_size_mb: m.bundle_size_mb,
+      usage_mb: Math.round(m.bundle_size_mb * (0.15 + Math.random() * 0.7)),
+      expiry_date: m.expiry_date || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+      status: 'active',
+      station_id: s.id,
+    }
+  })
+}
+
+async function getStationsForSims(): Promise<{ id: number; name: string; station_id: string; location: string }[]> {
+  try {
+    const { fetchStations: realFetch } = await import('../api/stations')
+    const real = await realFetch()
+    if (real.length > 0) return real.map((s) => ({ id: s.id, name: s.name, station_id: s.station_id, location: s.location }))
+  } catch { /* fall through to mock */ }
+  return STATION_DEFS.map((s) => ({ id: s.id, name: s.name, station_id: s.station_code, location: s.location }))
 }
 
 export async function createSimAccount(_data: Partial<SimAccount>): Promise<SimAccount> {
   throw new Error('Not implemented — backend pending')
 }
 
-export async function updateSimAccount(_id: number, _data: Partial<SimAccount>): Promise<SimAccount> {
-  throw new Error('Not implemented — backend pending')
+export async function updateSimAccount(id: number, data: Partial<SimAccount>): Promise<SimAccount> {
+  const meta = loadSimMetadata()
+  const stationId = id - 1000
+  const existing = meta[stationId] ?? { phone_number: '', bundle_size_mb: 512, expiry_date: '' }
+  if (data.phone_number !== undefined) existing.phone_number = data.phone_number
+  if (data.bundle_size_mb !== undefined) existing.bundle_size_mb = data.bundle_size_mb
+  if (data.expiry_date !== undefined) existing.expiry_date = data.expiry_date
+  meta[stationId] = existing
+  saveSimMetadata(meta)
+
+  const sims = await fetchSimAccounts()
+  const sim = sims.find((s) => s.id === id)
+  if (!sim) throw new Error('SIM not found')
+  return sim
 }
 
 export async function assignSimToStation(_simId: number, _stationId: number): Promise<void> {
@@ -1171,20 +1267,52 @@ export async function fetchSimManagementData(): Promise<{
   sims: SimManagementData[]
   summary: SimFleetSummary
 }> {
-  return {
-    sims: [],
-    summary: {
-      total_active: 0,
-      expiring_soon_count: 0,
-      expiring_soon_threshold_days: 7,
-      expired_count: 0,
-      total_remaining_mb: 0,
-    },
+  const sims = await fetchSimAccounts()
+  const stations = await getStationsForSims()
+  const stationMap = new Map(stations.map((s) => [s.id, s]))
+
+  const simData: SimManagementData[] = sims.map((sim) => {
+    const station = stationMap.get(sim.station_id ?? -1)
+    const dailyUsage = generateDailyUsage(30)
+    const remaining = Math.max(0, sim.bundle_size_mb - sim.usage_mb)
+    const proj = estimateProjection(dailyUsage, remaining)
+    return {
+      sim,
+      station_name: station?.name ?? null,
+      station_id: sim.station_id,
+      estimated_days_remaining: proj.days,
+      projected_expiry_date: proj.date,
+      forecast_confidence_note: proj.note,
+      daily_usage: dailyUsage,
+      top_up_history: [],
+    }
+  })
+
+  const summary: SimFleetSummary = {
+    total_active: simData.filter((s) => s.sim.status === 'active').length,
+    expiring_soon_count: simData.filter(
+      (s) => s.estimated_days_remaining !== null && s.estimated_days_remaining <= 7 && s.estimated_days_remaining > 0,
+    ).length,
+    expiring_soon_threshold_days: 7,
+    expired_count: simData.filter((s) => s.sim.status !== 'active' || (s.estimated_days_remaining !== null && s.estimated_days_remaining <= 0)).length,
+    total_remaining_mb: simData.reduce((acc, s) => acc + Math.max(0, s.sim.bundle_size_mb - s.sim.usage_mb), 0),
   }
+
+  return { sims: simData, summary }
 }
 
-export async function topUpSim(_simId: number, _amountMb: number, _note: string): Promise<SimManagementData> {
-  throw new Error('Not implemented — backend pending')
+export async function topUpSim(simId: number, amountMb: number, _note: string): Promise<SimManagementData> {
+  const meta = loadSimMetadata()
+  const stationId = simId - 1000
+  const existing = meta[stationId] ?? { phone_number: '', bundle_size_mb: 512, expiry_date: '' }
+  existing.bundle_size_mb += amountMb
+  meta[stationId] = existing
+  saveSimMetadata(meta)
+
+  const all = await fetchSimManagementData()
+  const updated = all.sims.find((s) => s.sim.id === simId)
+  if (!updated) throw new Error('SIM not found')
+  return updated
 }
 
 const SENSOR_OPTIONS = ['temperature', 'humidity', 'rainfall', 'wind_speed', 'pressure', 'solar_radiation']
