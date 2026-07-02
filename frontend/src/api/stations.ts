@@ -43,3 +43,15 @@ export async function fetchSensorHistory(
   )
   return res.data.data.readings
 }
+
+export async function fetchBenchmark(
+  stationId: string,
+  hours: number,
+  metric: string,
+  source?: string,
+): Promise<BenchmarkData> {
+  const params: Record<string, string | number> = { station_id: stationId, hours, metric }
+  if (source) params.source = source
+  const res = await apiClient.get<ApiEnvelope<BenchmarkData>>('/api/benchmark/', { params })
+  return res.data.data
+}

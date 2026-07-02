@@ -1,5 +1,6 @@
 import csv
 import datetime
+import io
 import logging
 import math
 import os
@@ -695,4 +696,88 @@ def benchmark(request):
         'aws_readings':        aws_readings,
         'benchmark_readings':  benchmark_readings,
         'stats':               stats,
+    })
+
+
+# ─────────────────────────────────────────────────────────
+# API: Benchmark CSV import — admin only
+# ─────────────────────────────────────────────────────────
+
+# CSV columns (besides the first "time" column) that map directly
+# onto BenchmarkReading fields. Same as BenchmarkReadingAdmin.import_csv.
+BENCHMARK_CSV_FIELDS = [
+    'temperature', 'humidity', 'pressure', 'wind_speed',
+    'wind_direction', 'rain', 'light', 'soil_moisture',
+]
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def benchmark_import(request):
+    """
+    Imports UNMA (or other) benchmark readings from an uploaded CSV.
+    Admin only. Mirrors the parsing logic in BenchmarkReadingAdmin.import_csv
+    so the Django admin and React upload flow behave identically.
+    """
+    if request.user.role != 'admin':
+        return api_response(error='Admin access required', status_code=403)
+
+    csv_file = request.FILES.get('file')
+    if not csv_file:
+        return api_response(error='file is required', status_code=400)
+
+    source = request.data.get('source') or 'UNMA'
+    location = request.data.get('location', '')
+
+    decoded = io.TextIOWrapper(csv_file.file, encoding='utf-8-sig')
+    reader = csv.reader(decoded)
+
+    try:
+        header = next(reader)
+    except StopIteration:
+        return api_response(error='CSV file is empty', status_code=400)
+
+    # First column is the timestamp; remaining columns are matched by
+    # name against BENCHMARK_CSV_FIELDS. Unknown columns are ignored;
+    # known fields not present are skipped.
+    field_columns = {}
+    for idx, col_name in enumerate(header[1:], start=1):
+        col_name = col_name.strip().lower()
+        if col_name in BENCHMARK_CSV_FIELDS:
+            field_columns[col_name] = idx
+
+    readings = []
+    skipped = 0
+    for row in reader:
+        if not row or not row[0].strip():
+            continue
+
+        timestamp = parse_datetime(row[0].strip())
+        if timestamp is None:
+            skipped += 1
+            continue
+
+        kwargs = {
+            'source': source,
+            'location': location,
+            'timestamp': timestamp,
+        }
+        for field_name, col_idx in field_columns.items():
+            if col_idx >= len(row):
+                continue
+            raw_value = row[col_idx].strip()
+            if not raw_value:
+                continue
+            try:
+                kwargs[field_name] = float(raw_value)
+            except ValueError:
+                pass
+
+        readings.append(BenchmarkReading(**kwargs))
+
+    BenchmarkReading.objects.bulk_create(readings, batch_size=500)
+
+    return api_response(data={
+        'imported': len(readings),
+        'skipped':  skipped,
     })

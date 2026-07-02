@@ -11,4 +11,5 @@ urlpatterns = [
     path('api/stations/<str:station_id>/history/',    views.history,        name='history'),
     path('api/sim-alert-email/',                       views.sim_alert_email, name='sim_alert_email'),
     path('api/benchmark/',                             views.benchmark,      name='benchmark'),
+    path('api/benchmark/import/',                       views.benchmark_import, name='benchmark_import'),
 ]

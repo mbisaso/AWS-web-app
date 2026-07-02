@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import {
   AlertsCenterPage,
+  BenchmarkPage,
   DashboardPage,
   LandingPage,
   LoginPage,
@@ -65,6 +66,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <AlertsCenterPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/benchmarking"
+            element={
+              <ProtectedRoute>
+                <BenchmarkPage />
               </ProtectedRoute>
             }
           />
