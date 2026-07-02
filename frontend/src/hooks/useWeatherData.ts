@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SensorReadingChart } from '../types'
 import { fetchSensorHistory } from '../api/stations'
+import { getCachedData, setCachedData } from '../services/cache'
+
+function cacheKey(params: { stationId: string; hours: number }): string {
+  return `weather_${params.stationId}_${params.hours}`
+}
 
 export interface UseWeatherDataResult {
   data: SensorReadingChart[]
@@ -9,12 +14,12 @@ export interface UseWeatherDataResult {
   retry: () => void
 }
 
-export function useWeatherData(params: {
-  stationId: string
-  hours: number
-}): UseWeatherDataResult {
-  const [data, setData] = useState<SensorReadingChart[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+export function useWeatherData(params: { stationId: string; hours: number }): UseWeatherDataResult {
+  const ck = cacheKey(params)
+  const cached = getCachedData<SensorReadingChart[]>(ck)
+
+  const [data, setData] = useState<SensorReadingChart[]>(cached ?? [])
+  const [isLoading, setIsLoading] = useState(!cached)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const paramsRef = useRef(params)
@@ -30,6 +35,7 @@ export function useWeatherData(params: {
         if (abort.signal.aborted) return
         setData(result)
         setError(null)
+        setCachedData(ck, result)
       } catch (err) {
         if (abort.signal.aborted) return
         setError(err instanceof Error ? err.message : 'Failed to load weather data')
@@ -44,13 +50,14 @@ export function useWeatherData(params: {
         if (abort.signal.aborted) return
         setData(result)
         setError(null)
-      } catch {
-        /* silent */
-      }
+        setCachedData(cacheKey(paramsRef.current), result)
+      } catch { /* silent */ }
     }
 
-    setIsLoading(true)
-    setError(null)
+    if (!cached) {
+      setIsLoading(true)
+      setError(null)
+    }
     const startTimer = setTimeout(() => load(), 0)
     const interval = window.setInterval(() => backgroundLoad(), 30_000)
 
@@ -59,6 +66,7 @@ export function useWeatherData(params: {
       clearInterval(interval)
       abort.abort()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.stationId, params.hours, retryCount])
 
   const retry = useCallback(() => {

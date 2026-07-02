@@ -1,9 +1,19 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import axios from 'axios'
-import { apiClient, setAuthToken, API_BASE_URL } from '../api/client'
+import { apiClient, setAuthToken, API_BASE_URL, setLogoutHandler } from '../api/client'
 import type { ApiEnvelope, LoginResult, UserRole } from '../types'
 
 const STORAGE_KEY = 'auth'
+
+interface AuthContextValue {
+  accessToken: string | null
+  username: string | null
+  role: UserRole | null
+  isAuthenticated: boolean
+  isLoading: boolean
+  login: (username: string, password: string) => Promise<void>
+  logout: () => void
+}
 
 const initial = (() => {
   try {
@@ -21,16 +31,6 @@ function persist(refreshToken: string | null, username: string | null, role: Use
   }
 }
 
-interface AuthContextValue {
-  accessToken: string | null
-  username: string | null
-  role: UserRole | null
-  isAuthenticated: boolean
-  isLoading: boolean
-  login: (username: string, password: string) => Promise<void>
-  logout: () => void
-}
-
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -39,40 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [role, setRole] = useState<UserRole | null>(initial.role)
   const [isLoading, setIsLoading] = useState<boolean>(!!initial.refreshToken)
 
-  useEffect(() => {
-    async function initAuth() {
-      if (initial.refreshToken) {
-        try {
-          const response = await axios.post(`${API_BASE_URL}/api/token/refresh/`, {
-            refresh: initial.refreshToken,
-          })
-          const newAccessToken = response.data.access
-          setAccessToken(newAccessToken)
-          setAuthToken(newAccessToken)
-        } catch (err) {
-          console.error('Initial silent auth refresh failed:', err)
-          logout()
-        }
-      }
-      setIsLoading(false)
-    }
-    initAuth()
-  }, [])
-
-  async function login(usernameInput: string, password: string) {
-    const response = await apiClient.post<ApiEnvelope<LoginResult>>('/api/login/', {
-      username: usernameInput,
-      password,
-    })
-    const { access, refresh, role: userRole, username: returnedUsername } = response.data.data
-    setAccessToken(access)
-    setUsername(returnedUsername)
-    setRole(userRole)
-    setAuthToken(access)
-    persist(refresh, returnedUsername, userRole)
-  }
-
-  async function logout() {
+  const logout = useCallback(async () => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (raw) {
@@ -90,6 +57,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthToken(null)
       persist(null, null, null)
     }
+  }, [])
+
+  useEffect(() => {
+    setLogoutHandler(logout)
+  }, [logout])
+
+  useEffect(() => {
+    async function initAuth() {
+      if (initial.refreshToken) {
+        try {
+          const response = await axios.post(`${API_BASE_URL}/api/token/refresh/`, {
+            refresh: initial.refreshToken,
+          })
+          const newAccessToken = response.data.access
+          setAccessToken(newAccessToken)
+          setAuthToken(newAccessToken)
+        } catch (err) {
+          console.error('Initial silent auth refresh failed:', err)
+          await logout()
+        }
+      }
+      setIsLoading(false)
+    }
+    initAuth()
+  }, [logout])
+
+  async function login(usernameInput: string, password: string) {
+    const response = await apiClient.post<ApiEnvelope<LoginResult>>('/api/login/', {
+      username: usernameInput,
+      password,
+    })
+    const { access, refresh, role: userRole, username: returnedUsername } = response.data.data
+    setAccessToken(access)
+    setUsername(returnedUsername)
+    setRole(userRole)
+    setAuthToken(access)
+    persist(refresh, returnedUsername, userRole)
   }
 
   return (
@@ -114,4 +118,3 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')
   return ctx
 }
-

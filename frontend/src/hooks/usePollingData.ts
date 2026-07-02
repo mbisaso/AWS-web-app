@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { getCachedData, setCachedData } from '../services/cache'
 
 export interface UsePollingDataResult<T> {
   data: T | null
@@ -11,12 +12,15 @@ export function usePollingData<T>(
   fetcher: () => Promise<T>,
   deps: React.DependencyList,
   intervalMs = 30_000,
+  cacheKey?: string,
 ): UsePollingDataResult<T> {
-  const [data, setData] = useState<T | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const cached = cacheKey ? getCachedData<T>(cacheKey) : null
+
+  const [data, setData] = useState<T | null>(cached)
+  const [isLoading, setIsLoading] = useState(!cached)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
-  const hasDataRef = useRef(false)
+  const hasDataRef = useRef(!!cached)
   const fetcherRef = useRef(fetcher)
   fetcherRef.current = fetcher
 
@@ -30,6 +34,7 @@ export function usePollingData<T>(
         setData(result)
         setError(null)
         hasDataRef.current = true
+        if (cacheKey) setCachedData(cacheKey, result)
       } catch (err) {
         if (abort.signal.aborted) return
         setError(err instanceof Error ? err.message : 'Failed to load data')
@@ -45,13 +50,14 @@ export function usePollingData<T>(
         setData(result)
         setError(null)
         hasDataRef.current = true
-      } catch {
-        /* silent */
-      }
+        if (cacheKey) setCachedData(cacheKey, result)
+      } catch { /* silent */ }
     }
 
-    setIsLoading(true)
-    setError(null)
+    if (!cached) {
+      setIsLoading(true)
+      setError(null)
+    }
     const startTimer = setTimeout(() => load(), 0)
     const interval = window.setInterval(() => backgroundLoad(), intervalMs)
 
@@ -60,7 +66,8 @@ export function usePollingData<T>(
       clearInterval(interval)
       abort.abort()
     }
-  }, deps.concat(retryCount, intervalMs)) // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps.concat(retryCount, intervalMs, cacheKey))
 
   const retry = useCallback(() => {
     setIsLoading(true)

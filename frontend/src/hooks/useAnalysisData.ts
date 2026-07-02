@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Station, SensorMetricKey, TaggedSensorReading, StatsResult } from '../types'
 import { fetchSensorHistory } from '../api/stations'
+import { getCachedData, setCachedData } from '../services/cache'
 
 const METRIC_KEYS: SensorMetricKey[] = [
   'temperature', 'humidity', 'pressure', 'wind_speed',
@@ -62,10 +63,22 @@ interface UseAnalysisDataResult {
   retry: () => void
 }
 
+interface AnalysisCache {
+  readings: TaggedSensorReading[]
+  stats: Record<string, StatsResult>
+}
+
+function analysisCacheKey(stationIds: string[], hours: number): string {
+  return `analysis_${stationIds.slice().sort().join(',')}_${hours}`
+}
+
 export function useAnalysisData({ stationIds, allStations, hours }: UseAnalysisDataParams): UseAnalysisDataResult {
-  const [readings, setReadings] = useState<TaggedSensorReading[]>([])
-  const [stats, setStats] = useState<Record<string, StatsResult>>({})
-  const [isLoading, setIsLoading] = useState(false)
+  const ack = analysisCacheKey(stationIds, hours)
+  const cached = getCachedData<AnalysisCache>(ack)
+
+  const [readings, setReadings] = useState<TaggedSensorReading[]>(cached?.readings ?? [])
+  const [stats, setStats] = useState<Record<string, StatsResult>>(cached?.stats ?? {})
+  const [isLoading, setIsLoading] = useState(!cached && stationIds.length > 0)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
 
@@ -114,12 +127,14 @@ export function useAnalysisData({ stationIds, allStations, hours }: UseAnalysisD
 
       setReadings(merged)
       setStats(newStats)
+      setCachedData(analysisCacheKey(stationIds, hours), { readings: merged, stats: newStats })
     } catch (err) {
       if (signal.aborted) return
       setError(err instanceof Error ? err.message : 'Failed to load analysis data')
     } finally {
       if (!signal.aborted) setIsLoading(false)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const idsKey = stationIds.join(',')

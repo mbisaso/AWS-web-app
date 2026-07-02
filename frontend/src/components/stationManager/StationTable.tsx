@@ -9,18 +9,16 @@ interface StationTableProps {
   onEdit: (station: StationManagementData) => void
   onDecommission: (station: StationManagementData) => void
   onDelete: (station: StationManagementData) => void
-  onManageSim: (station: StationManagementData) => void
 }
 
 type SortKey = 'name' | 'location' | 'connectivity' | 'status' | 'created_at'
 
-export function StationTable({ stations, isLoading, onEdit, onDecommission, onDelete, onManageSim }: StationTableProps) {
+export function StationTable({ stations, isLoading, onEdit, onDecommission, onDelete }: StationTableProps) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [connFilter, setConnFilter] = useState<string>('all')
   const [sortKey, setSortKey] = useState<SortKey>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
-  const [expandedSim, setExpandedSim] = useState<number | null>(null)
 
   const filtered = useMemo(() => {
     let list = stations
@@ -122,7 +120,6 @@ export function StationTable({ stations, isLoading, onEdit, onDecommission, onDe
               <Th sortable onClick={() => toggleSort('location')}><SortArrow column="location" />Location</Th>
               <Th sortable onClick={() => toggleSort('connectivity')}><SortArrow column="connectivity" />Type</Th>
               <Th sortable onClick={() => toggleSort('status')}><SortArrow column="status" />Status</Th>
-              <Th>SIM</Th>
               <Th sortable onClick={() => toggleSort('created_at')}><SortArrow column="created_at" />Added</Th>
               <Th className="text-right">Actions</Th>
             </tr>
@@ -144,20 +141,10 @@ export function StationTable({ stations, isLoading, onEdit, onDecommission, onDe
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-storm/60">{CONNECTIVITY_LABELS[station.connectivity]}</span>
                 </td>
                 <td className="px-4 py-3.5"><StatusBadge status={station.status} /></td>
-                <td className="px-4 py-3.5">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedSim(expandedSim === station.id ? null : station.id)}
-                    className="cursor-pointer text-xs text-sky-primary transition-colors hover:text-sky-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary"
-                  >
-                    {station.sim_id ? `SIM #${station.sim_id}` : '— Assign'}
-                  </button>
-                </td>
                 <td className="px-4 py-3.5 text-xs text-storm/40">{new Date(station.created_at).toLocaleDateString()}</td>
                 <td className="px-4 py-3.5 text-right">
                   <div className="flex items-center justify-end gap-1">
                     <ActionBtn onClick={() => onEdit(station)} label="Edit" />
-                    <ActionBtn onClick={() => onManageSim(station)} label="SIM" />
                     <ActionBtn onClick={() => onDecommission(station)} label="Decom." variant="warning" />
                     <ActionBtn onClick={() => onDelete(station)} label="Delete" variant="danger" />
                   </div>

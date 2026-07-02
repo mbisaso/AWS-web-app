@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { SimManagementData, DailyUsage } from '../../services/api'
+import { updateSimAccount } from '../../services/api'
 import { TopUpHistoryTable } from './TopUpHistoryTable'
+import { DataUsageCurve } from './DataUsageCurve'
 
 interface SimDetailPanelProps {
   data: SimManagementData | null
@@ -29,9 +31,56 @@ export function SimDetailPanel({ data, isLoading, onTopUp, onClose }: SimDetailP
 
   if (!data) return null
 
-  const remaining = Math.max(0, data.sim.bundle_size_mb - data.sim.usage_mb)
-  const usagePct = data.sim.bundle_size_mb > 0
-    ? Math.min(100, ((data.sim.usage_mb / data.sim.bundle_size_mb) * 100))
+  /* ── Local editing state ── */
+  const [dirty, setDirty] = useState(0) // bump to re-sync local state from data
+
+  const [phone, setPhone] = useState(data.sim.phone_number)
+  const [editingPhone, setEditingPhone] = useState(false)
+  const [phoneDraft, setPhoneDraft] = useState('')
+
+  const [bundle, setBundle] = useState(data.sim.bundle_size_mb)
+  const [editingBundle, setEditingBundle] = useState(false)
+  const [bundleDraft, setBundleDraft] = useState(0)
+
+  const [expiry, setExpiry] = useState(data.sim.expiry_date)
+  const [editingExpiry, setEditingExpiry] = useState(false)
+  const [expiryDraft, setExpiryDraft] = useState('')
+
+  /* Sync local state from data when a new SIM is selected */
+  useEffect(() => {
+    setPhone(data.sim.phone_number)
+    setBundle(data.sim.bundle_size_mb)
+    setExpiry(data.sim.expiry_date)
+    setEditingPhone(false)
+    setEditingBundle(false)
+    setEditingExpiry(false)
+  }, [data.sim.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSavePhone = async () => {
+    await updateSimAccount(data.sim.id, { phone_number: phoneDraft })
+    setPhone(phoneDraft)
+    setEditingPhone(false)
+  }
+
+  const handleSaveBundle = async () => {
+    if (bundleDraft > 0) {
+      await updateSimAccount(data.sim.id, { bundle_size_mb: bundleDraft })
+      setBundle(bundleDraft)
+    }
+    setEditingBundle(false)
+  }
+
+  const handleSaveExpiry = async () => {
+    if (expiryDraft) {
+      await updateSimAccount(data.sim.id, { expiry_date: expiryDraft })
+      setExpiry(expiryDraft)
+    }
+    setEditingExpiry(false)
+  }
+
+  const remaining = Math.max(0, bundle - data.sim.usage_mb)
+  const usagePct = bundle > 0
+    ? Math.min(100, ((data.sim.usage_mb / bundle) * 100))
     : 0
 
   const detailContent = (
@@ -45,7 +94,42 @@ export function SimDetailPanel({ data, isLoading, onTopUp, onClose }: SimDetailP
           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-storm/60">
             <span>{data.sim.carrier}</span>
             <span className="font-mono">…{data.sim.iccid.slice(-6)}</span>
-            <span>{data.sim.phone_number}</span>
+            {editingPhone ? (
+              <div className="flex items-center gap-1">
+                <input
+                  type="text"
+                  value={phoneDraft}
+                  onChange={(e) => setPhoneDraft(e.target.value)}
+                  className="w-28 rounded border border-sky-200 px-1.5 py-0.5 text-xs text-midnight focus:outline-2 focus:outline-offset-1 focus:outline-sky-primary"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleSavePhone}
+                  className="cursor-pointer rounded bg-sky-primary px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-sky-deep"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingPhone(false)}
+                  className="cursor-pointer rounded px-1.5 py-0.5 text-[10px] text-storm/50 hover:text-storm/70"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => { setPhoneDraft(phone); setEditingPhone(true) }}
+                className="group flex items-center gap-1 hover:text-storm/80"
+              >
+                <span>{phone || <span className="italic text-storm/40">No phone</span>}</span>
+                <svg className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
@@ -73,18 +157,104 @@ export function SimDetailPanel({ data, isLoading, onTopUp, onClose }: SimDetailP
 
       {/* ── Stats row ── */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatBox label="Bundle" value={`${data.sim.bundle_size_mb.toLocaleString()} MB`} />
         <StatBox label="Used" value={`${data.sim.usage_mb.toLocaleString()} MB (${usagePct.toFixed(0)}%)`} />
         <StatBox
           label="Remaining"
           value={`${remaining.toLocaleString()} MB`}
-          urgent={remaining < data.sim.bundle_size_mb * 0.1 && data.sim.status === 'active'}
+          urgent={remaining < bundle * 0.1 && data.sim.status === 'active'}
         />
-        <StatBox
-          label="Status"
-          value={data.sim.status === 'active' ? 'Active' : 'Inactive'}
-          urgent={data.sim.status !== 'active'}
-        />
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-storm/40">Bundle</p>
+          {editingBundle ? (
+            <div className="mt-1 flex items-center gap-1">
+              <input
+                type="number"
+                min={1}
+                value={bundleDraft}
+                onChange={(e) => setBundleDraft(Number(e.target.value))}
+                className="w-20 rounded border border-sky-200 px-1.5 py-0.5 text-xs text-midnight focus:outline-2 focus:outline-offset-1 focus:outline-sky-primary"
+                autoFocus
+              />
+              <span className="text-[10px] text-storm/40">MB</span>
+              <button
+                type="button"
+                onClick={handleSaveBundle}
+                className="cursor-pointer rounded bg-sky-primary px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-sky-deep"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingBundle(false)}
+                className="cursor-pointer rounded px-1.5 py-0.5 text-[10px] text-storm/50 hover:text-storm/70"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => { setBundleDraft(bundle); setEditingBundle(true) }}
+              className="group mt-1 flex w-full items-center gap-1"
+            >
+              <span className="text-base font-bold font-display tabular-nums text-midnight">
+                {bundle.toLocaleString()} MB
+              </span>
+              <svg className="h-3 w-3 text-storm/30 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              </svg>
+            </button>
+          )}
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-storm/40">Expiry</p>
+          {editingExpiry ? (
+            <div className="mt-1 flex items-center gap-1">
+              <input
+                type="date"
+                value={expiryDraft}
+                onChange={(e) => setExpiryDraft(e.target.value)}
+                className="w-28 rounded border border-sky-200 px-1.5 py-0.5 text-xs text-midnight focus:outline-2 focus:outline-offset-1 focus:outline-sky-primary"
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={handleSaveExpiry}
+                className="cursor-pointer rounded bg-sky-primary px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-sky-deep"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingExpiry(false)}
+                className="cursor-pointer rounded px-1.5 py-0.5 text-[10px] text-storm/50 hover:text-storm/70"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => { setExpiryDraft(expiry); setEditingExpiry(true) }}
+              className="group mt-1 flex w-full items-center gap-1"
+            >
+              <span className={`text-base font-bold font-display tabular-nums ${data.sim.status === 'active' && new Date(expiry) < new Date() ? 'text-rose' : 'text-midnight'}`}>
+                {expiry ? new Date(expiry).toLocaleDateString() : <span className="text-storm/30 italic">Not set</span>}
+              </span>
+              <svg className="h-3 w-3 text-storm/30 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Data usage percentage curve ── */}
+      <div>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">
+          Data usage overview
+        </p>
+        <DataUsageCurve used={data.sim.usage_mb} total={bundle} dailyUsage={data.daily_usage} />
       </div>
 
       {/* ── Usage chart ── */}

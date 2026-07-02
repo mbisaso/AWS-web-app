@@ -1,22 +1,28 @@
 import csv
 import datetime
+import logging
 import math
 import os
 
 import requests
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.core.mail import send_mail
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.conf import settings
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
+
+logger = logging.getLogger(__name__)
 
 from .models import Station, StationStatus, SensorReading
 from .serializers import (
@@ -525,3 +531,44 @@ def export(request):
         'count':   len(serializer.data),
         'data':    serializer.data,
     })
+
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def sim_alert_email(request):
+    """Send an email notification for a SIM alert (low data or expiring)."""
+    import json
+    try:
+        body = json.loads(request.body) if isinstance(request.body, bytes) else request.data
+    except (ValueError, AttributeError):
+        body = request.data
+
+    alert_type = body.get('type', 'unknown')
+    station_name = body.get('station_name', 'Unknown Station')
+    message = body.get('message', '')
+    explanation = body.get('explanation', '')
+
+    subject = f'[AWS Monitor] SIM Alert — {station_name}'
+    email_message = (
+        f'Station: {station_name}\n'
+        f'Alert Type: {alert_type}\n'
+        f'Message: {message}\n'
+        f'Details: {explanation}\n\n'
+        f'Please log in to the dashboard at {request.build_absolute_uri("/")}dashboard/sim-management '
+        f'to take action.'
+    )
+
+    try:
+        sent = send_mail(
+            subject=subject,
+            message=email_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[settings.NOTIFICATION_EMAIL],
+            fail_silently=False,
+        )
+        logger.info(f'SIM alert email sent to {settings.NOTIFICATION_EMAIL}: {sent} email(s)')
+        return JsonResponse({'success': True, 'sent': sent, 'to': settings.NOTIFICATION_EMAIL})
+    except Exception as e:
+        logger.error(f'Failed to send SIM alert email: {e}')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)

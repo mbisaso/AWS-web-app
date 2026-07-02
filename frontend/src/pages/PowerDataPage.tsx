@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { PowerMetricKey, Station } from '../types'
 import { POWER_METRIC_CONFIG } from '../types'
 import { fetchStations } from '../api/stations'
@@ -31,6 +32,7 @@ function today(): string {
 }
 
 export function PowerDataPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [stations, setStations] = useState<Station[]>([])
   const [stationsLoading, setStationsLoading] = useState(true)
 
@@ -40,11 +42,19 @@ export function PowerDataPage() {
       .finally(() => setStationsLoading(false))
   }, [])
 
-  const [stationId, setStationId] = useState<string | null>(null)
-  const [metric, setMetric] = useState<PowerMetricKey>('volt_batt')
-  const [dateFrom, setDateFrom] = useState(() => daysAgo(7))
-  const [dateTo, setDateTo] = useState(() => today())
-  const [showSecondary, setShowSecondary] = useState(false)
+  const urlStation = searchParams.get('station')
+  const urlMetric = searchParams.get('metric') as PowerMetricKey | null
+  const urlDateFrom = searchParams.get('from')
+  const urlDateTo = searchParams.get('to')
+  const urlSecondary = searchParams.get('secondary')
+
+  const [stationId, setStationId] = useState<string | null>(urlStation)
+  const [metric, setMetric] = useState<PowerMetricKey>(
+    urlMetric && urlMetric in POWER_METRIC_CONFIG ? urlMetric : 'volt_batt',
+  )
+  const [dateFrom, setDateFrom] = useState(urlDateFrom ?? daysAgo(7))
+  const [dateTo, setDateTo] = useState(urlDateTo ?? today())
+  const [showSecondary, setShowSecondary] = useState(urlSecondary === '1')
 
   const hours = useMemo(
     () => Math.max(1, Math.ceil((Date.parse(dateTo) - Date.parse(dateFrom)) / 3600000)),
@@ -55,6 +65,18 @@ export function PowerDataPage() {
 
   const currentReading = readings.length ? readings[readings.length - 1] : null
   const secondaryKey = SECONDARY_MAP[metric] ?? null
+
+  /* ── Sync state to URL ── */
+  useEffect(() => {
+    const next = new URLSearchParams()
+    if (stationId) next.set('station', stationId)
+    if (metric !== 'volt_batt') next.set('metric', metric)
+    if (dateFrom !== daysAgo(7)) next.set('from', dateFrom)
+    if (dateTo !== today()) next.set('to', dateTo)
+    if (showSecondary) next.set('secondary', '1')
+    setSearchParams(next, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stationId, metric, dateFrom, dateTo, showSecondary])
 
   const handleDateChange = useCallback((from: string, to: string) => {
     setDateFrom(from)

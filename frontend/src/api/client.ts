@@ -7,6 +7,7 @@ export const apiClient = axios.create({
 })
 
 let _accessToken: string | null = null
+let onLogout: (() => void) | null = null
 
 export function setAuthToken(token: string | null) {
   _accessToken = token
@@ -15,6 +16,10 @@ export function setAuthToken(token: string | null) {
   } else {
     delete apiClient.defaults.headers.common['Authorization']
   }
+}
+
+export function setLogoutHandler(handler: () => void) {
+  onLogout = handler
 }
 
 // Request interceptor to attach the in-memory access token dynamically
@@ -94,10 +99,14 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest)
       } catch (refreshError) {
         processQueue(refreshError, null)
-        // Clear auth and redirect to login
-        localStorage.removeItem('auth')
-        setAuthToken(null)
-        window.location.href = '/login'
+        // Clear auth and call onLogout or redirect to login
+        if (onLogout) {
+          onLogout()
+        } else {
+          localStorage.removeItem('auth')
+          setAuthToken(null)
+          window.location.href = '/login'
+        }
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
@@ -106,4 +115,4 @@ apiClient.interceptors.response.use(
 
     return Promise.reject(error)
   }
-)
+)
