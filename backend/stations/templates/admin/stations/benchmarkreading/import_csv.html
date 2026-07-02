@@ -1,0 +1,17 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+  <p>
+    Upload a CSV whose first column is the reading time (ISO datetime or
+    <code>YYYY-MM-DD HH:MM:SS</code>). Remaining columns should be named to match:
+    <code>temperature, humidity, pressure, wind_speed, wind_direction, rain, light, soil_moisture</code>.
+    Missing columns are skipped; unrecognized columns are ignored.
+  </p>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <table>
+      {{ form.as_table }}
+    </table>
+    <input type="submit" value="Import" class="default">
+  </form>
+{% endblock %}

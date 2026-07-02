@@ -206,4 +206,32 @@ class SensorReading(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.station_code} @ {self.timestamp}" 
+        return f"{self.station_code} @ {self.timestamp}"
+
+
+class BenchmarkReading(models.Model):
+    """
+    Reference-data reading imported from an external meteorological
+    authority (e.g. UNMA) — used to benchmark AWS station accuracy.
+    """
+    source    = models.CharField(max_length=100, default='UNMA')
+    location  = models.CharField(max_length=100, blank=True)
+    timestamp = models.DateTimeField(db_index=True)
+
+    temperature    = models.FloatField(null=True, blank=True)
+    humidity       = models.FloatField(null=True, blank=True)
+    pressure       = models.FloatField(null=True, blank=True)
+    wind_speed     = models.FloatField(null=True, blank=True)
+    wind_direction = models.FloatField(null=True, blank=True)
+    rain           = models.FloatField(null=True, blank=True)
+    light          = models.FloatField(null=True, blank=True)
+    soil_moisture  = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['source', 'timestamp'], name='idx_benchmark_source_time'),
+        ]
+
+    def __str__(self):
+        return f"{self.source} @ {self.timestamp}" 

@@ -24,13 +24,14 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 logger = logging.getLogger(__name__)
 
-from .models import Station, StationStatus, SensorReading
+from .models import Station, StationStatus, SensorReading, BenchmarkReading
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
     SensorReadingChartSerializer,
     PowerChartSerializer,
     StationSerializer,
+    BenchmarkReadingSerializer,
 )
 
 
@@ -572,3 +573,126 @@ def sim_alert_email(request):
     except Exception as e:
         logger.error(f'Failed to send SIM alert email: {e}')
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ─────────────────────────────────────────────────────────
+# API: Benchmark endpoint — AWS vs UNMA reference data
+# ─────────────────────────────────────────────────────────
+
+def _nearest_pairs(aws_points, benchmark_points, max_delta=datetime.timedelta(minutes=30)):
+    """
+    Matches each AWS (timestamp, value) point to the closest benchmark
+    point within max_delta. Returns a list of (aws_value, benchmark_value)
+    pairs. Benchmark points assumed small enough for a linear scan.
+    """
+    pairs = []
+    for aws_ts, aws_val in aws_points:
+        best = None
+        best_delta = None
+        for bench_ts, bench_val in benchmark_points:
+            delta = abs(aws_ts - bench_ts)
+            if delta <= max_delta and (best_delta is None or delta < best_delta):
+                best = bench_val
+                best_delta = delta
+        if best is not None:
+            pairs.append((aws_val, best))
+    return pairs
+
+
+def _pearson_correlation(xs, ys):
+    """Pearson correlation coefficient for two equal-length lists. None if undefined."""
+    n = len(xs)
+    if n < 2:
+        return None
+
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+
+    cov = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
+    var_x = sum((x - mean_x) ** 2 for x in xs)
+    var_y = sum((y - mean_y) ** 2 for y in ys)
+
+    denom = math.sqrt(var_x * var_y)
+    return (cov / denom) if denom else None
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def benchmark(request):
+    """
+    Compares AWS station readings against benchmark (e.g. UNMA) reference
+    data for a given metric over a time window.
+    """
+    station_id = request.query_params.get('station_id')
+    if not station_id:
+        return api_response(error='station_id is required', status_code=400)
+
+    hours  = int(request.query_params.get('hours', 168))
+    metric = request.query_params.get('metric', 'temperature')
+    source = request.query_params.get('source')
+
+    valid_metrics = {
+        'temperature', 'humidity', 'pressure', 'wind_speed',
+        'wind_direction', 'rain', 'light', 'soil_moisture',
+    }
+    if metric not in valid_metrics:
+        return api_response(error=f'Invalid metric: {metric}', status_code=400)
+
+    since = timezone.now() - datetime.timedelta(hours=hours)
+
+    aws_qs = SensorReading.objects.filter(
+        station_code=station_id,
+        timestamp__gte=since,
+    ).order_by('timestamp').values('timestamp', metric)
+
+    bench_qs = BenchmarkReading.objects.filter(
+        timestamp__gte=since,
+    ).order_by('timestamp')
+    if source:
+        bench_qs = bench_qs.filter(source=source)
+    bench_qs = bench_qs.values('timestamp', 'source', metric)
+
+    aws_readings = [
+        {'timestamp': r['timestamp'], 'value': r[metric]}
+        for r in aws_qs if r[metric] is not None
+    ]
+    benchmark_readings = [
+        {'timestamp': r['timestamp'], 'value': r[metric], 'source': r['source']}
+        for r in bench_qs if r[metric] is not None
+    ]
+
+    aws_values = [r['value'] for r in aws_readings]
+    benchmark_values = [r['value'] for r in benchmark_readings]
+
+    aws_points = [(r['timestamp'], r['value']) for r in aws_readings]
+    bench_points = [(r['timestamp'], r['value']) for r in benchmark_readings]
+    pairs = _nearest_pairs(aws_points, bench_points)
+
+    mae = (
+        sum(abs(a - b) for a, b in pairs) / len(pairs)
+        if pairs else None
+    )
+    correlation = (
+        _pearson_correlation([a for a, _ in pairs], [b for _, b in pairs])
+        if len(pairs) >= 2 else None
+    )
+
+    stats = {
+        'aws_avg':             (sum(aws_values) / len(aws_values)) if aws_values else None,
+        'aws_min':             min(aws_values) if aws_values else None,
+        'aws_max':             max(aws_values) if aws_values else None,
+        'benchmark_avg':       (sum(benchmark_values) / len(benchmark_values)) if benchmark_values else None,
+        'benchmark_min':       min(benchmark_values) if benchmark_values else None,
+        'benchmark_max':       max(benchmark_values) if benchmark_values else None,
+        'mean_absolute_error': mae,
+        'correlation':         correlation,
+    }
+
+    return api_response(data={
+        'station_id':          station_id,
+        'hours':               hours,
+        'metric':              metric,
+        'aws_readings':        aws_readings,
+        'benchmark_readings':  benchmark_readings,
+        'stats':               stats,
+    })

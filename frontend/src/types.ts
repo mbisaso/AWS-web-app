@@ -180,3 +180,35 @@ export interface StatsResult {
   percent_change: number | null
   sparkline: number[]
 }
+
+// Benchmarking — AWS station readings vs UNMA reference data
+export interface BenchmarkReading {
+  timestamp: string
+  value: number
+  source: string
+}
+
+export interface AwsReading {
+  timestamp: string
+  value: number
+}
+
+export interface BenchmarkStats {
+  aws_avg: number | null
+  aws_min: number | null
+  aws_max: number | null
+  benchmark_avg: number | null
+  benchmark_min: number | null
+  benchmark_max: number | null
+  mean_absolute_error: number | null
+  correlation: number | null
+}
+
+export interface BenchmarkData {
+  station_id: string
+  hours: number
+  metric: string
+  aws_readings: AwsReading[]
+  benchmark_readings: BenchmarkReading[]
+  stats: BenchmarkStats
+}
