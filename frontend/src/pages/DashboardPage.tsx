@@ -82,19 +82,15 @@ export function DashboardPage() {
     return { atRisk, healthy, unknown }
   }, [stations])
 
-  /* ── SIM fleet summary (fetched once) ── */
+  /* ── SIM fleet data (single fetch) ── */
   const [simSummary, setSimSummary] = useState<SimFleetSummary | null>(null)
+  const [simSparklines, setSimSparklines] = useState<{ name: string; usage: number[] }[]>([])
   const simFetched = useRef(false)
   useEffect(() => {
     if (simFetched.current) return
     simFetched.current = true
-    fetchSimManagementData().then((d) => setSimSummary(d.summary)).catch(() => {})
-  }, [])
-
-  /* ── SIM data usage sparklines (top 4) ── */
-  const [simSparklines, setSimSparklines] = useState<{ name: string; usage: number[] }[]>([])
-  useEffect(() => {
     fetchSimManagementData().then((d) => {
+      setSimSummary(d.summary)
       const top = d.sims.slice(0, 4)
       setSimSparklines(top.map((s) => ({
         name: s.station_name ?? `SIM #${s.sim.id}`,
@@ -129,7 +125,14 @@ export function DashboardPage() {
           </div>
 
           <div className="space-y-8 px-6 py-6">
-            {isLoading && <p className="text-sm text-slate-500">Loading stations…</p>}
+            {isLoading && (
+              <div className="flex items-center justify-center py-12">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-sky-primary border-t-transparent" />
+                  <p className="text-sm font-medium text-storm/50">Loading stations…</p>
+                </div>
+              </div>
+            )}
             {error && <p className="text-sm text-rose-600">{error}</p>}
 
             {!isLoading && !error && (
@@ -363,8 +366,7 @@ export function DashboardPage() {
         {/*  ADDED SECTIONS (SIM, Power, Weather Analysis)  */}
         {/* ════════════════════════════════════════════════ */}
 
-        {!isLoading && !error && dashData && !dashLoading && (
-          <div className="mt-6 space-y-6">
+        <div className="mt-6 space-y-6">
 
             {/* ── Quick stat cards ── */}
             <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -601,7 +603,6 @@ export function DashboardPage() {
             </section>
 
           </div>
-        )}
       </main>
 
     </div>

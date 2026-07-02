@@ -116,9 +116,13 @@ export function SimManagementPage() {
     const updated = await topUpSim(topUpTarget.sim.id, amountMb, note)
     setTopUpResult({ simId: updated.sim.id, newRemaining: updated.sim.bundle_size_mb - updated.sim.usage_mb })
     setTopUpTarget(null)
-    /* Update selected SIM if it was the one topped up */
+    /* Update URL param if it was the one topped up */
     if (selectedSim?.sim.id === updated.sim.id) {
-      setSelectedSim(updated)
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('selected', String(updated.sim.id))
+        return next
+      }, { replace: true })
     }
     /* Clear success toast after a few seconds */
     setTimeout(() => setTopUpResult(null), 4000)
