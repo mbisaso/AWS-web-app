@@ -16,10 +16,6 @@ export function DataUsageCurve({ used, total, dailyUsage }: DataUsageCurveProps)
     : pct >= 70 ? '#F59E0B'
     : '#22C55E'
 
-  const curveBg =
-    pct >= 90 ? 'from-rose-500/20 to-rose-500/5'
-    : pct >= 70 ? 'from-amber-500/20 to-amber-500/5'
-    : 'from-emerald-500/20 to-emerald-500/5'
 
   const curvePoints = useMemo(() => {
     if (!dailyUsage.length) return null

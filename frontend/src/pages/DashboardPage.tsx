@@ -36,7 +36,7 @@ function predictionOf(station: Station): string {
 
 export function DashboardPage() {
   const navigate = useNavigate()
-  const { data: dashData, isLoading: dashLoading } = useDashboardData()
+  const { data: dashData } = useDashboardData()
   const [stations, setStations] = useState<Station[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)

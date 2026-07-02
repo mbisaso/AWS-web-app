@@ -32,7 +32,6 @@ export function SimDetailPanel({ data, isLoading, onTopUp, onClose }: SimDetailP
   if (!data) return null
 
   /* ── Local editing state ── */
-  const [dirty, setDirty] = useState(0) // bump to re-sync local state from data
 
   const [phone, setPhone] = useState(data.sim.phone_number)
   const [editingPhone, setEditingPhone] = useState(false)

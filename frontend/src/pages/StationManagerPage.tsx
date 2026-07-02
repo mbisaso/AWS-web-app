@@ -401,7 +401,3 @@ function SummaryPill({ label, value, color, bg }: { label: string; value: number
     </div>
   )
 }
-
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-storm/40 text-left" scope="col">{children}</th>
-}

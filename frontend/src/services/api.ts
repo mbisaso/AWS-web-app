@@ -1193,8 +1193,6 @@ function saveSimMetadata(meta: Record<number, SimMetadata>): void {
   localStorage.setItem(SIM_STORAGE_KEY, JSON.stringify(meta))
 }
 
-let simIdCounter = 1000
-
 function generateDailyUsage(days: number): DailyUsage[] {
   const now = new Date()
   const usage: DailyUsage[] = []

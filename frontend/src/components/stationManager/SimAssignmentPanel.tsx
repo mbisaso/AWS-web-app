@@ -20,7 +20,7 @@ export function SimAssignmentPanel({ station, onUpdate }: SimAssignmentPanelProp
   const [editPhone, setEditPhone] = useState(false)
   const [editPhoneValue, setEditPhoneValue] = useState('')
 
-  const currentSim = sims.find((s) => s.id === station.sim_id)
+  const currentSim = sims.find((s) => s.station_id === station.id)
 
   const handleSavePhone = async () => {
     if (!currentSim) return
@@ -47,10 +47,10 @@ export function SimAssignmentPanel({ station, onUpdate }: SimAssignmentPanelProp
   }
 
   const handleUnassign = async () => {
-    if (!station.sim_id) return
+    if (!currentSim) return
     setAssigning(true)
     try {
-      await unassignSimFromStation(station.sim_id)
+      await unassignSimFromStation(currentSim.id)
       const updated = await fetchSimAccounts()
       setSims(updated)
       onUpdate()
@@ -177,7 +177,7 @@ export function SimAssignmentPanel({ station, onUpdate }: SimAssignmentPanelProp
             disabled={assigning}
           >
             <option value="">Select a SIM…</option>
-            {sims.filter((s) => !s.station_id || s.id === station.sim_id).map((s) => (
+            {sims.filter((s) => !s.station_id || s.station_id === station.id).map((s) => (
               <option key={s.id} value={s.id}>{s.carrier} · {s.iccid.slice(-6)} ({s.usage_mb}/{s.bundle_size_mb} MB)</option>
             ))}
           </select>
