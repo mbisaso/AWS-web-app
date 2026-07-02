@@ -26,6 +26,8 @@ export function RegisterPage() {
     role: 'viewer' as Role,
   })
 
+  const [showPassword, setShowPassword] = useState(false)
+  const [showPassword2, setShowPassword2] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
   const [globalError, setGlobalError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -182,17 +184,38 @@ export function RegisterPage() {
                 <label className="mb-2 block text-sm font-medium text-[#1a2332]" htmlFor="password">
                   Password <span className="text-rose-500">*</span>
                 </label>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  className={inputClass('password')}
-                  placeholder="Create password"
-                  value={form.password}
-                  onChange={set('password')}
-                />
+                <div className="relative">
+                  <input
+                    id="password"
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    autoComplete="new-password"
+                    className={`${inputClass('password')} pr-11`}
+                    placeholder="Create password"
+                    value={form.password}
+                    onChange={set('password')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
                 <p className="mt-1 text-xs text-slate-500">At least 8 characters. Cannot be entirely numeric.</p>
                 {fieldErrors.password?.map((e) => <p key={e} className="mt-1 text-xs text-rose-600">{e}</p>)}
               </div>
@@ -200,21 +223,42 @@ export function RegisterPage() {
                 <label className="mb-2 block text-sm font-medium text-[#1a2332]" htmlFor="password2">
                   Confirm password <span className="text-rose-500">*</span>
                 </label>
-                <input
-                  id="password2"
-                  name="password2"
-                  type="password"
-                  required
-                  autoComplete="new-password"
-                  className={`w-full rounded-2xl border bg-[#f8fafc] px-4 py-3 text-sm outline-none transition focus:bg-white ${
-                    form.password2 && form.password !== form.password2
-                      ? 'border-rose-400 focus:border-rose-500'
-                      : 'border-slate-200 focus:border-[#0a6ebd]'
-                  }`}
-                  placeholder="Repeat password"
-                  value={form.password2}
-                  onChange={set('password2')}
-                />
+                <div className="relative">
+                  <input
+                    id="password2"
+                    name="password2"
+                    type={showPassword2 ? 'text' : 'password'}
+                    required
+                    autoComplete="new-password"
+                    className={`w-full rounded-2xl border bg-[#f8fafc] px-4 py-3 pr-11 text-sm outline-none transition focus:bg-white ${
+                      form.password2 && form.password !== form.password2
+                        ? 'border-rose-400 focus:border-rose-500'
+                        : 'border-slate-200 focus:border-[#0a6ebd]'
+                    }`}
+                    placeholder="Repeat password"
+                    value={form.password2}
+                    onChange={set('password2')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword2((s) => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    tabIndex={-1}
+                  >
+                    {showPassword2 ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                        <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                        <line x1="1" y1="1" x2="23" y2="23" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
                 {form.password2 && form.password !== form.password2 && (
                   <p className="mt-1 text-xs text-rose-600">Passwords do not match.</p>
                 )}

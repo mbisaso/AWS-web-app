@@ -12,9 +12,10 @@ export type StationStatus = 'online' | 'partial' | 'offline'
 export type AlertType =
   | 'station_offline'
   | 'sensor_anomaly'
-  | 'sim_expiring'
   | 'low_battery'
   | 'threshold_breach'
+  | 'sim_expiry'
+  | 'sim_low_data'
 
 export type AlertSeverity = 'critical' | 'warning' | 'info'
 
@@ -76,9 +77,10 @@ export interface AlertsDataResponse {
 export const ALERT_TYPE_LABELS: Record<AlertType, string> = {
   station_offline: 'Station Offline',
   sensor_anomaly: 'Sensor Anomaly',
-  sim_expiring: 'SIM Expiry',
   low_battery: 'Low Battery',
   threshold_breach: 'Threshold Breach',
+  sim_expiry: 'SIM Expiry',
+  sim_low_data: 'SIM Low Data',
 }
 
 export const SEVERITY_CONFIG: Record<AlertSeverity, { label: string; dot: string; text: string; bg: string; border: string }> = {
@@ -311,14 +313,6 @@ const ALERT_DEFS: Omit<Alert, 'id'>[] = [
     explanation: 'The humidity sensor at Lake Victoria East exhibited a rapid 16% rise within 5 minutes. This rate of change is 3.8σ above the station\'s typical diurnal variation, suggesting possible sensor condensation or mechanical fault.',
   },
   {
-    type: 'sim_expiring',
-    severity: 'warning',
-    station_name: stationName(9),
-    station_id: 9,
-    message: 'GSM SIM card expires in 14 days. Please arrange replacement.',
-    timestamp: minutesAgo(55),
-  },
-  {
     type: 'low_battery',
     severity: 'warning',
     station_name: stationName(6),
@@ -395,7 +389,17 @@ function generateMockData(): DashboardData {
 export async function fetchDashboardData(): Promise<DashboardData> {
   /* --- MOCK IMPLEMENTATION (development only) --- */
   await new Promise((resolve) => setTimeout(resolve, 600 + Math.random() * 400))
-  return generateMockData()
+  const data = generateMockData()
+
+  try {
+    const { sims } = await fetchSimManagementData()
+    const simAlerts = generateSimAlerts(sims)
+    if (simAlerts.length) {
+      data.alerts = [...simAlerts, ...data.alerts]
+    }
+  } catch { /* SIM alerts are best-effort */ }
+
+  return data
 
   /* --- PRODUCTION IMPLEMENTATION (uncomment when API is ready) ---
   const response = await fetch(`${API_BASE}/dashboard/overview/`, {
@@ -434,12 +438,6 @@ const ALERT_TEMPLATES: Array<{
   { type: 'sensor_anomaly', severity: 'warning', station_id: 7, message: 'Wind speed sensor stuck at 0.0 m/s for 90+ minutes despite gust readings at adjacent stations.', explanation: 'Zero-wind reading sustained for 90+ minutes while stations within 15 km report gusts of 4–7 m/s. The sensor likely has mechanical friction or bearing failure. Anemometer replacement recommended.' },
   { type: 'sensor_anomaly', severity: 'warning', station_id: 10, message: 'Barometric pressure dropped 4.2 hPa in 30 minutes — anomalous rate of change.', explanation: 'A pressure drop of 4.2 hPa in 30 minutes exceeds the 99th percentile for rate-of-change at this station. This may indicate a rapidly approaching convective system or sensor malfunction. Cross-referencing with satellite imagery recommended.' },
   { type: 'sensor_anomaly', severity: 'warning', station_id: 4, message: 'Solar radiation sensor reading 1,200 W/m² at 18:00 — physically implausible for this hour.', explanation: 'Solar radiation of 1,200 W/m² at 18:00 local time is above the theoretical maximum for this latitude and time of day. The sensor may be partially shaded by debris or the signal conditioner may be drifting.' },
-
-  /* ── Warning: sim_expiring ── */
-  { type: 'sim_expiring', severity: 'warning', station_id: 9, message: 'SIM card expires in 14 days. Please arrange replacement.' },
-  { type: 'sim_expiring', severity: 'warning', station_id: 6, message: 'Data bundle depleted — 0 MB of 500 MB monthly allocation remaining.' },
-  { type: 'sim_expiring', severity: 'warning', station_id: 3, message: 'SIM card expires in 7 days. Automatic renewal may fail — manual intervention required.' },
-  { type: 'sim_expiring', severity: 'warning', station_id: 2, message: 'Roaming charges exceeded: $12.40 incurred in the last 24 hours above plan limit.' },
 
   /* ── Warning: low_battery ── */
   { type: 'low_battery', severity: 'warning', station_id: 6, message: 'Battery voltage at 11.8V — below nominal operating range (12.0–14.2V).' },
@@ -523,6 +521,15 @@ export async function fetchAlertsData(params?: AlertFilterParams): Promise<Alert
   await new Promise((resolve) => setTimeout(resolve, 300 + Math.random() * 200))
 
   let filtered = getMockAlerts()
+
+  /* ── Merge live SIM alerts ── */
+  try {
+    const { sims } = await fetchSimManagementData()
+    const simAlerts = generateSimAlerts(sims)
+    if (simAlerts.length) {
+      filtered = [...simAlerts, ...filtered]
+    }
+  } catch { /* SIM alerts are best-effort */ }
 
   if (params) {
     if (params.severity && params.severity !== 'all') {
@@ -1065,4 +1072,950 @@ export async function fetchAnalysisData(params: {
   }
 
   return { readings, stats }
+}
+
+/* ─────────────────────────────────────────────
+   Station & User Management — types & mock data
+   ───────────────────────────────────────────── */
+
+export type ConnectivityType = 'gsm' | 'lora' | 'wifi'
+
+export type UserRole = 'admin' | 'analyst' | 'technician' | 'public_viewer'
+
+export interface StationManagementData {
+  id: number
+  name: string
+  station_code: string
+  location: string
+  latitude: number
+  longitude: number
+  status: StationStatus
+  connectivity: ConnectivityType
+  expected_interval_minutes: number
+  sensors: string[]
+  notes: string
+  phone_number: string
+  created_at: string
+  is_active: boolean
+}
+
+export interface UserAccount {
+  id: number
+  name: string
+  email: string
+  role: UserRole
+  status: 'active' | 'invited' | 'disabled'
+  last_login: string | null
+  created_at: string
+}
+
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Admin',
+  analyst: 'Analyst',
+  technician: 'Technician',
+  public_viewer: 'Public Viewer',
+}
+
+export const CONNECTIVITY_LABELS: Record<ConnectivityType, string> = {
+  gsm: 'GSM',
+  lora: 'LoRa',
+  wifi: 'Wi-Fi',
+}
+
+/* ── SIM types (stubs — real backend pending) ── */
+
+export interface SimAccount {
+  id: number
+  carrier: string
+  iccid: string
+  phone_number: string
+  bundle_size_mb: number
+  usage_mb: number
+  expiry_date: string
+  status: 'active' | 'inactive'
+  station_id: number | null
+}
+
+export interface TopUpRecord {
+  id: number
+  sim_id: number
+  amount_mb: number
+  added_by: string
+  note: string
+  created_at: string
+  new_total_mb: number
+}
+
+export interface DailyUsage {
+  date: string
+  usage_mb: number
+}
+
+export interface SimManagementData {
+  sim: SimAccount
+  station_name: string | null
+  station_id: number | null
+  estimated_days_remaining: number | null
+  projected_expiry_date: string | null
+  forecast_confidence_note: string
+  daily_usage: DailyUsage[]
+  top_up_history: TopUpRecord[]
+}
+
+export interface SimFleetSummary {
+  total_active: number
+  expiring_soon_count: number
+  expiring_soon_threshold_days: number
+  expired_count: number
+  total_remaining_mb: number
+}
+
+/* ── localStorage-backed SIM persistence ── */
+
+const SIM_STORAGE_KEY = 'aws_sim_metadata'
+
+interface SimMetadata {
+  phone_number: string
+  bundle_size_mb: number
+  expiry_date: string
+}
+
+function loadSimMetadata(): Record<number, SimMetadata> {
+  try {
+    const raw = localStorage.getItem(SIM_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveSimMetadata(meta: Record<number, SimMetadata>): void {
+  localStorage.setItem(SIM_STORAGE_KEY, JSON.stringify(meta))
+}
+
+let simIdCounter = 1000
+
+function generateDailyUsage(days: number): DailyUsage[] {
+  const now = new Date()
+  const usage: DailyUsage[] = []
+  for (let i = days; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(d.getDate() - i)
+    usage.push({
+      date: d.toISOString().split('T')[0],
+      usage_mb: Math.round((Math.random() * 8 + 2) * 10) / 10,
+    })
+  }
+  return usage
+}
+
+function estimateProjection(usage: DailyUsage[], remaining: number) {
+  if (usage.length < 3 || remaining <= 0) {
+    return { days: null, date: null, note: 'Insufficient data for projection' }
+  }
+  const vals = usage.map((d) => d.usage_mb)
+  const avg = vals.reduce((s, v) => s + v, 0) / vals.length
+  if (avg <= 0) return { days: null, date: null, note: 'No usage data available' }
+
+  const days = Math.round(remaining / avg)
+  const projDate = new Date()
+  projDate.setDate(projDate.getDate() + days)
+  const variance = vals.reduce((s, v) => s + (v - avg) ** 2, 0) / vals.length
+  const confidence = variance / avg < 3 ? 'stable' : 'fluctuating'
+
+  return {
+    days,
+    date: projDate.toISOString().split('T')[0],
+    note: `Based on average daily consumption of ${avg.toFixed(1)} MB/day (${confidence} usage pattern)`,
+  }
+}
+
+export async function fetchSimAccounts(): Promise<SimAccount[]> {
+  const meta = loadSimMetadata()
+  const stations = await getStationsForSims()
+  return stations.map((s) => {
+    const m = meta[s.id] ?? { phone_number: '', bundle_size_mb: 512, expiry_date: '' }
+    return {
+      id: s.id + 1000,
+      carrier: 'Airtel',
+      iccid: `896101${String(s.id).padStart(13, '0')}`,
+      phone_number: m.phone_number || `+2567${String(70 + (s.id % 10)).padStart(2, '0')}${String(s.id).padStart(6, '0')}`,
+      bundle_size_mb: m.bundle_size_mb,
+      usage_mb: Math.round(m.bundle_size_mb * (0.15 + Math.random() * 0.7)),
+      expiry_date: m.expiry_date || new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0],
+      status: 'active',
+      station_id: s.id,
+    }
+  })
+}
+
+async function getStationsForSims(): Promise<{ id: number; name: string; station_id: string; location: string }[]> {
+  try {
+    const { fetchStations: realFetch } = await import('../api/stations')
+    const real = await realFetch()
+    if (real.length > 0) return real.map((s) => ({ id: s.id, name: s.name, station_id: s.station_id, location: s.location }))
+  } catch { /* fall through to mock */ }
+  return STATION_DEFS.map((s) => ({ id: s.id, name: s.name, station_id: s.station_code, location: s.location }))
+}
+
+export async function createSimAccount(_data: Partial<SimAccount>): Promise<SimAccount> {
+  throw new Error('Not implemented — backend pending')
+}
+
+export async function updateSimAccount(id: number, data: Partial<SimAccount>): Promise<SimAccount> {
+  const meta = loadSimMetadata()
+  const stationId = id - 1000
+  const existing = meta[stationId] ?? { phone_number: '', bundle_size_mb: 512, expiry_date: '' }
+  if (data.phone_number !== undefined) existing.phone_number = data.phone_number
+  if (data.bundle_size_mb !== undefined) existing.bundle_size_mb = data.bundle_size_mb
+  if (data.expiry_date !== undefined) existing.expiry_date = data.expiry_date
+  meta[stationId] = existing
+  saveSimMetadata(meta)
+
+  const sims = await fetchSimAccounts()
+  const sim = sims.find((s) => s.id === id)
+  if (!sim) throw new Error('SIM not found')
+  return sim
+}
+
+export async function assignSimToStation(_simId: number, _stationId: number): Promise<void> {
+  throw new Error('Not implemented — backend pending')
+}
+
+export async function unassignSimFromStation(_simId: number): Promise<void> {
+  throw new Error('Not implemented — backend pending')
+}
+
+export async function fetchSimManagementData(): Promise<{
+  sims: SimManagementData[]
+  summary: SimFleetSummary
+}> {
+  const sims = await fetchSimAccounts()
+  const stations = await getStationsForSims()
+  const stationMap = new Map(stations.map((s) => [s.id, s]))
+
+  const simData: SimManagementData[] = sims.map((sim) => {
+    const station = stationMap.get(sim.station_id ?? -1)
+    const dailyUsage = generateDailyUsage(30)
+    const remaining = Math.max(0, sim.bundle_size_mb - sim.usage_mb)
+    const proj = estimateProjection(dailyUsage, remaining)
+    return {
+      sim,
+      station_name: station?.name ?? null,
+      station_id: sim.station_id,
+      estimated_days_remaining: proj.days,
+      projected_expiry_date: proj.date,
+      forecast_confidence_note: proj.note,
+      daily_usage: dailyUsage,
+      top_up_history: [],
+    }
+  })
+
+  const summary: SimFleetSummary = {
+    total_active: simData.filter((s) => s.sim.status === 'active').length,
+    expiring_soon_count: simData.filter(
+      (s) => s.estimated_days_remaining !== null && s.estimated_days_remaining <= 7 && s.estimated_days_remaining > 0,
+    ).length,
+    expiring_soon_threshold_days: 7,
+    expired_count: simData.filter((s) => s.sim.status !== 'active' || (s.estimated_days_remaining !== null && s.estimated_days_remaining <= 0)).length,
+    total_remaining_mb: simData.reduce((acc, s) => acc + Math.max(0, s.sim.bundle_size_mb - s.sim.usage_mb), 0),
+  }
+
+  return { sims: simData, summary }
+}
+
+export async function topUpSim(simId: number, amountMb: number, _note: string): Promise<SimManagementData> {
+  const meta = loadSimMetadata()
+  const stationId = simId - 1000
+  const existing = meta[stationId] ?? { phone_number: '', bundle_size_mb: 512, expiry_date: '' }
+  existing.bundle_size_mb += amountMb
+  meta[stationId] = existing
+  saveSimMetadata(meta)
+
+  const all = await fetchSimManagementData()
+  const updated = all.sims.find((s) => s.sim.id === simId)
+  if (!updated) throw new Error('SIM not found')
+  resetSimAlert(simId)
+  return updated
+}
+
+/* ── SIM Alert Engine ──
+   Detects low-data and expiring-SIM conditions every poll cycle.
+   Tracks sent alerts in localStorage to avoid duplicates.
+   Re-alerts every 3 hours until the condition is resolved.
+   ───────────────────────────────────────────── */
+
+const SIM_ALERT_TRACKER_KEY = 'aws_sim_alert_sent'
+const SIM_ALERT_REPEAT_MS = 3 * 60 * 60 * 1000 // 3 hours
+const SIM_LOW_DATA_THRESHOLD = 0.10 // 10% remaining
+
+interface SimAlertTracker {
+  [key: string]: number // key: `${simId}_${type}`, value: last-sent timestamp
+}
+
+function loadSimAlertTracker(): SimAlertTracker {
+  try {
+    return JSON.parse(localStorage.getItem(SIM_ALERT_TRACKER_KEY) || '{}')
+  } catch {
+    return {}
+  }
+}
+
+function saveSimAlertTracker(t: SimAlertTracker): void {
+  localStorage.setItem(SIM_ALERT_TRACKER_KEY, JSON.stringify(t))
+}
+
+export function resetSimAlert(simId: number): void {
+  const tracker = loadSimAlertTracker()
+  Object.keys(tracker).forEach((key) => {
+    if (key.startsWith(`${simId}_`)) delete tracker[key]
+  })
+  saveSimAlertTracker(tracker)
+}
+
+let simAlertIdCounter = 1000
+
+export function generateSimAlerts(sims: SimManagementData[]): Alert[] {
+  const tracker = loadSimAlertTracker()
+  const now = Date.now()
+  const alerts: Alert[] = []
+
+  for (const entry of sims) {
+    if (entry.sim.status !== 'active') continue
+
+    const remaining = entry.sim.bundle_size_mb - entry.sim.usage_mb
+    const remainingPct = entry.sim.bundle_size_mb > 0
+      ? remaining / entry.sim.bundle_size_mb
+      : 0
+
+    const stationId = entry.station_id ?? 0
+    const station = stationName(stationId)
+    const simId = entry.sim.id
+
+    /* ── Low data check ── */
+    if (remainingPct <= SIM_LOW_DATA_THRESHOLD && remaining > 0) {
+      const key = `${simId}_sim_low_data`
+      const lastSent = tracker[key]
+      if (!lastSent || (now - lastSent) >= SIM_ALERT_REPEAT_MS) {
+        alerts.push({
+          id: ++simAlertIdCounter,
+          type: 'sim_low_data',
+          severity: remainingPct <= 0.05 ? 'critical' : 'warning',
+          station_name: station,
+          station_id: stationId,
+          message: `SIM data bundle critically low — ${remaining.toLocaleString()} MB remaining (${(remainingPct * 100).toFixed(0)}% of ${entry.sim.bundle_size_mb.toLocaleString()} MB bundle). Top up to maintain connectivity.`,
+          timestamp: new Date().toISOString(),
+          explanation: `Station "${station}" has used ${((1 - remainingPct) * 100).toFixed(0)}% of its data bundle. Only ${remaining.toLocaleString()} MB remain. Without a top-up, the station will lose cellular connectivity and stop transmitting weather data.`,
+          related_url: '/dashboard/sim-management',
+        })
+        tracker[key] = now
+      }
+    }
+
+    /* ── Expiry check — ≤ 7 days ── */
+    if (entry.sim.expiry_date) {
+      const daysToExpiry = Math.ceil(
+        (new Date(entry.sim.expiry_date).getTime() - now) / 86_400_000,
+      )
+      if (daysToExpiry <= 7 && daysToExpiry > 0) {
+        const key = `${simId}_sim_expiry`
+        const lastSent = tracker[key]
+        if (!lastSent || (now - lastSent) >= SIM_ALERT_REPEAT_MS) {
+          alerts.push({
+            id: ++simAlertIdCounter,
+            type: 'sim_expiry',
+            severity: daysToExpiry <= 2 ? 'critical' : 'warning',
+            station_name: station,
+            station_id: stationId,
+            message: `SIM data bundle expires in ${daysToExpiry} day${daysToExpiry !== 1 ? 's' : ''} (${new Date(entry.sim.expiry_date).toLocaleDateString()}). Renew to prevent service interruption.`,
+            timestamp: new Date().toISOString(),
+            explanation: `The data bundle for station "${station}" expires on ${new Date(entry.sim.expiry_date).toLocaleDateString()}. The SIM will stop transmitting once the plan expires unless renewed or topped up.`,
+            related_url: '/dashboard/sim-management',
+          })
+          tracker[key] = now
+        }
+      }
+    }
+  }
+
+  if (alerts.length) saveSimAlertTracker(tracker)
+  return alerts
+}
+
+export function sendSimEmailAlert(alert: Alert): void {
+  /* Store sent email in localStorage for the UI to show */
+  const key = 'aws_sim_email_log'
+  try {
+    const log = JSON.parse(localStorage.getItem(key) || '[]')
+    log.push({
+      alert_id: alert.id,
+      type: alert.type,
+      station_name: alert.station_name,
+      message: alert.message,
+      sent_at: new Date().toISOString(),
+    })
+    localStorage.setItem(key, JSON.stringify(log))
+  } catch { /* ignore */ }
+
+  /* Attempt to send via backend email endpoint — fire-and-forget */
+  import('../api/client').then(({ apiClient }) => {
+    apiClient.post('/api/sim-alert-email/', {
+      type: alert.type,
+      station_name: alert.station_name,
+      station_id: alert.station_id,
+      message: alert.message,
+      explanation: alert.explanation,
+    }).catch(() => { /* email sending is best-effort */ })
+  })
+}
+
+/* ── Shared notification badge counter ──
+   SimManagementPage publishes the count into localStorage.
+   DashboardSidebar reads it to show a badge on the nav link.   */
+
+const SIM_BADGE_KEY = 'aws_sim_alert_badge'
+const SIM_DISMISSED_KEY = 'aws_sim_dismissed_alerts'
+
+export function publishSimAlertCount(count: number): void {
+  try {
+    localStorage.setItem(SIM_BADGE_KEY, String(Math.max(0, count)))
+  } catch { /* ignore */ }
+}
+
+export function getSimAlertCount(): number {
+  try {
+    return Number(localStorage.getItem(SIM_BADGE_KEY)) || 0
+  } catch {
+    return 0
+  }
+}
+
+/* ── Dismissed-alert tracking (survives page refresh) ── */
+
+export function loadDismissedAlertIds(): Set<number> {
+  try {
+    const raw = localStorage.getItem(SIM_DISMISSED_KEY)
+    return new Set<number>(raw ? JSON.parse(raw) : [])
+  } catch {
+    return new Set()
+  }
+}
+
+export function saveDismissedAlertIds(ids: Set<number>): void {
+  try {
+    localStorage.setItem(SIM_DISMISSED_KEY, JSON.stringify(Array.from(ids)))
+  } catch { /* ignore */ }
+}
+
+export function dismissAlert(id: number): Set<number> {
+  const ids = loadDismissedAlertIds()
+  ids.add(id)
+  saveDismissedAlertIds(ids)
+  return ids
+}
+
+export function clearAllDismissedAlerts(): void {
+  try {
+    localStorage.removeItem(SIM_DISMISSED_KEY)
+  } catch { /* ignore */ }
+}
+
+const SENSOR_OPTIONS = ['temperature', 'humidity', 'rainfall', 'wind_speed', 'pressure', 'solar_radiation']
+
+/* ── In-memory mock database ── */
+
+let nextStationId = 100
+let nextUserId = 20
+
+const MOCK_STATIONS: StationManagementData[] = STATION_DEFS.map((s, i) => ({
+  id: s.id,
+  name: s.name,
+  station_code: s.station_code,
+  location: s.location,
+  latitude: s.latitude,
+  longitude: s.longitude,
+  status: s.status,
+  connectivity: (['gsm', 'lora', 'wifi'] as ConnectivityType[])[i % 3],
+  expected_interval_minutes: s.interval,
+  sensors: SENSOR_OPTIONS.slice(0, 3 + (i % 3)),
+  notes: i === 2 ? 'Solar panel replaced March 2026. New charge controller installed.' : '',
+  phone_number: '',
+  created_at: new Date(Date.now() - (30 + i * 45) * 24 * 60 * 60 * 1000).toISOString(),
+  is_active: i !== 8,
+}))
+
+const MOCK_USERS: UserAccount[] = [
+  { id: 1, name: 'Sarah Kintu', email: 'sarah@awsmonitor.ug', role: 'admin', status: 'active', last_login: new Date(Date.now() - 15 * 60000).toISOString(), created_at: new Date(Date.now() - 300 * 86400000).toISOString() },
+  { id: 2, name: 'James Opondo', email: 'james@awsmonitor.ug', role: 'analyst', status: 'active', last_login: new Date(Date.now() - 2 * 3600000).toISOString(), created_at: new Date(Date.now() - 200 * 86400000).toISOString() },
+  { id: 3, name: 'Grace Nabatanzi', email: 'grace@awsmonitor.ug', role: 'technician', status: 'active', last_login: new Date(Date.now() - 24 * 3600000).toISOString(), created_at: new Date(Date.now() - 150 * 86400000).toISOString() },
+  { id: 4, name: 'Peter Mukasa', email: 'peter@awsmonitor.ug', role: 'technician', status: 'active', last_login: new Date(Date.now() - 3 * 86400000).toISOString(), created_at: new Date(Date.now() - 100 * 86400000).toISOString() },
+  { id: 5, name: 'Alice Akello', email: 'alice@awsmonitor.ug', role: 'public_viewer', status: 'active', last_login: new Date(Date.now() - 7 * 86400000).toISOString(), created_at: new Date(Date.now() - 60 * 86400000).toISOString() },
+  { id: 6, name: 'Robert Ssempijja', email: 'robert@awsmonitor.ug', role: 'analyst', status: 'invited', last_login: null, created_at: new Date(Date.now() - 2 * 86400000).toISOString() },
+]
+
+/* ── Station CRUD ── */
+
+export async function fetchStations(): Promise<StationManagementData[]> {
+  await new Promise((r) => setTimeout(r, 300 + Math.random() * 200))
+  return MOCK_STATIONS.filter((s) => s.is_active)
+}
+
+export async function fetchAllStations(): Promise<StationManagementData[]> {
+  await new Promise((r) => setTimeout(r, 200))
+  return [...MOCK_STATIONS]
+}
+
+export async function createStation(data: Partial<StationManagementData>): Promise<StationManagementData> {
+  await new Promise((r) => setTimeout(r, 400 + Math.random() * 200))
+  const station: StationManagementData = {
+    id: nextStationId++,
+    name: data.name ?? 'New Station',
+    station_code: data.station_code ?? `AWS-${String(nextStationId).padStart(3, '0')}`,
+    location: data.location ?? '',
+    latitude: data.latitude ?? 1.5,
+    longitude: data.longitude ?? 32.5,
+    status: 'online',
+    connectivity: data.connectivity ?? 'gsm',
+    expected_interval_minutes: data.expected_interval_minutes ?? 15,
+    sensors: data.sensors ?? [],
+    notes: data.notes ?? '',
+    phone_number: data.phone_number ?? '',
+    created_at: new Date().toISOString(),
+    is_active: true,
+  }
+  MOCK_STATIONS.push(station)
+  return station
+}
+
+export async function updateStation(id: number, data: Partial<StationManagementData>): Promise<StationManagementData> {
+  await new Promise((r) => setTimeout(r, 300 + Math.random() * 200))
+  const idx = MOCK_STATIONS.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Station not found')
+  MOCK_STATIONS[idx] = { ...MOCK_STATIONS[idx], ...data }
+  return MOCK_STATIONS[idx]
+}
+
+export async function decommissionStation(id: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, 200))
+  const idx = MOCK_STATIONS.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Station not found')
+  MOCK_STATIONS[idx].is_active = false
+  MOCK_STATIONS[idx].status = 'offline'
+}
+
+export async function deleteStation(id: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, 300))
+  const idx = MOCK_STATIONS.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Station not found')
+  MOCK_STATIONS.splice(idx, 1)
+}
+
+/* ── User CRUD ── */
+
+export async function fetchUsers(): Promise<UserAccount[]> {
+  await new Promise((r) => setTimeout(r, 300 + Math.random() * 200))
+  return [...MOCK_USERS]
+}
+
+export async function createUser(data: Partial<UserAccount>): Promise<UserAccount> {
+  await new Promise((r) => setTimeout(r, 300 + Math.random() * 200))
+  const user: UserAccount = {
+    id: nextUserId++,
+    name: data.name ?? '',
+    email: data.email ?? '',
+    role: data.role ?? 'analyst',
+    status: 'invited',
+    last_login: null,
+    created_at: new Date().toISOString(),
+  }
+  MOCK_USERS.push(user)
+  return user
+}
+
+export async function updateUser(id: number, data: Partial<UserAccount>): Promise<UserAccount> {
+  await new Promise((r) => setTimeout(r, 300))
+  const idx = MOCK_USERS.findIndex((u) => u.id === id)
+  if (idx === -1) throw new Error('User not found')
+  MOCK_USERS[idx] = { ...MOCK_USERS[idx], ...data }
+  return MOCK_USERS[idx]
+}
+
+export async function disableUser(id: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, 200))
+  const idx = MOCK_USERS.findIndex((u) => u.id === id)
+  if (idx === -1) throw new Error('User not found')
+  MOCK_USERS[idx].status = 'disabled'
+}
+
+export async function deleteUser(id: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, 200))
+  const idx = MOCK_USERS.findIndex((u) => u.id === id)
+  if (idx === -1) throw new Error('User not found')
+  MOCK_USERS.splice(idx, 1)
+}
+
+/* ─────────────────────────────────────────────
+   Reports & Export — types & mock data
+   ───────────────────────────────────────────── */
+
+export type ReportType = 'station_summary' | 'weather_summary' | 'alerts_summary' | 'custom'
+export type ReportFormat = 'pdf' | 'csv'
+export type ReportStatus = 'completed' | 'failed' | 'generating'
+export type ScheduleFrequency = 'daily' | 'weekly' | 'monthly'
+
+export const REPORT_TYPE_LABELS: Record<ReportType, string> = {
+  station_summary: 'Station Summary',
+  weather_summary: 'Weather Summary',
+  alerts_summary: 'Alerts Summary',
+  custom: 'Custom (combination)',
+}
+
+export const REPORT_TYPE_DESCRIPTIONS: Record<ReportType, string> = {
+  station_summary: 'Overview of all stations: status, location, connectivity, last reading time.',
+  weather_summary: 'Temperature, humidity, rainfall, wind speed — averages, min/max, anomaly count.',
+  alerts_summary: 'All alerts in the selected period grouped by severity and type.',
+  custom: 'Pick specific sections from any of the above report types.',
+}
+
+export const SCHEDULE_FREQUENCY_LABELS: Record<ScheduleFrequency, string> = {
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+}
+
+export interface ReportMetricSection {
+  id: string
+  label: string
+  available_in_csv: boolean
+  checked: boolean
+}
+
+export function getDefaultMetricsForType(type: ReportType): ReportMetricSection[] {
+  switch (type) {
+    case 'station_summary':
+      return [
+        { id: 'station_status', label: 'Station status breakdown', available_in_csv: true, checked: true },
+        { id: 'station_connectivity', label: 'Connectivity overview', available_in_csv: true, checked: true },
+        { id: 'station_locations', label: 'Station locations map', available_in_csv: false, checked: true },
+        { id: 'station_last_reading', label: 'Last reading timestamps', available_in_csv: true, checked: true },
+      ]
+    case 'weather_summary':
+      return [
+        { id: 'weather_averages', label: 'Averages (temp, humidity, etc.)', available_in_csv: true, checked: true },
+        { id: 'weather_minmax', label: 'Min / max values', available_in_csv: true, checked: true },
+        { id: 'weather_anomalies', label: 'Anomaly count & details', available_in_csv: true, checked: true },
+        { id: 'weather_chart_temperature', label: 'Temperature trend chart', available_in_csv: false, checked: true },
+        { id: 'weather_chart_rainfall', label: 'Rainfall bar chart', available_in_csv: false, checked: true },
+      ]
+    case 'alerts_summary':
+      return [
+        { id: 'alerts_by_severity', label: 'Alerts by severity', available_in_csv: true, checked: true },
+        { id: 'alerts_by_type', label: 'Alerts by type', available_in_csv: true, checked: true },
+        { id: 'alerts_timeline', label: 'Alert timeline', available_in_csv: true, checked: true },
+        { id: 'alerts_resolution', label: 'Resolution status summary', available_in_csv: true, checked: true },
+      ]
+    case 'custom':
+      return [
+        { id: 'station_status', label: 'Station status breakdown', available_in_csv: true, checked: true },
+        { id: 'weather_averages', label: 'Weather averages', available_in_csv: true, checked: true },
+        { id: 'weather_anomalies', label: 'Weather anomaly count', available_in_csv: true, checked: true },
+        { id: 'power_battery', label: 'Battery level overview', available_in_csv: true, checked: true },
+        { id: 'alerts_by_severity', label: 'Alerts by severity', available_in_csv: true, checked: true },
+        { id: 'weather_chart_temperature', label: 'Temperature trend chart', available_in_csv: false, checked: true },
+      ]
+  }
+}
+
+export interface ReportConfig {
+  type: ReportType
+  station_ids: number[]  // empty = all
+  date_from: string
+  date_to: string
+  format: ReportFormat
+  metrics: string[]  // metric section ids
+}
+
+export interface ReportResult {
+  id: number
+  name: string
+  type: ReportType
+  format: ReportFormat
+  scope_summary: string
+  date_from: string
+  date_to: string
+  generated_at: string
+  generated_by: string
+  status: ReportStatus
+  file_size_bytes: number | null
+  failure_reason: string | null
+}
+
+export interface ScheduledReport {
+  id: number
+  name: string
+  type: ReportType
+  format: ReportFormat
+  scope_summary: string
+  station_ids: number[]
+  date_range_days: number  // e.g. 7 for "last 7 days"
+  metrics: string[]
+  frequency: ScheduleFrequency
+  time_of_day: string  // "HH:MM"
+  recipients: string[]  // email addresses
+  is_active: boolean
+  next_run: string
+  last_run: string | null
+  created_at: string
+}
+
+const MOCK_STATION_NAMES = STATION_DEFS.map((s) => s.name)
+
+/* ── In-memory mock report store ── */
+let nextReportId = 200
+let nextScheduleId = 50
+
+const MOCK_REPORT_HISTORY: ReportResult[] = []
+let MOCK_SCHEDULES: ScheduledReport[] = []
+
+/* ── Seed mock data lazily ── */
+let seeded = false
+function seedReports() {
+  if (seeded) return
+  seeded = true
+
+  const types: ReportType[] = ['station_summary', 'weather_summary', 'alerts_summary', 'custom']
+  const formats: ReportFormat[] = ['pdf', 'csv']
+  const users = ['Sarah Kintu', 'James Opondo', 'Scheduled', 'Scheduled']
+
+  for (let i = 0; i < 18; i++) {
+    const type = types[i % types.length]
+    const format = formats[i % 2]
+    const daysAgo = i * 3 + Math.floor(Math.random() * 2)
+    const status: ReportStatus = i === 6 ? 'failed' : i === 12 ? 'failed' : 'completed'
+    const stationIds = i % 3 === 0 ? [] : [1, 2, 3].slice(0, (i % 3) + 1)
+    const stationNames = stationIds.length
+      ? stationIds.map((id) => MOCK_STATION_NAMES[id - 1] ?? `Station #${id}`).join(', ')
+      : 'All stations'
+
+    MOCK_REPORT_HISTORY.push({
+      id: nextReportId++,
+      name: `${REPORT_TYPE_LABELS[type]} — ${new Date(Date.now() - daysAgo * 86400000).toLocaleDateString()}`,
+      type,
+      format,
+      scope_summary: stationNames,
+      date_from: new Date(Date.now() - (daysAgo + 7) * 86400000).toISOString().slice(0, 10),
+      date_to: new Date(Date.now() - daysAgo * 86400000).toISOString().slice(0, 10),
+      generated_at: new Date(Date.now() - daysAgo * 86400000).toISOString(),
+      generated_by: users[i % users.length],
+      status,
+      file_size_bytes: status === 'completed' ? Math.round(100_000 + Math.random() * 900_000) : null,
+      failure_reason: status === 'failed' ? (i === 6 ? 'No data in selected range' : 'Data source temporarily unavailable') : null,
+    })
+  }
+
+  /* Reverse so most recent first */
+  MOCK_REPORT_HISTORY.reverse()
+
+  MOCK_SCHEDULES = [
+    {
+      id: nextScheduleId++,
+      name: 'Daily station health report',
+      type: 'station_summary',
+      format: 'pdf',
+      scope_summary: 'All stations',
+      station_ids: [],
+      date_range_days: 1,
+      metrics: getDefaultMetricsForType('station_summary').map((m) => m.id),
+      frequency: 'daily',
+      time_of_day: '07:00',
+      recipients: ['ops@awsmonitor.ug', 'supervisor@example.com'],
+      is_active: true,
+      next_run: new Date(Date.now() + 6 * 3600000).toISOString(),
+      last_run: new Date(Date.now() - 18 * 3600000).toISOString(),
+      created_at: new Date(Date.now() - 60 * 86400000).toISOString(),
+    },
+    {
+      id: nextScheduleId++,
+      name: 'Weekly weather summary',
+      type: 'weather_summary',
+      format: 'pdf',
+      scope_summary: 'Northern region stations',
+      station_ids: [1, 2, 3],
+      date_range_days: 7,
+      metrics: getDefaultMetricsForType('weather_summary').map((m) => m.id),
+      frequency: 'weekly',
+      time_of_day: '09:00',
+      recipients: ['analysts@awsmonitor.ug'],
+      is_active: true,
+      next_run: new Date(Date.now() + 3 * 86400000).toISOString(),
+      last_run: new Date(Date.now() - 4 * 86400000).toISOString(),
+      created_at: new Date(Date.now() - 45 * 86400000).toISOString(),
+    },
+    {
+      id: nextScheduleId++,
+      name: 'Monthly alerts digest',
+      type: 'alerts_summary',
+      format: 'csv',
+      scope_summary: 'All stations',
+      station_ids: [],
+      date_range_days: 30,
+      metrics: getDefaultMetricsForType('alerts_summary').filter((m) => m.available_in_csv).map((m) => m.id),
+      frequency: 'monthly',
+      time_of_day: '06:00',
+      recipients: ['compliance@awsmonitor.ug'],
+      is_active: false,
+      next_run: new Date(Date.now() + 20 * 86400000).toISOString(),
+      last_run: new Date(Date.now() - 10 * 86400000).toISOString(),
+      created_at: new Date(Date.now() - 90 * 86400000).toISOString(),
+    },
+  ]
+}
+
+/* ── Public API ── */
+
+export async function generateReport(config: ReportConfig): Promise<ReportResult> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 800 + Math.random() * 1200))
+
+  /* Simulate empty-data detection */
+  const hasData = config.date_from < new Date().toISOString().slice(0, 10)
+  if (!hasData) {
+    const result: ReportResult = {
+      id: nextReportId++,
+      name: `${REPORT_TYPE_LABELS[config.type]} — ${new Date().toLocaleDateString()}`,
+      type: config.type,
+      format: config.format,
+      scope_summary: config.station_ids.length
+        ? config.station_ids.map((id) => MOCK_STATION_NAMES[id - 1] ?? `Station #${id}`).join(', ')
+        : 'All stations',
+      date_from: config.date_from,
+      date_to: config.date_to,
+      generated_at: new Date().toISOString(),
+      generated_by: 'Sarah Kintu',
+      status: 'failed',
+      file_size_bytes: null,
+      failure_reason: 'No data in selected range',
+    }
+    MOCK_REPORT_HISTORY.unshift(result)
+    return result
+  }
+
+  const stationNames = config.station_ids.length
+    ? config.station_ids.map((id) => MOCK_STATION_NAMES[id - 1] ?? `Station #${id}`).join(', ')
+    : 'All stations'
+
+  const result: ReportResult = {
+    id: nextReportId++,
+    name: `${REPORT_TYPE_LABELS[config.type]} — ${new Date().toLocaleDateString()}`,
+    type: config.type,
+    format: config.format,
+    scope_summary: stationNames,
+    date_from: config.date_from,
+    date_to: config.date_to,
+    generated_at: new Date().toISOString(),
+    generated_by: 'Sarah Kintu',
+    status: 'completed',
+    file_size_bytes: config.format === 'pdf'
+      ? Math.round(200_000 + Math.random() * 800_000)
+      : Math.round(30_000 + Math.random() * 70_000),
+    failure_reason: null,
+  }
+  MOCK_REPORT_HISTORY.unshift(result)
+  return result
+}
+
+export async function checkForEmptyData(_config: ReportConfig): Promise<{ empty: boolean; message: string | null }> {
+  await new Promise((r) => setTimeout(r, 100 + Math.random() * 100))
+  /* Randomly warn ~15% of the time for demo */
+  const empty = Math.random() < 0.15
+  return {
+    empty,
+    message: empty ? 'No readings found for this station in the selected range. The report will indicate no data available.' : null,
+  }
+}
+
+export async function fetchReportHistory(params?: {
+  type?: ReportType | 'all'
+  status?: ReportStatus | 'all'
+  search?: string
+  date_from?: string
+  date_to?: string
+  page?: number
+  page_size?: number
+}): Promise<{ history: ReportResult[]; total: number }> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 200 + Math.random() * 100))
+
+  let list = [...MOCK_REPORT_HISTORY]
+  if (params?.type && params.type !== 'all') list = list.filter((r) => r.type === params.type)
+  if (params?.status && params.status !== 'all') list = list.filter((r) => r.status === params.status)
+  if (params?.search) {
+    const q = params.search.toLowerCase()
+    list = list.filter((r) => r.name.toLowerCase().includes(q) || r.scope_summary.toLowerCase().includes(q))
+  }
+  if (params?.date_from) list = list.filter((r) => r.date_from >= params.date_from!)
+  if (params?.date_to) list = list.filter((r) => r.date_to <= params.date_to!)
+
+  const total = list.length
+  const page = params?.page ?? 1
+  const pageSize = params?.page_size ?? 10
+  const paged = list.slice((page - 1) * pageSize, page * pageSize)
+
+  return { history: paged, total }
+}
+
+export async function fetchScheduleList(): Promise<ScheduledReport[]> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 150 + Math.random() * 100))
+  return [...MOCK_SCHEDULES]
+}
+
+export async function createSchedule(data: Partial<ScheduledReport>): Promise<ScheduledReport> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 300 + Math.random() * 200))
+  const schedule: ScheduledReport = {
+    id: nextScheduleId++,
+    name: data.name ?? 'Untitled schedule',
+    type: data.type ?? 'station_summary',
+    format: data.format ?? 'pdf',
+    scope_summary: data.scope_summary ?? 'All stations',
+    station_ids: data.station_ids ?? [],
+    date_range_days: data.date_range_days ?? 7,
+    metrics: data.metrics ?? [],
+    frequency: data.frequency ?? 'daily',
+    time_of_day: data.time_of_day ?? '08:00',
+    recipients: data.recipients ?? [],
+    is_active: data.is_active ?? true,
+    next_run: data.next_run ?? new Date(Date.now() + 86400000).toISOString(),
+    last_run: null,
+    created_at: new Date().toISOString(),
+  }
+  MOCK_SCHEDULES.push(schedule)
+  return schedule
+}
+
+export async function updateSchedule(id: number, data: Partial<ScheduledReport>): Promise<ScheduledReport> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 200 + Math.random() * 100))
+  const idx = MOCK_SCHEDULES.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Schedule not found')
+  MOCK_SCHEDULES[idx] = { ...MOCK_SCHEDULES[idx], ...data }
+  return MOCK_SCHEDULES[idx]
+}
+
+export async function deleteSchedule(id: number): Promise<void> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 150 + Math.random() * 100))
+  const idx = MOCK_SCHEDULES.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Schedule not found')
+  MOCK_SCHEDULES.splice(idx, 1)
+}
+
+export async function toggleSchedule(id: number): Promise<ScheduledReport> {
+  seedReports()
+  await new Promise((r) => setTimeout(r, 100))
+  const idx = MOCK_SCHEDULES.findIndex((s) => s.id === id)
+  if (idx === -1) throw new Error('Schedule not found')
+  MOCK_SCHEDULES[idx].is_active = !MOCK_SCHEDULES[idx].is_active
+  return MOCK_SCHEDULES[idx]
 }

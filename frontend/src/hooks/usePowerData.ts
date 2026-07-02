@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PowerChart } from '../types'
 import { fetchPowerHistory } from '../api/stations'
+import { getCachedData, setCachedData } from '../services/cache'
+
+function cacheKey(params: { stationId: string | null; hours: number }): string {
+  return `power_${params.stationId ?? 'none'}_${params.hours}`
+}
 
 export interface UsePowerDataResult {
   data: PowerChart[]
@@ -9,12 +14,12 @@ export interface UsePowerDataResult {
   retry: () => void
 }
 
-export function usePowerData(params: {
-  stationId: string | null
-  hours: number
-}): UsePowerDataResult {
-  const [data, setData] = useState<PowerChart[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+export function usePowerData(params: { stationId: string | null; hours: number }): UsePowerDataResult {
+  const ck = cacheKey(params)
+  const cached = getCachedData<PowerChart[]>(ck)
+
+  const [data, setData] = useState<PowerChart[]>(cached ?? [])
+  const [isLoading, setIsLoading] = useState(!cached && !!params.stationId)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const paramsRef = useRef(params)
@@ -37,6 +42,7 @@ export function usePowerData(params: {
         if (abort.signal.aborted) return
         setData(result)
         setError(null)
+        setCachedData(ck, result)
       } catch (err) {
         if (abort.signal.aborted) return
         setError(err instanceof Error ? err.message : 'Failed to load power data')
@@ -51,13 +57,14 @@ export function usePowerData(params: {
         if (abort.signal.aborted) return
         setData(result)
         setError(null)
-      } catch {
-        /* silent */
-      }
+        setCachedData(cacheKey(paramsRef.current), result)
+      } catch { /* silent */ }
     }
 
-    setIsLoading(true)
-    setError(null)
+    if (!cached) {
+      setIsLoading(true)
+      setError(null)
+    }
     const startTimer = setTimeout(() => load(), 0)
     const interval = window.setInterval(() => backgroundLoad(), 30_000)
 
@@ -66,6 +73,7 @@ export function usePowerData(params: {
       clearInterval(interval)
       abort.abort()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.stationId, params.hours, retryCount])
 
   const retry = useCallback(() => {

@@ -12,7 +12,7 @@ export function StatsSection() {
   const { ref, isVisible } = useScrollReveal({ threshold: 0.3 })
 
   return (
-    <section className="border-t border-sky-100 bg-gradient-to-b from-sky-soft to-white py-20 lg:py-24">
+    <section id="platform" className="border-t border-sky-100 bg-gradient-to-b from-sky-soft to-white py-20 lg:py-24">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         {/* Section header */}
         <div className="mx-auto max-w-xl text-center">

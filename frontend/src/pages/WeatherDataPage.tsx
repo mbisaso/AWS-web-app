@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { SensorMetricKey, SensorReadingChart, Station } from '../types'
 import { SENSOR_METRIC_CONFIG } from '../types'
 import { fetchStations } from '../api/stations'
 import { useWeatherData } from '../hooks/useWeatherData'
-import { Sidebar } from '../components/Sidebar'
+import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { StationSensorSelector } from '../components/weatherData/StationSensorSelector'
 import { ReadingSummaryCard } from '../components/weatherData/ReadingSummaryCard'
 import { HistoricalChart } from '../components/weatherData/HistoricalChart'
@@ -96,6 +97,7 @@ function WeatherContent({
 
 /* ── Main page ── */
 export function WeatherDataPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [stations, setStations] = useState<Station[]>([])
   const [stationsLoading, setStationsLoading] = useState(true)
 
@@ -105,15 +107,55 @@ export function WeatherDataPage() {
       .finally(() => setStationsLoading(false))
   }, [])
 
-  const [stationId, setStationId] = useState<string | null>(null)
-  const [metricKey, setMetricKey] = useState<SensorMetricKey>('temperature')
-  const [dateFrom, setDateFrom] = useState(() => daysAgo(7))
-  const [dateTo, setDateTo] = useState(() => today())
+  const urlStation = searchParams.get('station')
+  const urlMetric = searchParams.get('metric') as SensorMetricKey | null
+  const urlDateFrom = searchParams.get('from')
+  const urlDateTo = searchParams.get('to')
+
+  const [stationId, setStationId] = useState<string | null>(urlStation)
+
+  // Sync URL param → state when navigating from another page
+  useEffect(() => {
+    if (urlStation && urlStation !== stationId) {
+      setStationId(urlStation)
+    }
+  }, [urlStation]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [metricKey, setMetricKey] = useState<SensorMetricKey>(
+    urlMetric && SENSOR_METRICS.includes(urlMetric) ? urlMetric : 'temperature',
+  )
+  const [dateFrom, setDateFrom] = useState(urlDateFrom ?? daysAgo(7))
+  const [dateTo, setDateTo] = useState(urlDateTo ?? today())
+
+  const handleStationChange = useCallback((id: string | null) => {
+    setStationId(id)
+    const next = new URLSearchParams()
+    if (id) next.set('station', id)
+    if (metricKey !== 'temperature') next.set('metric', metricKey)
+    if (dateFrom !== daysAgo(7)) next.set('from', dateFrom)
+    if (dateTo !== today()) next.set('to', dateTo)
+    setSearchParams(next, { replace: true })
+  }, [setSearchParams, metricKey, dateFrom, dateTo])
 
   const hours = useMemo(
     () => Math.max(1, Math.ceil((Date.parse(dateTo) - Date.parse(dateFrom)) / 3600000)),
     [dateFrom, dateTo],
   )
+
+  /* ── Sync metric/date to URL ── */
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    if (stationId) next.set('station', stationId)
+    else { next.delete('station') }
+    if (metricKey !== 'temperature') next.set('metric', metricKey)
+    else { next.delete('metric') }
+    if (dateFrom !== daysAgo(7)) next.set('from', dateFrom)
+    else { next.delete('from') }
+    if (dateTo !== today()) next.set('to', dateTo)
+    else { next.delete('to') }
+    setSearchParams(next, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metricKey, dateFrom, dateTo])
 
   const handleDateChange = useCallback((from: string, to: string) => {
     setDateFrom(from)
@@ -122,7 +164,7 @@ export function WeatherDataPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-mist lg:h-screen lg:flex-row">
-      <Sidebar />
+      <DashboardSidebar />
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}
@@ -143,7 +185,7 @@ export function WeatherDataPage() {
           <StationSensorSelector
             stations={stations}
             selectedStationId={stationId}
-            onStationChange={setStationId}
+            onStationChange={handleStationChange}
             selectedMetric={metricKey}
             onMetricChange={setMetricKey}
             dateFrom={dateFrom}

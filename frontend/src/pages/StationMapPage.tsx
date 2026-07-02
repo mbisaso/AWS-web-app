@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import {
   APIProvider,
   Map,
@@ -8,67 +7,103 @@ import {
   useApiLoadingStatus,
   useMap,
 } from '@vis.gl/react-google-maps'
-import { useDashboardData } from '../hooks/useDashboardData'
+import { fetchStations } from '../api/stations'
 import { type StationReading, formatRelativeTime } from '../services/api'
-import { Sidebar } from '../components/Sidebar'
+import type { Station } from '../types'
+import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { StatusBadge } from '../components/dashboard/StatusIndicator'
 import { StationMarker } from '../components/stationMap/StationMarker'
 import { StatusFilterBar, type StationFilter } from '../components/stationMap/StatusFilterBar'
 import { StationListPanel } from '../components/stationMap/StationListPanel'
 
-const CUSTOM_MAP_ID = 'YOUR_MAP_ID'
 
-function hasActiveAlerts(
-  station: StationReading,
-  alerts: { station_name: string }[],
-): boolean {
-  return alerts.some(
-    (a) =>
-      a.station_name.startsWith(station.station_code) ||
-      a.station_name.includes(station.name.split(' ')[0]),
-  )
+function toStationReading(stations: Station[]): StationReading[] {
+  const statusMap: Record<string, 'online' | 'partial' | 'offline'> = {
+    full: 'online', partial: 'partial', down: 'offline',
+  }
+
+  return stations.map((s) => {
+    const rawStatus = s.status?.status ?? 'down'
+    const lastSeen = s.status?.last_updated ?? new Date().toISOString()
+    const elapsed = Date.now() - new Date(lastSeen).getTime()
+    const isStale = elapsed > s.expected_interval_minutes * 60 * 1000 * 2
+
+    return {
+      id: s.id,
+      name: s.name,
+      station_code: s.station_id,
+      location: s.location,
+      latitude: s.latitude ?? 0,
+      longitude: s.longitude ?? 0,
+      status: statusMap[rawStatus] ?? 'offline',
+      temperature: null,
+      humidity: null,
+      rainfall: null,
+      wind_speed: null,
+      pressure: null,
+      last_seen: lastSeen,
+      expected_interval_minutes: s.expected_interval_minutes,
+      is_stale: isStale,
+    }
+  })
 }
 
-/* ── Page ── */
 
 export function StationMapPage() {
-  const { data, isLoading, error, retry } = useDashboardData()
+  const [allStations, setAllStations] = useState<StationReading[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [retryTrigger, setRetryTrigger] = useState(0)
+
+  const retry = useCallback(() => setRetryTrigger((c) => c + 1), [])
+
+  /* ── Fetch real station data ── */
+  useEffect(() => {
+    async function load() {
+      setIsLoading(true)
+      try {
+        const stn = await fetchStations()
+        setAllStations(toStationReading(stn))
+        setError(null)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Failed to load station data')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    load()
+  }, [retryTrigger])
 
   const [filter, setFilter] = useState<StationFilter>('all')
   const [selectedStation, setSelectedStation] = useState<StationReading | null>(null)
+  const [detailStation, setDetailStation] = useState<StationReading | null>(null)
   const [isListOpen, setIsListOpen] = useState(true)
   const [recenterCount, setRecenterCount] = useState(0)
 
-  /* ── Determine which stations have alerts ── */
-  const alertStationIds = useMemo(() => {
-    if (!data) return new Set<number>()
-    return new Set(
-      data.stations.filter((s) => hasActiveAlerts(s, data.alerts)).map((s) => s.id),
-    )
-  }, [data])
+  /* ── Alerting not available (no real alerts API) ── */
+  const alertStationIds = useMemo(() => new Set<number>(), [])
 
   /* ── Filtered stations ── */
   const filteredStations = useMemo(() => {
-    if (!data) return []
-    let result = data.stations.filter((s) => s.latitude && s.longitude)
+    let result = allStations.filter((s) => s.latitude && s.longitude)
 
     if (filter === 'online') result = result.filter((s) => s.status === 'online')
     else if (filter === 'offline') result = result.filter((s) => s.status !== 'online')
     else if (filter === 'fault') result = result.filter((s) => alertStationIds.has(s.id))
 
     return result
-  }, [data, filter, alertStationIds])
+  }, [allStations, filter, alertStationIds])
 
   /* ── Filter counts ── */
   const filterCounts = useMemo(() => {
-    const allPlotted = data?.stations.filter((s) => s.latitude && s.longitude) ?? []
+    const allPlotted = allStations.filter((s) => s.latitude && s.longitude)
     return {
       all: allPlotted.length,
       online: allPlotted.filter((s) => s.status === 'online').length,
       offline: allPlotted.filter((s) => s.status !== 'online').length,
       fault: alertStationIds.size,
     }
-  }, [data, alertStationIds])
+  }, [allStations, alertStationIds])
 
   const handleSelect = useCallback((station: StationReading | null) => {
     setSelectedStation(station)
@@ -82,20 +117,20 @@ export function StationMapPage() {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
 
   /* ── Loading: no data yet ── */
-  if (isLoading && !data) {
+  if (isLoading && allStations.length === 0) {
     return (
       <div className="flex h-screen bg-mist">
-        <Sidebar />
+        <DashboardSidebar />
         <MapSkeleton />
       </div>
     )
   }
 
   /* ── Error: fetch failed, no cached data ── */
-  if (error && !data) {
+  if (error && allStations.length === 0) {
     return (
       <div className="flex h-screen bg-mist">
-        <Sidebar />
+        <DashboardSidebar />
         <div className="flex flex-1 items-center justify-center">
           <div className="max-w-md px-6 text-center">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose-50">
@@ -122,7 +157,7 @@ export function StationMapPage() {
   if (!apiKey || apiKey === 'YOUR_API_KEY_HERE') {
     return (
       <div className="flex h-screen bg-mist">
-        <Sidebar />
+        <DashboardSidebar />
         <div className="flex flex-1 items-center justify-center">
           <div className="max-w-md px-6 text-center">
             <h2 className="text-lg font-semibold text-midnight font-display">
@@ -149,51 +184,56 @@ export function StationMapPage() {
   }
 
   /* ── Main render ── */
-  const hasPlottedStations = data && data.stations.some((s) => s.latitude && s.longitude)
+  const hasPlottedStations = allStations.some((s) => s.latitude && s.longitude)
 
   return (
-    <div className="flex h-screen bg-mist">
-      <Sidebar />
+    <>
+      <div className="flex h-screen bg-mist">
+        <DashboardSidebar />
 
-      <main className="flex min-w-0 flex-1">
-        <div className="relative flex-1">
-          <APIProvider apiKey={apiKey}>
-            {!hasPlottedStations && data ? (
-              <EmptyMapState
-                onAdd={() => {
-                  /* future: navigate to station registration */
-                }}
-              />
-            ) : (
-              <MapScreenContent
-                stations={filteredStations}
-                allStations={data?.stations ?? []}
-                alertStationIds={alertStationIds}
-                selectedStation={selectedStation}
-                onSelect={handleSelect}
-                filter={filter}
-                filterCounts={filterCounts}
-                onFilterChange={setFilter}
-                onRecenter={handleRecenter}
-                recenterCount={recenterCount}
-              />
-            )}
-          </APIProvider>
-        </div>
+        <main className="flex min-w-0 flex-1">
+          <div className="relative flex-1">
+            <APIProvider apiKey={apiKey}>
+              {!hasPlottedStations && !isLoading ? (
+                <EmptyMapState
+                  onAdd={() => {
+                    /* future: navigate to station registration */
+                  }}
+                />
+              ) : (
+                <MapScreenContent
+                  stations={filteredStations}
+                  allStations={allStations}
+                  alertStationIds={alertStationIds}
+                  selectedStation={selectedStation}
+                  onSelect={handleSelect}
+                  onViewDetails={setDetailStation}
+                  filter={filter}
+                  filterCounts={filterCounts}
+                  onFilterChange={setFilter}
+                  onRecenter={handleRecenter}
+                  recenterCount={recenterCount}
+                />
+              )}
+            </APIProvider>
+          </div>
 
-        <StationListPanel
-          stations={filteredStations}
-          totalCount={
-            data?.stations.filter((s) => s.latitude && s.longitude).length ?? 0
-          }
-          selectedId={selectedStation?.id ?? null}
-          alertIds={alertStationIds}
-          onSelect={handleSelect}
-          isOpen={isListOpen}
-          onToggle={() => setIsListOpen((o) => !o)}
-        />
-      </main>
-    </div>
+          <StationListPanel
+            stations={filteredStations}
+            totalCount={
+              allStations.filter((s) => s.latitude && s.longitude).length
+            }
+            selectedId={selectedStation?.id ?? null}
+            alertIds={alertStationIds}
+            onSelect={handleSelect}
+            isOpen={isListOpen}
+            onToggle={() => setIsListOpen((o) => !o)}
+          />
+        </main>
+      </div>
+
+      {detailStation && <StationDetailDialog station={detailStation} onClose={() => setDetailStation(null)} />}
+    </>
   )
 }
 
@@ -205,6 +245,7 @@ function MapScreenContent({
   alertStationIds,
   selectedStation,
   onSelect,
+  onViewDetails,
   filter,
   filterCounts,
   onFilterChange,
@@ -216,6 +257,7 @@ function MapScreenContent({
   alertStationIds: Set<number>
   selectedStation: StationReading | null
   onSelect: (s: StationReading | null) => void
+  onViewDetails: (s: StationReading) => void
   filter: StationFilter
   filterCounts: Record<StationFilter, number>
   onFilterChange: (f: StationFilter) => void
@@ -252,12 +294,13 @@ function MapScreenContent({
       )}
 
       <Map
-        mapId={CUSTOM_MAP_ID}
         className="h-full w-full"
         defaultZoom={7}
         defaultCenter={{ lat: 1.5, lng: 32.5 }}
         gestureHandling="greedy"
-        disableDefaultUI
+        streetViewControl={false}
+        fullscreenControl={false}
+        mapTypeControl={false}
         clickableIcons={false}
         onClick={() => onSelect(null)}
       >
@@ -267,6 +310,7 @@ function MapScreenContent({
           alertStationIds={alertStationIds}
           selectedStation={selectedStation}
           onSelect={onSelect}
+          onViewDetails={onViewDetails}
           recenterCount={recenterCount}
         />
       </Map>
@@ -297,6 +341,7 @@ function MapView({
   alertStationIds,
   selectedStation,
   onSelect,
+  onViewDetails,
   recenterCount,
 }: {
   stations: StationReading[]
@@ -304,6 +349,7 @@ function MapView({
   alertStationIds: Set<number>
   selectedStation: StationReading | null
   onSelect: (s: StationReading | null) => void
+  onViewDetails: (s: StationReading) => void
   recenterCount: number
 }) {
   const map = useMap()
@@ -357,7 +403,7 @@ function MapView({
           onCloseClick={() => onSelect(null)}
           pixelOffset={[0, -18]}
         >
-          <InfoWindowContent station={selectedStation} />
+          <InfoWindowContent station={selectedStation} onViewDetails={onViewDetails} />
         </InfoWindow>
       )}
     </>
@@ -366,7 +412,7 @@ function MapView({
 
 /* ── InfoWindow content ── */
 
-function InfoWindowContent({ station }: { station: StationReading }) {
+function InfoWindowContent({ station, onViewDetails }: { station: StationReading; onViewDetails: (s: StationReading) => void }) {
   return (
     <div className="min-w-[220px] py-1" aria-label={`Station details for ${station.name}`}>
       <div className="mb-2 flex items-center gap-2">
@@ -377,12 +423,16 @@ function InfoWindowContent({ station }: { station: StationReading }) {
         {station.station_code} &middot; {station.location}
       </p>
 
-      {station.temperature && (
+      {station.temperature ? (
         <div className="mb-2 grid grid-cols-2 gap-x-4 gap-y-1">
-          <SensorReading label="Temp" value={station.temperature ? `${station.temperature.value.toFixed(1)}°C` : '—'} />
+          <SensorReading label="Temp" value={`${station.temperature.value.toFixed(1)}°C`} />
           <SensorReading label="Humidity" value={station.humidity ? `${station.humidity.value.toFixed(0)}%` : '—'} />
           <SensorReading label="Rainfall" value={station.rainfall ? `${station.rainfall.value.toFixed(1)}mm` : '—'} />
           <SensorReading label="Wind" value={station.wind_speed ? `${station.wind_speed.value.toFixed(1)}m/s` : '—'} />
+        </div>
+      ) : (
+        <div className="mb-2 rounded-md bg-slate-50 px-3 py-2 text-[11px] text-storm/50">
+          Awaiting sensor data…
         </div>
       )}
 
@@ -393,12 +443,107 @@ function InfoWindowContent({ station }: { station: StationReading }) {
         )}
       </div>
 
-      <Link
-        to={`/stations/${station.id}`}
-        className="mt-2 inline-flex text-xs font-medium text-sky-primary transition-colors hover:text-sky-deep"
+      <button
+        type="button"
+        onClick={() => onViewDetails(station)}
+        className="mt-2 inline-flex cursor-pointer text-xs font-medium text-sky-primary transition-colors hover:text-sky-deep"
       >
         View station details &rarr;
-      </Link>
+      </button>
+    </div>
+  )
+}
+
+/* ── Station Detail Dialog ── */
+
+function StationDetailDialog({ station, onClose }: { station: StationReading; onClose: () => void }) {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = '' }
+  }, [])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-midnight/40 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl animate-fade-in-up motion-reduce:animate-none">
+        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{station.station_code}</p>
+            <h2 className="mt-1 text-lg font-semibold text-midnight">{station.name}</h2>
+          </div>
+          <button type="button" onClick={onClose} className="cursor-pointer rounded-lg p-1.5 text-storm/40 transition-colors hover:bg-slate-100 hover:text-storm/70" aria-label="Close">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="space-y-5 px-6 py-5">
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge status={station.status} />
+            {station.is_stale && (
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Stale data</span>
+            )}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-xl bg-[#f8fafc] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Location</p>
+              <p className="mt-1 text-sm text-midnight">{station.location || '—'}</p>
+            </div>
+            <div className="rounded-xl bg-[#f8fafc] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Coordinates</p>
+              <p className="mt-1 text-sm text-midnight">
+                {station.latitude != null && station.longitude != null
+                  ? `${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}`
+                  : '—'}
+              </p>
+            </div>
+            <div className="rounded-xl bg-[#f8fafc] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Expected Interval</p>
+              <p className="mt-1 text-sm text-midnight">{station.expected_interval_minutes} min</p>
+            </div>
+            <div className="rounded-xl bg-[#f8fafc] p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Last Seen</p>
+              <p className="mt-1 text-sm text-midnight">{new Date(station.last_seen).toLocaleString()}</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Latest Sensor Readings</p>
+            {station.temperature ? (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-slate-500">Temperature</p>
+                  <p className="mt-0.5 text-sm font-semibold text-midnight">{station.temperature ? `${station.temperature.value.toFixed(1)}°C` : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Humidity</p>
+                  <p className="mt-0.5 text-sm font-semibold text-midnight">{station.humidity ? `${station.humidity.value.toFixed(0)}%` : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Rainfall</p>
+                  <p className="mt-0.5 text-sm font-semibold text-midnight">{station.rainfall ? `${station.rainfall.value.toFixed(1)}mm` : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Wind Speed</p>
+                  <p className="mt-0.5 text-sm font-semibold text-midnight">{station.wind_speed ? `${station.wind_speed.value.toFixed(1)}m/s` : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Pressure</p>
+                  <p className="mt-0.5 text-sm font-semibold text-midnight">{station.pressure ? `${station.pressure.value.toFixed(1)}hPa` : '—'}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-storm/50">No sensor data available yet.</p>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
