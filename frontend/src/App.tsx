@@ -10,6 +10,7 @@ import {
   WeatherAnalysisPage,
   WeatherDataPage,
 } from './pages'
+import { ThingSpeakDemoPage } from './pages/ThingSpeakDemoPage'
 import { AuthProvider } from './context/AuthContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
@@ -69,6 +70,7 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/thingspeak-demo" element={<ThingSpeakDemoPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
