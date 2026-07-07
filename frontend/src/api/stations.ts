@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { ApiEnvelope, PowerChart, SensorReadingChart, Station } from '../types'
+import type { ApiEnvelope, BenchmarkData, PowerChart, SensorReadingChart, Station } from '../types'
 
 export async function fetchStations(): Promise<Station[]> {
   const res = await apiClient.get<ApiEnvelope<Station[]>>('/api/stations/')
@@ -42,4 +42,33 @@ export async function fetchSensorHistory(
     { params: { type: 'sensor', hours, limit } },
   )
   return res.data.data.readings
+}
+
+export async function fetchBenchmark(
+  stationId: string,
+  hours: number,
+  metric: string,
+  source?: string,
+): Promise<BenchmarkData> {
+  const params: Record<string, string | number> = { station_id: stationId, hours, metric }
+  if (source) params.source = source
+  const res = await apiClient.get<ApiEnvelope<BenchmarkData>>('/api/benchmark/', { params })
+  return res.data.data
+}
+
+export async function importBenchmarkCSV(
+  file: File,
+  source: string,
+  location: string,
+): Promise<{ imported: number; skipped: number }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('source', source)
+  formData.append('location', location)
+  const res = await apiClient.post<ApiEnvelope<{ imported: number; skipped: number }>>(
+    '/api/benchmark/import/',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+  return res.data.data
 }

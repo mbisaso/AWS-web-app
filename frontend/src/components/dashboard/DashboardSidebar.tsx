@@ -15,6 +15,7 @@ const NAV_ITEMS: { label: string; href: string; adminOnly?: boolean }[] = [
   { label: "Weather data", href: "/dashboard/weather-data" },
   { label: "Power data", href: "/dashboard/power-data" },
   { label: "Weather analysis", href: "/dashboard/weather-analysis" },
+  { label: "Benchmarking", href: "/benchmarking" },
   { label: "Station map", href: "/stations/map" },
   { label: "Notifications", href: "/dashboard/alerts-center" },
   { label: "SIM management", href: "/dashboard/sim-management" },
@@ -124,6 +125,11 @@ const NAV_ICONS: Record<string, React.ReactNode> = {
     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 3v18h18" />
       <path d="M7 16l4-8 4 4 4-6" />
+    </svg>
+  ),
+  "/benchmarking": (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 17H4v-4M4 13l6-6 4 4 6-6M15 3h6v6" />
     </svg>
   ),
   "/stations/map": (
