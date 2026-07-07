@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { AwsReading, BenchmarkReading, SensorMetricKey, Station } from '../types'
 import { SENSOR_METRIC_CONFIG } from '../types'
-import { fetchStations } from '../api/stations'
+import { fetchStations, importBenchmarkCSV } from '../api/stations'
 import { useBenchmarkData } from '../hooks/useBenchmarkData'
+import { useAuth } from '../context/AuthContext'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { StationSensorSelector } from '../components/weatherData/StationSensorSelector'
 
@@ -386,17 +387,138 @@ function StatComparisonCards({
   )
 }
 
+/* ── Admin-only CSV import panel ── */
+
+interface ImportStatus {
+  kind: 'success' | 'error'
+  message: string
+}
+
+function BenchmarkImportPanel({ onImportSuccess }: { onImportSuccess: () => void }) {
+  const [source, setSource] = useState('UNMA')
+  const [location, setLocation] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [status, setStatus] = useState<ImportStatus | null>(null)
+
+  useEffect(() => {
+    if (!status) return
+    const timer = setTimeout(() => setStatus(null), 5000)
+    return () => clearTimeout(timer)
+  }, [status])
+
+  async function handleImport() {
+    if (!file || isUploading) return
+    setIsUploading(true)
+    setStatus(null)
+    try {
+      const result = await importBenchmarkCSV(file, source, location)
+      setStatus({
+        kind: 'success',
+        message: `Imported ${result.imported} readings (${result.skipped} skipped)`,
+      })
+      setFile(null)
+      onImportSuccess()
+    } catch (err) {
+      setStatus({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Failed to import CSV',
+      })
+    } finally {
+      setIsUploading(false)
+    }
+  }
+
+  return (
+    <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+      <div className="mb-4 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-midnight font-display">Import UNMA Data</h3>
+        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+          Admin only
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-wrap">
+        <div className="min-w-0 sm:w-40">
+          <label htmlFor="benchmark-source" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-storm/40">
+            Source
+          </label>
+          <input
+            id="benchmark-source"
+            type="text"
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-midnight transition-colors focus:border-sky-200 focus:ring-2 focus:ring-sky-soft focus:outline-none"
+          />
+        </div>
+        <div className="min-w-0 sm:w-48">
+          <label htmlFor="benchmark-location" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-storm/40">
+            Location
+          </label>
+          <input
+            id="benchmark-location"
+            type="text"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            placeholder="e.g. Entebbe"
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-midnight transition-colors focus:border-sky-200 focus:ring-2 focus:ring-sky-soft focus:outline-none"
+          />
+        </div>
+        <div className="min-w-0 sm:flex-1">
+          <label htmlFor="benchmark-file" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-storm/40">
+            CSV file
+          </label>
+          <input
+            id="benchmark-file"
+            type="file"
+            accept=".csv"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-midnight file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-storm/70 hover:file:bg-slate-200"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleImport}
+          disabled={!file || isUploading}
+          className="shrink-0 cursor-pointer rounded-xl bg-midnight px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-ocean disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {isUploading ? 'Importing…' : 'Import'}
+        </button>
+      </div>
+
+      {status && (
+        <div
+          className={`mt-4 rounded-xl px-4 py-2.5 text-sm font-medium ${
+            status.kind === 'success'
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              : 'bg-rose-50 text-rose-700 border border-rose-200'
+          }`}
+        >
+          {status.message}
+        </div>
+      )}
+    </section>
+  )
+}
+
 /* ── Sub-component: rendered only when a station is selected ── */
 function BenchmarkContent({
   stationId,
   metricKey,
   hours,
+  onRetryReady,
 }: {
   stationId: string
   metricKey: SensorMetricKey
   hours: number
+  onRetryReady: (retry: () => void) => void
 }) {
   const { data, isLoading, error, retry } = useBenchmarkData({ stationId, hours, metric: metricKey })
+
+  useEffect(() => {
+    onRetryReady(retry)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retry])
 
   if (isLoading && !data) {
     return (
@@ -461,9 +583,11 @@ function BenchmarkContent({
 
 /* ── Main page ── */
 export function BenchmarkPage() {
+  const { role } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const [stations, setStations] = useState<Station[]>([])
   const [stationsLoading, setStationsLoading] = useState(true)
+  const retryRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     fetchStations()
@@ -524,6 +648,14 @@ export function BenchmarkPage() {
     setDateTo(to)
   }, [])
 
+  const handleRetryReady = useCallback((retry: () => void) => {
+    retryRef.current = retry
+  }, [])
+
+  const handleImportSuccess = useCallback(() => {
+    retryRef.current?.()
+  }, [])
+
   return (
     <div className="flex min-h-screen flex-col bg-mist lg:h-screen lg:flex-row">
       <DashboardSidebar />
@@ -556,12 +688,18 @@ export function BenchmarkPage() {
           />
         </section>
 
+        {/* ── CSV import — admin only ── */}
+        {role === 'admin' && (
+          <BenchmarkImportPanel onImportSuccess={handleImportSuccess} />
+        )}
+
         {/* ── Data or prompt ── */}
         {stationId ? (
           <BenchmarkContent
             stationId={stationId}
             metricKey={metricKey}
             hours={hours}
+            onRetryReady={handleRetryReady}
           />
         ) : (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white py-20">

@@ -55,3 +55,20 @@ export async function fetchBenchmark(
   const res = await apiClient.get<ApiEnvelope<BenchmarkData>>('/api/benchmark/', { params })
   return res.data.data
 }
+
+export async function importBenchmarkCSV(
+  file: File,
+  source: string,
+  location: string,
+): Promise<{ imported: number; skipped: number }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('source', source)
+  formData.append('location', location)
+  const res = await apiClient.post<ApiEnvelope<{ imported: number; skipped: number }>>(
+    '/api/benchmark/import/',
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  )
+  return res.data.data
+}
