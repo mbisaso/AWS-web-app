@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Station, StationStatus, SensorReading
+from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading
 
 
 # ─────────────────────────────────────────────────────────
@@ -135,3 +135,66 @@ class PowerChartSerializer(serializers.ModelSerializer):
             'curr_batt',
             'curr_solar',
         ]
+        
+        # ─────────────────────────────────────────────────────────
+# WeatherReading Serializers
+# ─────────────────────────────────────────────────────────
+
+class WeatherReadingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = WeatherReading
+        fields = [
+            'id',
+            'station_code',
+            'timestamp',
+            'received_at',
+            'pressure',
+            'altitude',
+            'temperature',
+            'humidity',
+            'light',
+            'soil_moisture',
+            'rain',
+            'wind_speed',
+            'wind_direction',
+        ]
+        read_only_fields = ['id', 'received_at']
+
+
+# ─────────────────────────────────────────────────────────
+# VoltageReading Serializers
+# ─────────────────────────────────────────────────────────
+
+class VoltageReadingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = VoltageReading
+        fields = [
+            'id',
+            'station_code',
+            'timestamp',
+            'received_at',
+            'volt_3v3',
+            'volt_5v',
+            'volt_batt',
+            'volt_solar',
+            'volt_dc',
+        ]
+        read_only_fields = ['id', 'received_at']
+
+
+# ─────────────────────────────────────────────────────────
+# CurrentReading Serializers
+# ─────────────────────────────────────────────────────────
+
+class CurrentReadingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = CurrentReading
+        fields = [
+            'id',
+            'station_code',
+            'timestamp',
+            'received_at',
+            'curr_batt',
+            'curr_solar',
+        ]
+        read_only_fields = ['id', 'received_at']
