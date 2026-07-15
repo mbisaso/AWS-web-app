@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useCurrentUser } from '../hooks/useCurrentUser'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
+import { PageHeader } from '../components/shared/PageHeader'
 import { StationTable } from '../components/stationManager/StationTable'
 import { StationFormModal } from '../components/stationManager/StationFormModal'
 import { UserTable } from '../components/stationManager/UserTable'
@@ -196,26 +197,18 @@ export function StationManagerPage() {
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}
-        <div className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-midnight via-[#1a2a4a] to-sky-deep/30 p-6 shadow-lg sm:p-8">
-          <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-sky-primary/10 blur-3xl" aria-hidden="true" />
-          <div className="pointer-events-none absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-emerald-400/8 blur-3xl" aria-hidden="true" />
-          <div className="relative z-10 flex flex-col gap-2">
-            <div className="flex items-center gap-2.5">
-              <svg className="h-5 w-5 text-sky-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" />
-                <circle cx="12" cy="10" r="3" />
-              </svg>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300/80">Administration</p>
-            </div>
-            <h1 className="text-2xl font-semibold text-white font-display sm:text-3xl">
-              Station manager
-            </h1>
-            <p className="text-sm text-white/50">
-              Manage stations, SIM accounts, and user access
-            </p>
-          </div>
-          <div className="absolute bottom-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-sky-400/20 to-transparent" aria-hidden="true" />
-        </div>
+        <PageHeader
+          label="Administration"
+          title="Station manager"
+          subtitle="Manage stations, SIM accounts, and user access"
+          variant="admin"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+          }
+        />
 
         {/* ── Tabs ── */}
         <div className="mb-6 border-b border-slate-200" role="tablist" aria-label="Station manager sections">
@@ -227,7 +220,7 @@ export function StationManagerPage() {
                 role="tab"
                 aria-selected={activeTab === tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`cursor-pointer px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary ${
+                className={`cursor-pointer px-5 py-3 text-sm font-medium transition-all duration-200 border-b-2 -mb-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary ${
                   activeTab === tab.key
                     ? 'border-sky-primary text-sky-deep'
                     : 'border-transparent text-storm/40 hover:text-storm/60 hover:border-slate-300'
@@ -273,7 +266,7 @@ export function StationManagerPage() {
               <button
                 type="button"
                 onClick={() => { setEditingStation(null); setStationFormOpen(true) }}
-                className="cursor-pointer rounded-xl bg-sky-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary"
+                className="cursor-pointer rounded-xl bg-gradient-to-r from-sky-primary to-sky-deep px-4 py-2 text-sm font-semibold text-white shadow-md shadow-sky-200/50 transition-all duration-200 hover:shadow-lg hover:shadow-sky-200/60 hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary"
               >
                 + Add station
               </button>
@@ -304,7 +297,7 @@ export function StationManagerPage() {
               <button
                 type="button"
                 onClick={() => { setEditingUser(null); setUserFormOpen(true) }}
-                className="cursor-pointer rounded-xl bg-sky-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-deep focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary"
+                className="cursor-pointer rounded-xl bg-gradient-to-r from-sky-primary to-sky-deep px-4 py-2 text-sm font-semibold text-white shadow-md shadow-sky-200/50 transition-all duration-200 hover:shadow-lg hover:shadow-sky-200/60 hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary"
               >
                 + Add user
               </button>

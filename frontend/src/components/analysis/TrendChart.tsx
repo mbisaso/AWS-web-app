@@ -1,6 +1,6 @@
 ﻿import { useMemo, useRef, useState } from 'react'
-import type { MetricReading, SensorMetricKey } from '../../types'
-import { SENSOR_METRIC_CONFIG } from '../../types'
+import type { MetricReading, AnalysisMetricKey } from '../../types'
+import { ANALYSIS_METRIC_CONFIG } from '../../types'
 
 const STATION_COLORS = [
   '#0EA5E9', '#F97316', '#22C55E', '#8B5CF6', '#E11D48',
@@ -33,7 +33,7 @@ function buildLine(readings: { timestamp: string; value: number }[], start: numb
 
 export interface TrendChartProps {
   readings: MetricReading[]
-  metricKey: SensorMetricKey
+  metricKey: AnalysisMetricKey
   showMovingAverage: boolean
   onToggleMovingAverage: () => void
   isLoading?: boolean
@@ -48,7 +48,7 @@ interface TooltipData {
 }
 
 export function TrendChart({ readings, metricKey, showMovingAverage, onToggleMovingAverage, isLoading }: TrendChartProps) {
-  const cfg = SENSOR_METRIC_CONFIG[metricKey]
+  const cfg = ANALYSIS_METRIC_CONFIG[metricKey]
   const [tooltip, setTooltip] = useState<TooltipData | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
 

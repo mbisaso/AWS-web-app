@@ -113,11 +113,11 @@ export function DashboardPage() {
       <DashboardSidebar />
 
       <main className="flex-1 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8">
-        <div className="rounded-[28px] border border-slate-200 bg-white shadow-[0_20px_70px_rgba(15,23,42,0.06)]">
-          <div className="flex flex-col gap-4 border-b border-slate-200 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="rounded-3xl border border-slate-200 bg-white shadow-elevation-2">
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#0a6ebd]">Dashboard</p>
-              <h1 className="mt-2 text-2xl font-semibold text-[#1a2332]">Station overview</h1>
+              <h1 className="mt-2 text-2xl font-semibold text-[#1a2332] font-display">Station overview</h1>
             </div>
             <div className="flex items-center gap-3 text-sm text-slate-500">
               <span className="rounded-full bg-sky-50 px-3 py-1 font-medium text-[#0a6ebd]">All stations</span>
@@ -126,10 +126,26 @@ export function DashboardPage() {
 
           <div className="space-y-8 px-6 py-6">
             {isLoading && (
-              <div className="flex items-center justify-center py-12">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-sky-primary border-t-transparent" />
-                  <p className="text-sm font-medium text-storm/50">Loading stations…</p>
+              <div className="space-y-6" aria-label="Loading stations">
+                <div className="grid gap-4 md:grid-cols-3">
+                  {[1,2,3].map((i) => (
+                    <div key={i} className="overflow-hidden rounded-3xl border border-slate-200 bg-[#f8fafc] p-5">
+                      <div className="h-6 w-10 rounded-full bg-slate-200 skeleton-shimmer" />
+                      <div className="mt-4 h-5 w-32 rounded bg-slate-200 skeleton-shimmer" />
+                      <div className="mt-2 h-3 w-48 rounded bg-slate-100 skeleton-shimmer" />
+                    </div>
+                  ))}
+                </div>
+                <div className="h-4 w-32 rounded-full bg-slate-200 skeleton-shimmer" />
+                <div className="overflow-hidden rounded-2xl border border-slate-200">
+                  {[1,2,3].map((i) => (
+                    <div key={i} className="flex items-center gap-4 border-b border-slate-100 px-4 py-4 last:border-b-0">
+                      <div className="h-3 w-24 rounded-full bg-slate-200 skeleton-shimmer" />
+                      <div className="h-3 w-20 rounded-full bg-slate-200 skeleton-shimmer" />
+                      <div className="h-3 w-16 rounded-full bg-slate-100 skeleton-shimmer" />
+                      <div className="ml-auto h-3 w-20 rounded-full bg-slate-100 skeleton-shimmer" />
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -142,11 +158,11 @@ export function DashboardPage() {
                   <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Station summary</div>
                   <div className="grid gap-4 md:grid-cols-3">
                     {(Object.keys(STATUS_LABELS) as StationOperationalStatus[]).map((status) => (
-                      <article key={status} className="rounded-[28px] border border-slate-200 bg-[#f8fafc] p-5">
-                        <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${STATUS_LABELS[status].tone}`}>
+                      <article key={status} className="group rounded-3xl border border-slate-200 bg-[#f8fafc] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-elevation-2 cursor-default">
+                        <div className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold transition-transform duration-200 group-hover:scale-105 ${STATUS_LABELS[status].tone}`}>
                           {String(counts[status]).padStart(2, '0')}
                         </div>
-                        <h2 className="mt-4 text-xl font-semibold text-[#1a2332]">{STATUS_LABELS[status].title}</h2>
+                        <h2 className="mt-4 text-xl font-semibold text-[#1a2332] font-display">{STATUS_LABELS[status].title}</h2>
                         <p className="mt-2 text-sm leading-7 text-slate-600">{STATUS_LABELS[status].description}</p>
                       </article>
                     ))}
@@ -158,59 +174,67 @@ export function DashboardPage() {
                   <div>
                     <div className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">All stations</div>
                     {stations.length === 0 ? (
-                      <p className="text-sm text-slate-500">No stations registered yet.</p>
+                      <div className="flex flex-col items-center rounded-2xl border border-dashed border-slate-200 bg-white/50 px-5 py-16 text-center">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-storm/30">
+                          <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
+                        </div>
+                        <p className="mt-4 text-sm font-semibold text-storm/50">No stations registered yet</p>
+                        <p className="mt-1 text-xs text-storm/30">Add a station in the Station Manager to get started.</p>
+                      </div>
                     ) : (
-                      <div className="overflow-hidden rounded-2xl border border-slate-200">
-                        <table className="w-full text-left text-sm">
-                          <thead>
-                            <tr className="border-b border-slate-100 bg-slate-50/50">
-                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Station</th>
-                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Location</th>
-                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</th>
-                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Prediction</th>
-                              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Last Updated</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {stations.map((station) => {
-                              const status = statusOf(station)
-                              const prediction = predictionOf(station)
-                              return (
-                                <tr
-                                  key={station.station_id}
-                                  onClick={() => navigate(`/dashboard/weather-data?station=${station.station_id}`)}
-                                  className="cursor-pointer border-b border-slate-100 transition-colors last:border-b-0 hover:bg-slate-50"
-                                >
-                                  <td className="px-4 py-3.5">
-                                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{station.station_id}</p>
-                                    <p className="mt-0.5 font-semibold text-midnight">{station.name}</p>
-                                  </td>
-                                  <td className="px-4 py-3.5 text-sm text-slate-500">{station.location || '—'}</td>
-                                  <td className="px-4 py-3.5">
-                                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_BADGE[status]}`}>
-                                      {status === 'full' ? 'Online' : status === 'partial' ? 'Partial' : 'Down'}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-3.5">
-                                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${PREDICTION_BADGE[prediction] ?? PREDICTION_BADGE.unknown}`}>
-                                      {prediction === 'healthy' ? 'Healthy' : prediction === 'at_risk' ? 'At Risk' : 'Unknown'}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-3.5 text-xs text-slate-400">
-                                    {station.status?.last_updated
-                                      ? new Date(station.status.last_updated).toLocaleString()
-                                      : '—'}
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
+                      <div className="overflow-hidden rounded-2xl border border-slate-200 shadow-xs">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm">
+                            <thead>
+                              <tr className="border-b border-slate-100 bg-slate-50/80">
+                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 sticky top-0 bg-slate-50/80">Station</th>
+                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 sticky top-0 bg-slate-50/80">Location</th>
+                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 sticky top-0 bg-slate-50/80">Status</th>
+                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 sticky top-0 bg-slate-50/80">Prediction</th>
+                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 sticky top-0 bg-slate-50/80">Last Updated</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {stations.map((station) => {
+                                const status = statusOf(station)
+                                const prediction = predictionOf(station)
+                                return (
+                                  <tr
+                                    key={station.station_id}
+                                    onClick={() => navigate(`/dashboard/weather-data?station=${station.station_id}`)}
+                                    className="cursor-pointer border-b border-slate-100 transition-colors duration-150 last:border-b-0 hover:bg-sky-soft/30"
+                                  >
+                                    <td className="px-4 py-3.5">
+                                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{station.station_id}</p>
+                                      <p className="mt-0.5 font-semibold text-midnight">{station.name}</p>
+                                    </td>
+                                    <td className="px-4 py-3.5 text-sm text-slate-500">{station.location || '—'}</td>
+                                    <td className="px-4 py-3.5">
+                                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_BADGE[status]}`}>
+                                        {status === 'full' ? 'Online' : status === 'partial' ? 'Partial' : 'Down'}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3.5">
+                                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${PREDICTION_BADGE[prediction] ?? PREDICTION_BADGE.unknown}`}>
+                                        {prediction === 'healthy' ? 'Healthy' : prediction === 'at_risk' ? 'At Risk' : 'Unknown'}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3.5 text-xs text-slate-400 tabular-nums">
+                                      {station.status?.last_updated
+                                        ? new Date(station.status.last_updated).toLocaleString()
+                                        : '—'}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     )}
                   </div>
 
-                  <aside className="rounded-[28px] border border-slate-200 bg-[#f8fafc] p-5">
+                  <aside className="rounded-3xl border border-slate-200 bg-[#f8fafc] p-5 transition-shadow duration-300 hover:shadow-xs">
                     <div>
                       <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">AI Model Analytics</p>
                       <h2 className="mt-2 text-xl font-semibold text-[#1a2332]">Insights panel</h2>
@@ -425,7 +449,7 @@ export function DashboardPage() {
             {/* ── Charts row: SIM fleet + Power + Sensor bars + Trends ── */}
             <section className="grid gap-4 lg:grid-cols-2">
               {/* SIM fleet donut */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs transition-all duration-300 hover:shadow-elevation-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">SIM fleet</p>
                 <h3 className="mt-1 text-base font-semibold text-midnight font-display">
                   {simSummary?.total_active ?? 0} active SIMs
@@ -479,7 +503,7 @@ export function DashboardPage() {
               </div>
 
               {/* Power overview */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs transition-all duration-300 hover:shadow-elevation-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">Power system</p>
                 <h3 className="mt-1 text-base font-semibold text-midnight font-display">Station power overview</h3>
                 <div className="mt-4 space-y-3">
@@ -519,7 +543,7 @@ export function DashboardPage() {
               </div>
 
               {/* Sensor vertical bars */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs transition-all duration-300 hover:shadow-elevation-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">Weather sensors</p>
                 <h3 className="mt-1 text-base font-semibold text-midnight font-display">Live averages across fleet</h3>
                 <div className="mt-4 flex items-center justify-around gap-2">
@@ -541,7 +565,7 @@ export function DashboardPage() {
               </div>
 
               {/* Weather analysis trends */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs transition-all duration-300 hover:shadow-elevation-2">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">Weather analysis</p>
                 <h3 className="mt-1 text-base font-semibold text-midnight font-display">Trend summary</h3>
                 <div className="mt-4 space-y-3">
@@ -576,7 +600,7 @@ export function DashboardPage() {
             </section>
 
             {/* ── SIM usage sparklines ── */}
-            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xs transition-all duration-300 hover:shadow-elevation-2">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">Data usage</p>
               <h3 className="mt-1 text-base font-semibold text-midnight font-display">SIM daily usage (top 4)</h3>
               <div className="mt-4 space-y-4">
@@ -614,8 +638,8 @@ function StatCard({ label, value, sub, icon, accent, valueColor }: {
   label: string; value: number | string; sub: string; icon: React.ReactNode; accent: string; valueColor: string
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs transition-shadow hover:shadow-md">
-      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent}`}>{icon}</div>
+    <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-elevation-2 hover:border-slate-300">
+      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${accent} transition-transform duration-200`}>{icon}</div>
       <div className="min-w-0">
         <p className="text-xs font-medium text-storm/50">{label}</p>
         <p className={`text-xl font-bold font-display tabular-nums ${valueColor}`}>{value}</p>

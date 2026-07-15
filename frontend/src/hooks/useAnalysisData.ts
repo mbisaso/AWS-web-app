@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Station, SensorMetricKey, TaggedSensorReading, StatsResult } from '../types'
-import { fetchSensorHistory } from '../api/stations'
+import type { Station, AnalysisMetricKey, TaggedSensorReading, StatsResult } from '../types'
+import { fetchSensorHistory, fetchPowerHistory } from '../api/stations'
 import { getCachedData, setCachedData } from '../services/cache'
 
-const METRIC_KEYS: SensorMetricKey[] = [
+const METRIC_KEYS: AnalysisMetricKey[] = [
   'temperature', 'humidity', 'pressure', 'wind_speed',
   'wind_direction', 'rain', 'light', 'soil_moisture',
+  'volt_solar', 'curr_solar', 'pv',
+  'volt_3v3', 'volt_5v', 'volt_batt', 'volt_dc', 'curr_batt',
 ]
 
 function computeStats(values: number[]): StatsResult {
@@ -104,9 +106,30 @@ export function useAnalysisData({ stationIds, allStations, hours }: UseAnalysisD
     try {
       const results = await Promise.all(
         targets.map((station) =>
-          fetchSensorHistory(station.station_id, hours).then((rows) =>
-            rows.map((r) => ({ ...r, stationId: station.station_id, stationName: station.name }))
-          )
+          Promise.all([
+            fetchSensorHistory(station.station_id, hours),
+            fetchPowerHistory(station.station_id, hours),
+          ]).then(([sensorRows, powerRows]) => {
+            const merged = sensorRows.map((r, i) => {
+              const p = powerRows[i]
+              return {
+                ...r,
+                stationId: station.station_id,
+                stationName: station.name,
+                volt_3v3: p?.volt_3v3 ?? null,
+                volt_5v: p?.volt_5v ?? null,
+                volt_batt: p?.volt_batt ?? null,
+                volt_solar: p?.volt_solar ?? null,
+                volt_dc: p?.volt_dc ?? null,
+                curr_batt: p?.curr_batt ?? null,
+                curr_solar: p?.curr_solar ?? null,
+                pv: p?.volt_solar != null && p?.curr_solar != null
+                  ? parseFloat((p.volt_solar * p.curr_solar).toFixed(2))
+                  : null,
+              }
+            })
+            return merged
+          })
         )
       )
 
@@ -118,7 +141,7 @@ export function useAnalysisData({ stationIds, allStations, hours }: UseAnalysisD
       for (const station of targets) {
         const sr = merged.filter((r) => r.stationId === station.station_id)
         for (const mk of METRIC_KEYS) {
-          const values = sr.map((r) => r[mk]).filter((v): v is number => v !== null)
+          const values = sr.map((r) => r[mk as keyof typeof r]).filter((v): v is number => v != null)
           if (values.length) {
             newStats[`${station.station_id}:${mk}`] = computeStats(values)
           }

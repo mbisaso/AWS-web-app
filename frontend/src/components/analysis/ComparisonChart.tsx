@@ -1,6 +1,6 @@
 ﻿import { useMemo, useState } from 'react'
-import type { MetricReading, SensorMetricKey } from '../../types'
-import { SENSOR_METRIC_CONFIG } from '../../types'
+import type { MetricReading, AnalysisMetricKey } from '../../types'
+import { ANALYSIS_METRIC_CONFIG } from '../../types'
 
 const BAR_COLORS = ['#0EA5E9', '#22C55E', '#F59E0B']
 
@@ -8,7 +8,7 @@ type SortBy = 'station' | 'avg' | 'min' | 'max'
 
 interface ComparisonChartProps {
   readings: MetricReading[]
-  metricKey: SensorMetricKey
+  metricKey: AnalysisMetricKey
   isLoading?: boolean
 }
 
@@ -27,7 +27,7 @@ function computeBarStats(values: number[]) {
 }
 
 export function ComparisonChart({ readings, metricKey, isLoading }: ComparisonChartProps) {
-  const cfg = SENSOR_METRIC_CONFIG[metricKey]
+  const cfg = ANALYSIS_METRIC_CONFIG[metricKey]
   const [sortBy, setSortBy] = useState<SortBy>('avg')
   const [sortAsc, setSortAsc] = useState(false)
 

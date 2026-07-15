@@ -13,6 +13,7 @@ import {
 } from '../services/api'
 import { usePollingData } from '../hooks/usePollingData'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
+import { PageHeader } from '../components/shared/PageHeader'
 import { SimFleetSummaryCard } from '../components/simManagement/SimFleetSummaryCard'
 import { SimTable } from '../components/simManagement/SimTable'
 import { SimDetailPanel } from '../components/simManagement/SimDetailPanel'
@@ -150,26 +151,18 @@ export function SimManagementPage() {
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}
-        <div className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-midnight via-[#1a2a4a] to-sky-deep/30 p-6 shadow-lg sm:p-8">
-          <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-sky-primary/10 blur-3xl" aria-hidden="true" />
-          <div className="pointer-events-none absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-emerald-400/8 blur-3xl" aria-hidden="true" />
-          <div className="relative z-10 flex flex-col gap-2">
-            <div className="flex items-center gap-2.5">
-              <svg className="h-5 w-5 text-sky-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="4" y="7" width="16" height="10" rx="2" />
-                <path d="M4 11h16" />
-              </svg>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300/80">Connectivity</p>
-            </div>
-            <h1 className="text-2xl font-semibold text-white font-display sm:text-3xl">
-              SIM &amp; Data Bundle Management
-            </h1>
-            <p className="text-sm text-white/50">
-              Monitor data usage, projected depletion, and top up bundles across the fleet
-            </p>
-          </div>
-          <div className="absolute bottom-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-sky-400/20 to-transparent" aria-hidden="true" />
-        </div>
+        <PageHeader
+          label="Connectivity"
+          title="SIM & Data Bundle Management"
+          subtitle="Monitor data usage, projected depletion, and top up bundles across the fleet"
+          variant="admin"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="7" width="16" height="10" rx="2" />
+              <path d="M4 11h16" />
+            </svg>
+          }
+        />
 
         {/* ── Fleet summary cards ── */}
         <section aria-label="Fleet summary" className="mb-6">

@@ -77,7 +77,7 @@ export interface SensorReadingLatest {
   curr_solar: number | null
 }
 
-// Weather chart - time series, no power fields
+// Weather chart - time series
 export interface SensorReadingChart {
   timestamp: string
   temperature: number | null
@@ -88,6 +88,14 @@ export interface SensorReadingChart {
   rain: number | null
   light: number | null
   soil_moisture: number | null
+  volt_3v3: number | null
+  volt_5v: number | null
+  volt_batt: number | null
+  volt_solar: number | null
+  volt_dc: number | null
+  curr_batt: number | null
+  curr_solar: number | null
+  pv: number | null
 }
 
 // Power chart - time series, power fields only
@@ -156,6 +164,16 @@ export const POWER_METRIC_CONFIG: Record<PowerMetricKey, { label: string; unit: 
   volt_dc:    { label: 'DC Voltage',      unit: 'V', color: '#94A3B8' },
   curr_batt:  { label: 'Battery Current', unit: 'A', color: '#F97316' },
   curr_solar: { label: 'Solar Current',   unit: 'A', color: '#EAB308' },
+}
+
+export type AnalysisMetricKey = SensorMetricKey | PowerMetricKey | 'pv'
+
+export const ANALYSIS_METRIC_CONFIG: Record<AnalysisMetricKey, { label: string; unit: string; color: string }> = {
+  ...SENSOR_METRIC_CONFIG,
+  ...POWER_METRIC_CONFIG,
+  volt_solar: { label: 'Vpv (Solar Voltage)', unit: 'V', color: '#F59E0B' },
+  curr_solar: { label: 'Iv (Solar Current)',  unit: 'A', color: '#EAB308' },
+  pv:         { label: 'Pv (Solar Power)',    unit: 'W', color: '#EF4444' },
 }
 
 export interface TaggedSensorReading extends SensorReadingChart {
