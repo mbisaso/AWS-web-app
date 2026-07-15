@@ -207,10 +207,10 @@ export function ReportsPage() {
                 role="tab"
                 aria-selected={tab === t.key}
                 onClick={() => setTab(t.key)}
-                className={`cursor-pointer px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary ${
+                className={`cursor-pointer rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 border-b-2 -mb-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary ${
                   tab === t.key
-                    ? 'border-sky-primary text-sky-deep'
-                    : 'border-transparent text-storm/40 hover:text-storm/60 hover:border-slate-300'
+                    ? 'border-sky-primary text-sky-deep bg-sky-soft/30'
+                    : 'border-transparent text-storm/40 hover:text-storm/60 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
                 {t.label}
@@ -225,11 +225,11 @@ export function ReportsPage() {
         {tab === 'builder' && (
           <section aria-label="Report builder" className="space-y-4">
             {dashLoading ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
-                <div className="h-5 w-40 animate-pulse rounded bg-slate-200" />
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+                <div className="h-5 w-40 rounded-full bg-slate-200 skeleton-shimmer" />
                 <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div className="h-32 animate-pulse rounded-xl bg-slate-200" />
-                  <div className="h-32 animate-pulse rounded-xl bg-slate-200" />
+                  <div className="h-32 rounded-xl bg-slate-200 skeleton-shimmer" />
+                  <div className="h-32 rounded-xl bg-slate-200 skeleton-shimmer" />
                 </div>
               </div>
             ) : (
