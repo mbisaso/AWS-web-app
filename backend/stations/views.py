@@ -25,7 +25,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 logger = logging.getLogger(__name__)
 
-from .models import Station, StationStatus, SensorReading, BenchmarkReading
+from .models import Station, StationStatus, SensorReading, BenchmarkReading, WeatherReading, VoltageReading, CurrentReading
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
@@ -33,6 +33,9 @@ from .serializers import (
     PowerChartSerializer,
     StationSerializer,
     BenchmarkReadingSerializer,
+    WeatherReadingSerializer,
+    VoltageReadingSerializer,
+    CurrentReadingSerializer,
 )
 
 
@@ -781,3 +784,117 @@ def benchmark_import(request):
         'imported': len(readings),
         'skipped':  skipped,
     })
+
+
+# ─────────────────────────────────────────────────────────
+# API: Split ingest endpoints — mirror the 3 ThingSpeak channels
+# ─────────────────────────────────────────────────────────
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def ingest_weather(request):
+    """
+    Channel 1 equivalent. Expects pre-parsed JSON:
+    { "station_id": "AWS-UG-001", "timestamp": "...", "pressure": .., ... }
+    """
+    data       = request.data
+    station_id = data.get('station_id', 'AWS-UG-001')
+    station    = get_or_none(station_id)
+
+    timestamp = parse_datetime(str(data.get('timestamp', '')))
+    if timestamp is None:
+        return api_response(error='timestamp is required and must be ISO format', status_code=400)
+
+    fields = dict(
+        pressure       = safe_float(data.get('pressure')),
+        altitude       = safe_float(data.get('altitude')),
+        temperature    = safe_float(data.get('temperature')),
+        humidity       = safe_float(data.get('humidity')),
+        light          = safe_float(data.get('light')),
+        soil_moisture  = safe_float(data.get('soil_moisture')),
+        rain           = safe_int(data.get('rain')),
+        wind_speed     = safe_float(data.get('wind_speed')),
+        wind_direction = safe_int(data.get('wind_direction')),
+    )
+
+    weather = WeatherReading.objects.create(
+        station=station, station_code=station_id, timestamp=timestamp, **fields
+    )
+
+    # Dual-write: keep SensorReading in sync for existing dashboard/history/export
+    reading, _ = SensorReading.objects.get_or_create(
+        station_code=station_id, timestamp=timestamp,
+        defaults={'station': station}
+    )
+    for k, v in fields.items():
+        setattr(reading, k, v)
+    reading.save()
+
+    return api_response({'status': 'ok', 'id': weather.id}, status_code=201)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def ingest_voltage(request):
+    """Channel 2 equivalent."""
+    data       = request.data
+    station_id = data.get('station_id', 'AWS-UG-001')
+    station    = get_or_none(station_id)
+
+    timestamp = parse_datetime(str(data.get('timestamp', '')))
+    if timestamp is None:
+        return api_response(error='timestamp is required and must be ISO format', status_code=400)
+
+    fields = dict(
+        volt_3v3   = safe_float(data.get('volt_3v3')),
+        volt_5v    = safe_float(data.get('volt_5v')),
+        volt_batt  = safe_float(data.get('volt_batt')),
+        volt_solar = safe_float(data.get('volt_solar')),
+        volt_dc    = safe_float(data.get('volt_dc')),
+    )
+
+    voltage = VoltageReading.objects.create(
+        station=station, station_code=station_id, timestamp=timestamp, **fields
+    )
+
+    reading, _ = SensorReading.objects.get_or_create(
+        station_code=station_id, timestamp=timestamp,
+        defaults={'station': station}
+    )
+    for k, v in fields.items():
+        setattr(reading, k, v)
+    reading.save()
+
+    return api_response({'status': 'ok', 'id': voltage.id}, status_code=201)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def ingest_current(request):
+    """Channel 3 equivalent."""
+    data       = request.data
+    station_id = data.get('station_id', 'AWS-UG-001')
+    station    = get_or_none(station_id)
+
+    timestamp = parse_datetime(str(data.get('timestamp', '')))
+    if timestamp is None:
+        return api_response(error='timestamp is required and must be ISO format', status_code=400)
+
+    fields = dict(
+        curr_batt  = safe_float(data.get('curr_batt')),
+        curr_solar = safe_float(data.get('curr_solar')),
+    )
+
+    current = CurrentReading.objects.create(
+        station=station, station_code=station_id, timestamp=timestamp, **fields
+    )
+
+    reading, _ = SensorReading.objects.get_or_create(
+        station_code=station_id, timestamp=timestamp,
+        defaults={'station': station}
+    )
+    for k, v in fields.items():
+        setattr(reading, k, v)
+    reading.save()
+
+    return api_response({'status': 'ok', 'id': current.id}, status_code=201)

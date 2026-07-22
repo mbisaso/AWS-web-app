@@ -32,6 +32,7 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.environ.get(
     'DJANGO_ALLOWED_HOSTS',
     'localhost,127.0.0.1,.ngrok-free.dev,.ngrok-free.app,.onrender.com,.trycloudflare.com,.lhr.life'
+    'localhost,127.0.0.1,.trycloudflare.com'
 ).split(',')
 
 CSRF_TRUSTED_ORIGINS = os.environ.get(

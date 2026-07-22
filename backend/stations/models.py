@@ -235,3 +235,116 @@ class BenchmarkReading(models.Model):
 
     def __str__(self):
         return f"{self.source} @ {self.timestamp}" 
+
+
+class WeatherReading(models.Model):
+    """
+    Stores atmospheric/environmental data from one ESP32 reading.
+    Mirrors ThingSpeak Channel 1 (fields 1-8):
+    field1:Temp, field2:Hum, field3:Press, field4:Rain,
+    field5:WSpd, field6:WDir, field7:Light, field8:SoilM
+    """
+    station = models.ForeignKey(
+        Station,
+        related_name="weather_readings",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    station_code = models.CharField(
+        max_length=50,
+        default='AWS-UG-001',
+        help_text="Raw station ID string from ESP32 e.g. AWS-UG-001"
+    )
+
+    timestamp   = models.DateTimeField(
+        help_text="Timestamp from the ESP32 RTC. ESP32 key: Time"
+    )
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    pressure       = models.FloatField(null=True, blank=True, help_text="ESP32 key: Press")
+    altitude       = models.FloatField(null=True, blank=True, help_text="ESP32 key: Alt")
+    temperature    = models.FloatField(null=True, blank=True, help_text="ESP32 key: Temp")
+    humidity       = models.FloatField(null=True, blank=True, help_text="ESP32 key: Hum")
+    light          = models.FloatField(null=True, blank=True, help_text="ESP32 key: Light")
+    soil_moisture  = models.FloatField(null=True, blank=True, help_text="ESP32 key: SoilM")
+    rain           = models.IntegerField(null=True, blank=True, help_text="ESP32 key: Rain")
+    wind_speed     = models.FloatField(null=True, blank=True, help_text="ESP32 key: WSpd")
+    wind_direction = models.IntegerField(null=True, blank=True, help_text="ESP32 key: WDir")
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['timestamp'], name='idx_weather_timestamp'),
+            models.Index(fields=['station_code', 'timestamp'], name='idx_weather_code_time'),
+        ]
+
+    def __str__(self):
+        return f"Weather {self.station_code} @ {self.timestamp}"
+
+
+class VoltageReading(models.Model):
+    """
+    Stores voltage rail data from one ESP32 reading.
+    Mirrors ThingSpeak Channel 2 (fields 1-5):
+    field1:V33, field2:V5, field3:VBatt, field4:VSol, field5:VDC
+    """
+    station = models.ForeignKey(
+        Station,
+        related_name="voltage_readings",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    station_code = models.CharField(max_length=50, default='AWS-UG-001')
+
+    timestamp   = models.DateTimeField(help_text="ESP32 key: Time")
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    volt_3v3   = models.FloatField(null=True, blank=True, help_text="ESP32 key: V33")
+    volt_5v    = models.FloatField(null=True, blank=True, help_text="ESP32 key: V5")
+    volt_batt  = models.FloatField(null=True, blank=True, help_text="ESP32 key: VBatt")
+    volt_solar = models.FloatField(null=True, blank=True, help_text="ESP32 key: VSol")
+    volt_dc    = models.FloatField(null=True, blank=True, help_text="ESP32 key: VDC")
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['timestamp'], name='idx_voltage_timestamp'),
+            models.Index(fields=['station_code', 'timestamp'], name='idx_voltage_code_time'),
+        ]
+
+    def __str__(self):
+        return f"Voltage {self.station_code} @ {self.timestamp}"
+
+
+class CurrentReading(models.Model):
+    """
+    Stores current data from one ESP32 reading.
+    Mirrors ThingSpeak Channel 3 (fields 1-2):
+    field1:CBatt, field2:CSol
+    """
+    station = models.ForeignKey(
+        Station,
+        related_name="current_readings",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    station_code = models.CharField(max_length=50, default='AWS-UG-001')
+
+    timestamp   = models.DateTimeField(help_text="ESP32 key: Time")
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    curr_batt  = models.FloatField(null=True, blank=True, help_text="ESP32 key: CBatt")
+    curr_solar = models.FloatField(null=True, blank=True, help_text="ESP32 key: CSol")
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['timestamp'], name='idx_current_timestamp'),
+            models.Index(fields=['station_code', 'timestamp'], name='idx_current_code_time'),
+        ]
+
+    def __str__(self):
+        return f"Current {self.station_code} @ {self.timestamp}"
