@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export function LoginPage() {
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -18,10 +18,10 @@ export function LoginPage() {
     setError(null)
     setIsSubmitting(true)
     try {
-      await login(username, password)
+      await login(email, password)
       navigate('/dashboard')
     } catch {
-      setError('Invalid username or password.')
+      setError('Invalid email or password.')
     } finally {
       setIsSubmitting(false)
     }
@@ -95,17 +95,17 @@ export function LoginPage() {
                   </div>
                 )}
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-midnight" htmlFor="username">
-                    Username
+                  <label className="mb-2 block text-sm font-medium text-midnight" htmlFor="email">
+                    Email
                   </label>
                   <input
-                    id="username"
-                    name="username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    id="email"
+                    name="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-midnight outline-none transition-all duration-200 placeholder:text-storm/30 focus:border-sky-primary focus:bg-white focus:ring-2 focus:ring-sky-primary/10"
-                    placeholder="Enter username"
+                    placeholder="Enter email"
                   />
                 </div>
 

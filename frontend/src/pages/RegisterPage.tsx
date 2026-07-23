@@ -1,4 +1,4 @@
-﻿import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { apiClient } from '../api/client'
 
@@ -11,7 +11,7 @@ const ROLES: { value: Role; label: string; description: string }[] = [
   { value: 'admin',         label: 'Admin',         description: 'Full access including user management' },
 ]
 
-type FieldErrors = Partial<Record<'username' | 'email' | 'first_name' | 'last_name' | 'password' | 'role' | 'non_field_errors', string[]>>
+type FieldErrors = Partial<Record<'email' | 'first_name' | 'last_name' | 'password' | 'non_field_errors', string[]>>
 
 export function RegisterPage() {
   const navigate = useNavigate()
@@ -19,11 +19,9 @@ export function RegisterPage() {
   const [form, setForm] = useState({
     first_name: '',
     last_name: '',
-    username: '',
     email: '',
     password: '',
     password2: '',
-    role: 'viewer' as Role,
   })
 
   const [showPassword, setShowPassword] = useState(false)
@@ -53,12 +51,10 @@ export function RegisterPage() {
     setIsLoading(true)
     try {
       await apiClient.post('/api/register/', {
-        username:   form.username,
-        email:      form.email || undefined,
+        email:      form.email,
         first_name: form.first_name || undefined,
         last_name:  form.last_name || undefined,
         password:   form.password,
-        role:       form.role,
       })
       navigate('/login', { state: { registered: true } })
     } catch (err: unknown) {
@@ -149,25 +145,7 @@ export function RegisterPage() {
               </div>
             </div>
 
-            {/* Username */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-midnight" htmlFor="username">
-                Username <span className="text-rose-500">*</span>
-              </label>
-              <input
-                id="username"
-                name="username"
-                type="text"
-                required
-                autoComplete="username"
-                className={inputClass('username')}
-                placeholder="Choose a username"
-                value={form.username}
-                onChange={set('username')}
-              />
-              <p className="mt-1 text-xs text-storm/40">Letters, digits and @/./+/-/_ only.</p>
-              {fieldErrors.username?.map((e) => <p key={e} className="mt-1 text-xs text-rose-600">{e}</p>)}
-            </div>
+
 
             {/* Email */}
             <div>
@@ -274,28 +252,7 @@ export function RegisterPage() {
               </div>
             </div>
 
-            {/* Role */}
-            <div>
-              <label className="mb-2 block text-sm font-medium text-midnight" htmlFor="role">
-                Role <span className="text-rose-500">*</span>
-              </label>
-              <select
-                id="role"
-                name="role"
-                required
-                className={`${inputClass('role')} cursor-pointer`}
-                value={form.role}
-                onChange={set('role')}
-              >
-                {ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-storm/40">
-                {ROLES.find((r) => r.value === form.role)?.description}
-              </p>
-              {fieldErrors.role?.map((e) => <p key={e} className="mt-1 text-xs text-rose-600">{e}</p>)}
-            </div>
+
 
             <button
               type="submit"

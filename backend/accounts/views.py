@@ -11,10 +11,10 @@ from .serializers import RegisterSerializer
 @permission_classes([AllowAny])
 @authentication_classes([])
 def login_api(request):
-    username = request.data.get('username')
+    email = request.data.get('email')
     password = request.data.get('password')
 
-    user = authenticate(request, username=username, password=password)
+    user = authenticate(request, username=email, password=password)
     if user is None:
         return Response(
             {'success': False, 'error': 'Invalid username or password'},
@@ -28,7 +28,7 @@ def login_api(request):
         'data': {
             'access':   str(refresh.access_token),
             'refresh':  str(refresh),
-            'username': user.username,
+            'email':    user.email,
             'role':     user.role,
         },
     })
@@ -51,8 +51,8 @@ def register_api(request):
             'success': True,
             'message': 'Account created',
             'data': {
-                'username': user.username,
-                'role':     user.role,
+                'email': user.email,
+                'role':  user.role,
             },
         },
         status=201,

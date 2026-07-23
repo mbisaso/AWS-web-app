@@ -27,20 +27,22 @@ export function DashboardSidebar() {
   const [badgeCount, setBadgeCount] = useState(0);
 
   useEffect(() => {
-    setBadgeCount(getSimAlertCount())
-    const id = setInterval(() => setBadgeCount(getSimAlertCount()), 10_000)
-    return () => clearInterval(id)
-  }, [])
+    setBadgeCount(getSimAlertCount());
+    const id = setInterval(() => setBadgeCount(getSimAlertCount()), 10_000);
+    return () => clearInterval(id);
+  }, []);
 
   /* Lock body scroll when mobile drawer is open */
   useEffect(() => {
     if (isMobileOpen) {
-      document.body.style.overflow = 'hidden'
+      document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = ''
+      document.body.style.overflow = "";
     }
-    return () => { document.body.style.overflow = '' }
-  }, [isMobileOpen])
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isMobileOpen]);
 
   return (
     <>
@@ -61,7 +63,7 @@ export function DashboardSidebar() {
       {/* ── Mobile overlay ── */}
       <div
         className={`fixed inset-0 z-30 bg-midnight/40 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${
-          isMobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          isMobileOpen ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
         onClick={() => setIsMobileOpen(false)}
         aria-hidden="true"
@@ -74,7 +76,10 @@ export function DashboardSidebar() {
         }`}
         aria-label="Dashboard navigation (mobile)"
       >
-        <MobileSidebarContent setIsMobileOpen={setIsMobileOpen} badgeCount={badgeCount} />
+        <MobileSidebarContent
+          setIsMobileOpen={setIsMobileOpen}
+          badgeCount={badgeCount}
+        />
       </aside>
 
       {/* ── Desktop sidebar (sticky — never scrolls) ── */}
@@ -108,7 +113,15 @@ function Brand() {
 /* ── SVG icon map ── */
 const NAV_ICONS: Record<string, React.ReactNode> = {
   "/dashboard": (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="3" y="3" width="7" height="9" rx="1" />
       <rect x="14" y="3" width="7" height="5" rx="1" />
       <rect x="14" y="12" width="7" height="9" rx="1" />
@@ -116,53 +129,125 @@ const NAV_ICONS: Record<string, React.ReactNode> = {
     </svg>
   ),
   "/dashboard/station-manager": (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" />
       <circle cx="12" cy="10" r="3" />
     </svg>
   ),
   "/dashboard/weather-data": (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
     </svg>
   ),
   "/dashboard/power-data": (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
     </svg>
   ),
   "/dashboard/weather-analysis": (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M3 3v18h18" />
       <path d="M7 16l4-8 4 4 4-6" />
     </svg>
   ),
   "/benchmarking": (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M9 17H4v-4M4 13l6-6 4 4 6-6M15 3h6v6" />
     </svg>
   ),
   "/stations/map": (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6" />
       <path d="M8 2v16" />
       <path d="M16 6v16" />
     </svg>
   ),
   "/dashboard/alerts-center": (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
       <path d="M13.73 21a2 2 0 0 1-3.46 0" />
     </svg>
   ),
   "/dashboard/sim-management": (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <rect x="4" y="7" width="16" height="10" rx="2" />
       <path d="M4 11h16" />
     </svg>
   ),
   "/dashboard/reports": (
-    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      className="h-5 w-5"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
       <polyline points="14 2 14 8 20 8" />
       <path d="M16 13H8" />
@@ -170,10 +255,16 @@ const NAV_ICONS: Record<string, React.ReactNode> = {
       <path d="M10 9H8" />
     </svg>
   ),
-}
+};
 
 /* ── Shared nav ── */
-function NavLinks({ onNavigate, badgeCount }: { onNavigate?: () => void; badgeCount?: number }) {
+function NavLinks({
+  onNavigate,
+  badgeCount,
+}: {
+  onNavigate?: () => void;
+  badgeCount?: number;
+}) {
   const { user } = useCurrentUser();
   const isAdmin = user?.role === "admin";
 
@@ -182,8 +273,8 @@ function NavLinks({ onNavigate, badgeCount }: { onNavigate?: () => void; badgeCo
   return (
     <nav className="mt-6 space-y-1" aria-label="Main navigation">
       {visibleItems.map((item) => {
-        const isSimMgmt = item.href === "/dashboard/sim-management"
-        const showBadge = isSimMgmt && (badgeCount ?? 0) > 0
+        const isSimMgmt = item.href === "/dashboard/sim-management";
+        const showBadge = isSimMgmt && (badgeCount ?? 0) > 0;
         return (
           <NavLink
             key={item.label}
@@ -198,9 +289,9 @@ function NavLinks({ onNavigate, badgeCount }: { onNavigate?: () => void; badgeCo
               }`
             }
           >
-            <span className={`relative shrink-0 transition-colors duration-200 ${
-              'group-hover:text-white/90'
-            }`}>
+            <span
+              className={`relative shrink-0 transition-colors duration-200 ${"group-hover:text-white/90"}`}
+            >
               {NAV_ICONS[item.href]}
               {showBadge && (
                 <span className="absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose px-1 text-[9px] font-bold leading-none text-white ring-2 ring-midnight animate-pulse-soft">
@@ -210,7 +301,7 @@ function NavLinks({ onNavigate, badgeCount }: { onNavigate?: () => void; badgeCo
             </span>
             <span>{item.label}</span>
           </NavLink>
-        )
+        );
       })}
     </nav>
   );
@@ -218,7 +309,7 @@ function NavLinks({ onNavigate, badgeCount }: { onNavigate?: () => void; badgeCo
 
 /* ── Shared user card ── */
 function UserCard() {
-  const { logout, username } = useAuth();
+  const { logout, email } = useAuth();
   const navigate = useNavigate();
 
   function handleLogout() {
@@ -231,7 +322,9 @@ function UserCard() {
       <p className="text-[10px] uppercase tracking-[0.18em] text-white/30">
         Signed in as
       </p>
-      <p className="mt-1.5 font-semibold text-base text-white truncate">{username}</p>
+      <p className="mt-1.5 font-semibold text-xs text-white truncate">
+        {email}
+      </p>
       <button
         type="button"
         onClick={handleLogout}
@@ -254,7 +347,10 @@ function MobileSidebarContent({
   return (
     <div className="flex h-full flex-col">
       <Brand />
-      <NavLinks onNavigate={() => setIsMobileOpen(false)} badgeCount={badgeCount} />
+      <NavLinks
+        onNavigate={() => setIsMobileOpen(false)}
+        badgeCount={badgeCount}
+      />
       <UserCard />
     </div>
   );
