@@ -1,16 +1,21 @@
 import csv
 import datetime
+import io
+import logging
 import math
 import os
 
 import requests
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.core.mail import send_mail
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.conf import settings
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -18,7 +23,9 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading
+logger = logging.getLogger(__name__)
+
+from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
@@ -28,6 +35,7 @@ from .serializers import (
     WeatherReadingSerializer,
     VoltageReadingSerializer,
     CurrentReadingSerializer,
+    BenchmarkReadingSerializer,
 )
 
 
@@ -642,3 +650,250 @@ def ingest_current(request):
     reading.save()
 
     return api_response({'status': 'ok', 'id': current.id}, status_code=201)
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def sim_alert_email(request):
+    """Send an email notification for a SIM alert (low data or expiring)."""
+    import json
+    try:
+        body = json.loads(request.body) if isinstance(request.body, bytes) else request.data
+    except (ValueError, AttributeError):
+        body = request.data
+
+    alert_type = body.get('type', 'unknown')
+    station_name = body.get('station_name', 'Unknown Station')
+    message = body.get('message', '')
+    explanation = body.get('explanation', '')
+
+    subject = f'[AWS Monitor] SIM Alert — {station_name}'
+    email_message = (
+        f'Station: {station_name}\n'
+        f'Alert Type: {alert_type}\n'
+        f'Message: {message}\n'
+        f'Details: {explanation}\n\n'
+        f'Please log in to the dashboard at {request.build_absolute_uri("/")}dashboard/sim-management '
+        f'to take action.'
+    )
+
+    try:
+        sent = send_mail(
+            subject=subject,
+            message=email_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[settings.NOTIFICATION_EMAIL],
+            fail_silently=False,
+        )
+        logger.info(f'SIM alert email sent to {settings.NOTIFICATION_EMAIL}: {sent} email(s)')
+        return JsonResponse({'success': True, 'sent': sent, 'to': settings.NOTIFICATION_EMAIL})
+    except Exception as e:
+        logger.error(f'Failed to send SIM alert email: {e}')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ─────────────────────────────────────────────────────────
+# API: Benchmark endpoint — AWS vs UNMA reference data
+# ─────────────────────────────────────────────────────────
+
+def _nearest_pairs(aws_points, benchmark_points, max_delta=datetime.timedelta(minutes=30)):
+    """
+    Matches each AWS (timestamp, value) point to the closest benchmark
+    point within max_delta. Returns a list of (aws_value, benchmark_value)
+    pairs. Benchmark points assumed small enough for a linear scan.
+    """
+    pairs = []
+    for aws_ts, aws_val in aws_points:
+        best = None
+        best_delta = None
+        for bench_ts, bench_val in benchmark_points:
+            delta = abs(aws_ts - bench_ts)
+            if delta <= max_delta and (best_delta is None or delta < best_delta):
+                best = bench_val
+                best_delta = delta
+        if best is not None:
+            pairs.append((aws_val, best))
+    return pairs
+
+
+def _pearson_correlation(xs, ys):
+    """Pearson correlation coefficient for two equal-length lists. None if undefined."""
+    n = len(xs)
+    if n < 2:
+        return None
+
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+
+    cov = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
+    var_x = sum((x - mean_x) ** 2 for x in xs)
+    var_y = sum((y - mean_y) ** 2 for y in ys)
+
+    denom = math.sqrt(var_x * var_y)
+    return (cov / denom) if denom else None
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def benchmark(request):
+    """
+    Compares AWS station readings against benchmark (e.g. UNMA) reference
+    data for a given metric over a time window.
+    """
+    station_id = request.query_params.get('station_id')
+    if not station_id:
+        return api_response(error='station_id is required', status_code=400)
+
+    hours  = int(request.query_params.get('hours', 168))
+    metric = request.query_params.get('metric', 'temperature')
+    source = request.query_params.get('source')
+
+    valid_metrics = {
+        'temperature', 'humidity', 'pressure', 'wind_speed',
+        'wind_direction', 'rain', 'light', 'soil_moisture',
+    }
+    if metric not in valid_metrics:
+        return api_response(error=f'Invalid metric: {metric}', status_code=400)
+
+    since = timezone.now() - datetime.timedelta(hours=hours)
+
+    aws_qs = SensorReading.objects.filter(
+        station_code=station_id,
+        timestamp__gte=since,
+    ).order_by('timestamp').values('timestamp', metric)
+
+    bench_qs = BenchmarkReading.objects.filter(
+        timestamp__gte=since,
+    ).order_by('timestamp')
+    if source:
+        bench_qs = bench_qs.filter(source=source)
+    bench_qs = bench_qs.values('timestamp', 'source', metric)
+
+    aws_readings = [
+        {'timestamp': r['timestamp'], 'value': r[metric]}
+        for r in aws_qs if r[metric] is not None
+    ]
+    benchmark_readings = [
+        {'timestamp': r['timestamp'], 'value': r[metric], 'source': r['source']}
+        for r in bench_qs if r[metric] is not None
+    ]
+
+    aws_values = [r['value'] for r in aws_readings]
+    benchmark_values = [r['value'] for r in benchmark_readings]
+
+    aws_points = [(r['timestamp'], r['value']) for r in aws_readings]
+    bench_points = [(r['timestamp'], r['value']) for r in benchmark_readings]
+    pairs = _nearest_pairs(aws_points, bench_points)
+
+    mae = (
+        sum(abs(a - b) for a, b in pairs) / len(pairs)
+        if pairs else None
+    )
+    correlation = (
+        _pearson_correlation([a for a, _ in pairs], [b for _, b in pairs])
+        if len(pairs) >= 2 else None
+    )
+
+    stats = {
+        'aws_avg':             (sum(aws_values) / len(aws_values)) if aws_values else None,
+        'aws_min':             min(aws_values) if aws_values else None,
+        'aws_max':             max(aws_values) if aws_values else None,
+        'benchmark_avg':       (sum(benchmark_values) / len(benchmark_values)) if benchmark_values else None,
+        'benchmark_min':       min(benchmark_values) if benchmark_values else None,
+        'benchmark_max':       max(benchmark_values) if benchmark_values else None,
+        'mean_absolute_error': mae,
+        'correlation':         correlation,
+    }
+
+    return api_response(data={
+        'station_id':          station_id,
+        'hours':               hours,
+        'metric':              metric,
+        'aws_readings':        aws_readings,
+        'benchmark_readings':  benchmark_readings,
+        'stats':               stats,
+    })
+
+
+# ─────────────────────────────────────────────────────────
+# API: Benchmark CSV import — admin only
+# ─────────────────────────────────────────────────────────
+
+# CSV columns (besides the first "time" column) that map directly
+# onto BenchmarkReading fields. Same as BenchmarkReadingAdmin.import_csv.
+BENCHMARK_CSV_FIELDS = [
+    'temperature', 'humidity', 'pressure', 'wind_speed',
+    'wind_direction', 'rain', 'light', 'soil_moisture',
+]
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def benchmark_import(request):
+    """
+    Imports UNMA (or other) benchmark readings from an uploaded CSV.
+    Admin only. Mirrors the parsing logic in BenchmarkReadingAdmin.import_csv
+    so the Django admin and React upload flow behave identically.
+    """
+    if request.user.role != 'admin':
+        return api_response(error='Admin access required', status_code=403)
+
+    csv_file = request.FILES.get('file')
+    if not csv_file:
+        return api_response(error='file is required', status_code=400)
+
+    source = request.data.get('source') or 'UNMA'
+    location = request.data.get('location', '')
+
+    decoded = io.TextIOWrapper(csv_file.file, encoding='utf-8-sig')
+    reader = csv.reader(decoded)
+
+    try:
+        header = next(reader)
+    except StopIteration:
+        return api_response(error='CSV file is empty', status_code=400)
+
+    # First column is the timestamp; remaining columns are matched by
+    # name against BENCHMARK_CSV_FIELDS. Unknown columns are ignored;
+    # known fields not present are skipped.
+    field_columns = {}
+    for idx, col_name in enumerate(header[1:], start=1):
+        col_name = col_name.strip().lower()
+        if col_name in BENCHMARK_CSV_FIELDS:
+            field_columns[col_name] = idx
+
+    readings = []
+    skipped = 0
+    for row in reader:
+        if not row or not row[0].strip():
+            continue
+
+        timestamp = parse_datetime(row[0].strip())
+        if timestamp is None:
+            skipped += 1
+            continue
+
+        kwargs = {
+            'source': source,
+            'location': location,
+            'timestamp': timestamp,
+        }
+        for field_name, col_idx in field_columns.items():
+            if col_idx >= len(row):
+                continue
+            raw_value = row[col_idx].strip()
+            if not raw_value:
+                continue
+            try:
+                kwargs[field_name] = float(raw_value)
+            except ValueError:
+                pass
+
+        readings.append(BenchmarkReading(**kwargs))
+
+    BenchmarkReading.objects.bulk_create(readings, batch_size=500)
+
+    return api_response(data={
+        'imported': len(readings),
+        'skipped':  skipped,
+    })

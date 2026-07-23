@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { type DashboardData, fetchDashboardData } from '../services/api'
+import { getCachedData, setCachedData } from '../services/cache'
+
+const CACHE_KEY = 'dashboard'
 
 export interface UseDashboardDataResult {
   data: DashboardData | null
@@ -9,11 +12,13 @@ export interface UseDashboardDataResult {
 }
 
 export function useDashboardData(): UseDashboardDataResult {
-  const [data, setData] = useState<DashboardData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const cached = getCachedData<DashboardData>(CACHE_KEY)
+
+  const [data, setData] = useState<DashboardData | null>(cached)
+  const [isLoading, setIsLoading] = useState(!cached)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
-  const hasDataRef = useRef(false)
+  const hasDataRef = useRef(!!cached)
 
   useEffect(() => {
     const abort = new AbortController()
@@ -25,6 +30,7 @@ export function useDashboardData(): UseDashboardDataResult {
         setData(result)
         setError(null)
         hasDataRef.current = true
+        setCachedData(CACHE_KEY, result)
       } catch (err) {
         if (abort.signal.aborted) return
         setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
@@ -40,14 +46,15 @@ export function useDashboardData(): UseDashboardDataResult {
         setData(result)
         setError(null)
         hasDataRef.current = true
-      } catch {
-        /* background poll errors are silent — keep existing data visible */
-      }
+        setCachedData(CACHE_KEY, result)
+      } catch { /* silent */ }
     }
 
-    /* Defer to avoid cascading-render lint on effect-initial setState */
+    if (!cached) {
+      setIsLoading(true)
+      setError(null)
+    }
     const startTimer = setTimeout(() => initialFetch(), 0)
-
     const interval = window.setInterval(() => backgroundFetch(), 30_000)
 
     return () => {
@@ -55,6 +62,7 @@ export function useDashboardData(): UseDashboardDataResult {
       clearInterval(interval)
       abort.abort()
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [retryCount])
 
   const retry = useCallback(() => {

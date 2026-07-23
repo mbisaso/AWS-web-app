@@ -57,8 +57,10 @@ export function AlertsCenterPage() {
 
   const [filters, setFilters] = useState<AlertFilters>(() => parseFiltersFromParams(searchParams))
   const [severityFilter, setSeverityFilter] = useState<AlertSeverity | 'all'>(filters.severity)
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
-  const [page, setPage] = useState(1)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(
+    () => new Set(searchParams.get('selected')?.split(',').map(Number).filter(Boolean) ?? []),
+  )
+  const [page, setPage] = useState(() => Math.max(1, Number(searchParams.get('page')) || 1))
   const [newIds, setNewIds] = useState<Set<number>>(new Set())
   const [localAlerts, setLocalAlerts] = useState<Alert[]>([])
   const prevAlertIdsRef = useRef<string>('')
@@ -76,6 +78,19 @@ export function AlertsCenterPage() {
     [filters.severity, filters.type, filters.station_id, filters.status, filters.search, filters.date_from, filters.date_to],
   )
 
+  const cacheKey = useMemo(
+    () => `alerts_${[
+      apiParams.severity ?? '',
+      apiParams.type ?? '',
+      apiParams.station_id ?? '',
+      apiParams.status ?? '',
+      apiParams.search ?? '',
+      apiParams.date_from ?? '',
+      apiParams.date_to ?? '',
+    ].join('|')}`,
+    [apiParams],
+  )
+
   const { data, isLoading, error, retry } = usePollingData(
     () => fetchAlertsData(apiParams),
     [
@@ -88,6 +103,7 @@ export function AlertsCenterPage() {
       apiParams.date_to ?? '',
     ],
     30_000,
+    cacheKey,
   )
 
   const allAlerts = data?.alerts ?? []
@@ -136,6 +152,19 @@ export function AlertsCenterPage() {
     setPage(1)
     setSelectedIds(new Set())
   }, [setSearchParams])
+
+  /* ── Sync page and selectedIds to URL ── */
+  useEffect(() => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (page > 1) next.set('page', String(page))
+      else next.delete('page')
+      const sel = Array.from(selectedIds)
+      if (sel.length > 0) next.set('selected', sel.join(','))
+      else next.delete('selected')
+      return next
+    }, { replace: true })
+  }, [page, selectedIds, setSearchParams])
 
   /* ── Severity summary card filter ── */
   const handleSeverityFilter = useCallback(

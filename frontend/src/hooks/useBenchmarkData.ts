@@ -1,33 +1,40 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { PowerChart } from '../types'
-import { fetchPowerHistory } from '../api/stations'
+import type { BenchmarkData, SensorMetricKey } from '../types'
+import { fetchBenchmark } from '../api/stations'
 import { getCachedData, setCachedData } from '../services/cache'
 
-function cacheKey(params: { stationId: string | null; hours: number }): string {
-  return `power_${params.stationId ?? 'none'}_${params.hours}`
+function cacheKey(params: { stationId: string; hours: number; metric: SensorMetricKey }): string {
+  return `benchmark_${params.stationId}_${params.hours}_${params.metric}`
 }
 
-export interface UsePowerDataResult {
-  data: PowerChart[]
+export interface UseBenchmarkDataParams {
+  stationId: string | null
+  hours: number
+  metric: SensorMetricKey
+}
+
+export interface UseBenchmarkDataResult {
+  data: BenchmarkData | null
   isLoading: boolean
   error: string | null
   retry: () => void
 }
 
-export function usePowerData(params: { stationId: string | null; hours: number }): UsePowerDataResult {
-  const ck = cacheKey(params)
-  const cached = getCachedData<PowerChart[]>(ck)
+export function useBenchmarkData(params: UseBenchmarkDataParams): UseBenchmarkDataResult {
+  const { stationId, hours, metric } = params
+  const ck = stationId ? cacheKey({ stationId, hours, metric }) : null
+  const cached = ck ? getCachedData<BenchmarkData>(ck) : null
 
-  const [data, setData] = useState<PowerChart[]>(cached ?? [])
-  const [isLoading, setIsLoading] = useState(!cached && !!params.stationId)
+  const [data, setData] = useState<BenchmarkData | null>(cached ?? null)
+  const [isLoading, setIsLoading] = useState(!!stationId && !cached)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const paramsRef = useRef(params)
   paramsRef.current = params
 
   useEffect(() => {
-    if (!paramsRef.current.stationId) {
-      setData([])
+    if (!stationId) {
+      setData(null)
       setIsLoading(false)
       setError(null)
       return
@@ -38,26 +45,28 @@ export function usePowerData(params: { stationId: string | null; hours: number }
 
     async function load() {
       try {
-        const result = await fetchPowerHistory(p.stationId!, p.hours)
+        const result = await fetchBenchmark(p.stationId as string, p.hours, p.metric)
         if (abort.signal.aborted) return
         setData(result)
         setError(null)
-        setCachedData(ck, result)
+        if (ck) setCachedData(ck, result)
       } catch (err) {
         if (abort.signal.aborted) return
-        setError(err instanceof Error ? err.message : 'Failed to load power data')
+        setError(err instanceof Error ? err.message : 'Failed to load benchmark data')
       } finally {
         if (!abort.signal.aborted) setIsLoading(false)
       }
     }
 
     async function backgroundLoad() {
+      const cur = paramsRef.current
+      if (!cur.stationId) return
       try {
-        const result = await fetchPowerHistory(paramsRef.current.stationId!, paramsRef.current.hours)
+        const result = await fetchBenchmark(cur.stationId, cur.hours, cur.metric)
         if (abort.signal.aborted) return
         setData(result)
         setError(null)
-        setCachedData(cacheKey(paramsRef.current), result)
+        setCachedData(cacheKey({ stationId: cur.stationId, hours: cur.hours, metric: cur.metric }), result)
       } catch { /* silent */ }
     }
 
@@ -74,7 +83,7 @@ export function usePowerData(params: { stationId: string | null; hours: number }
       abort.abort()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.stationId, params.hours, retryCount])
+  }, [stationId, hours, metric, retryCount])
 
   const retry = useCallback(() => {
     setIsLoading(true)

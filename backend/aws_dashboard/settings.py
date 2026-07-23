@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     'accounts',
     'stations',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
 ]
 
 # ── REST Framework config ─────────────────────────────
@@ -122,12 +123,12 @@ if DATABASE_URL:
 else:
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
+            'ENGINE': 'django.db.backends.mysql',
             'NAME':     os.environ.get('DB_NAME',     'aws-db'),
             'USER':     os.environ.get('DB_USER',     'aws_user'),
             'PASSWORD': os.environ.get('DB_PASSWORD', ''),
             'HOST':     os.environ.get('DB_HOST',     'localhost'),
-            'PORT':     os.environ.get('DB_PORT',     '5432'),
+            'PORT':     os.environ.get('DB_PORT',     '3306'),
         }
     }
 
@@ -173,3 +174,24 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Email configuration (load from env; console backend for development)
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend',
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@awsmonitor.ug')
+NOTIFICATION_EMAIL = os.environ.get('NOTIFICATION_EMAIL', 'admin@awsmonitor.ug')
+
+# Bypass Django's MariaDB version check & feature flags for local XAMPP
+from django.db.backends.mysql.base import DatabaseWrapper
+from django.db.backends.mysql.features import DatabaseFeatures
+
+DatabaseWrapper.check_database_version_supported = lambda self: None
+DatabaseFeatures.can_return_columns_from_insert = False
+DatabaseFeatures.can_return_rows_from_bulk_insert = False

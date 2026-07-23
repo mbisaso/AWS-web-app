@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { SensorMetricKey, Station, MetricReading } from '../types'
 import { SENSOR_METRIC_CONFIG } from '../types'
 import { fetchStations } from '../api/stations'
@@ -12,6 +13,7 @@ import { CorrelationView } from '../components/analysis/CorrelationView'
 import { DistributionChart } from '../components/analysis/DistributionChart'
 
 type ViewMode = 'trends' | 'comparison' | 'correlation' | 'distribution'
+const VIEW_MODES: ViewMode[] = ['trends', 'comparison', 'correlation', 'distribution']
 
 function daysAgo(days: number): string {
   const d = new Date()
@@ -24,6 +26,7 @@ function today(): string {
 }
 
 export function WeatherAnalysisPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [stations, setStations] = useState<Station[]>([])
   const [stationsLoading, setStationsLoading] = useState(true)
 
@@ -33,18 +36,48 @@ export function WeatherAnalysisPage() {
       .finally(() => setStationsLoading(false))
   }, [])
 
-  const [stationIds, setStationIds] = useState<string[]>([])
-  const [metricKey, setMetricKey] = useState<SensorMetricKey>('temperature')
-  const [correlationMetricB, setCorrelationMetricB] = useState<SensorMetricKey>('humidity')
-  const [dateFrom, setDateFrom] = useState(() => daysAgo(7))
-  const [dateTo, setDateTo] = useState(() => today())
-  const [viewMode, setViewMode] = useState<ViewMode>('trends')
-  const [showMovingAverage, setShowMovingAverage] = useState(false)
+  const urlStations = searchParams.get('stations')
+  const urlMetric = searchParams.get('metric') as SensorMetricKey | null
+  const urlCorrB = searchParams.get('corrB') as SensorMetricKey | null
+  const urlDateFrom = searchParams.get('from')
+  const urlDateTo = searchParams.get('to')
+  const urlView = searchParams.get('view') as ViewMode | null
+  const urlMovAvg = searchParams.get('movAvg')
+
+  const [stationIds, setStationIds] = useState<string[]>(
+    urlStations ? urlStations.split(',').filter(Boolean) : [],
+  )
+  const [metricKey, setMetricKey] = useState<SensorMetricKey>(
+    urlMetric && urlMetric in SENSOR_METRIC_CONFIG ? urlMetric : 'temperature',
+  )
+  const [correlationMetricB, setCorrelationMetricB] = useState<SensorMetricKey>(
+    urlCorrB && urlCorrB in SENSOR_METRIC_CONFIG ? urlCorrB : 'humidity',
+  )
+  const [dateFrom, setDateFrom] = useState(urlDateFrom ?? daysAgo(7))
+  const [dateTo, setDateTo] = useState(urlDateTo ?? today())
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    urlView && VIEW_MODES.includes(urlView) ? urlView : 'trends',
+  )
+  const [showMovingAverage, setShowMovingAverage] = useState(urlMovAvg === '1')
 
   const hours = useMemo(
     () => Math.max(1, Math.ceil((Date.parse(dateTo) - Date.parse(dateFrom)) / 3600000)),
     [dateFrom, dateTo],
   )
+
+  /* ── Sync state to URL ── */
+  useEffect(() => {
+    const next = new URLSearchParams()
+    if (stationIds.length > 0) next.set('stations', stationIds.join(','))
+    if (metricKey !== 'temperature') next.set('metric', metricKey)
+    if (correlationMetricB !== 'humidity') next.set('corrB', correlationMetricB)
+    if (dateFrom !== daysAgo(7)) next.set('from', dateFrom)
+    if (dateTo !== today()) next.set('to', dateTo)
+    if (viewMode !== 'trends') next.set('view', viewMode)
+    if (showMovingAverage) next.set('movAvg', '1')
+    setSearchParams(next, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stationIds.join(','), metricKey, correlationMetricB, dateFrom, dateTo, viewMode, showMovingAverage])
 
   const handleDateChange = useCallback((from: string, to: string) => {
     setDateFrom(from)

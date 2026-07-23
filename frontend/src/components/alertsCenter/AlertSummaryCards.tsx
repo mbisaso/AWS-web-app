@@ -148,7 +148,8 @@ export function AlertSummaryCards({ alerts, isLoading, activeSeverity, onSeverit
                 className={`inline-block h-1.5 w-1.5 rounded-full ${
                   type === 'station_offline' ? 'bg-red-500' :
                   type === 'sensor_anomaly' ? 'bg-yellow-500' :
-                  type === 'sim_expiring' ? 'bg-yellow-500' :
+                  type === 'sim_expiry' ? 'bg-yellow-500' :
+                  type === 'sim_low_data' ? 'bg-yellow-500' :
                   type === 'low_battery' ? 'bg-yellow-500' :
                   'bg-blue-500'
                 }`}
