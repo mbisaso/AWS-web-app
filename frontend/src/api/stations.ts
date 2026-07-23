@@ -6,6 +6,20 @@ export async function fetchStations(): Promise<Station[]> {
   return res.data.data
 }
 
+export async function createStation(data: Partial<Station>): Promise<Station> {
+  const res = await apiClient.post<ApiEnvelope<Station>>('/api/stations/', data)
+  return res.data.data
+}
+
+export async function updateStation(id: number | string, data: Partial<Station>): Promise<Station> {
+  const res = await apiClient.put<ApiEnvelope<Station>>(`/api/stations/${id}/`, data)
+  return res.data.data
+}
+
+export async function deleteStation(id: number | string): Promise<void> {
+  await apiClient.delete(`/api/stations/${id}/`)
+}
+
 interface PowerHistoryData {
   station_id: string
   hours: number

@@ -14,7 +14,7 @@ import {
   disableUser as apiDisableUser,
   deleteUser as apiDeleteUser,
 } from '../services/api'
-import { fetchStations } from '../api/stations'
+import { fetchStations, createStation, updateStation, deleteStation } from '../api/stations'
 import type { StationManagementData, UserAccount } from '../services/api'
 import type { Station } from '../types'
 
@@ -81,46 +81,47 @@ export function StationManagerPage() {
   /* ── Station modals ── */
   const [stationFormOpen, setStationFormOpen] = useState(false)
   const [editingStation, setEditingStation] = useState<StationManagementData | null>(null)
-  const [decommissionTarget, setDecommissionTarget] = useState<StationManagementData | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<StationManagementData | null>(null)
 
   const handleSaveStation = async (data: Partial<StationManagementData>) => {
-    await new Promise((r) => setTimeout(r, 300))
-    if (editingStation) {
-      setStations((prev) => prev.map((s) => s.id === editingStation.id ? { ...s, ...data } : s))
-    } else {
-      const created: StationManagementData = {
-        id: Date.now(),
-        name: data.name ?? '',
-        station_code: data.station_code ?? '',
-        location: data.location ?? '',
-        latitude: data.latitude ?? 1.5,
-        longitude: data.longitude ?? 32.5,
-        status: 'online',
-        connectivity: data.connectivity ?? 'gsm',
-        expected_interval_minutes: data.expected_interval_minutes ?? 15,
-        sensors: data.sensors ?? [],
-        notes: data.notes ?? '',
-        phone_number: data.phone_number ?? '',
-        created_at: new Date().toISOString(),
-        is_active: true,
+    try {
+      const payload: Partial<Station> = {
+        name: data.name,
+        station_id: data.station_code,
+        location: data.location,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        expected_interval_minutes: data.expected_interval_minutes,
+        phone_number: data.phone_number,
+        sensors: data.sensors,
+        notes: data.notes,
       }
-      setStations((prev) => [...prev, created])
+      
+      if (editingStation) {
+        await updateStation(editingStation.id, payload)
+      } else {
+        await createStation(payload)
+      }
+      
+      // Close modal and refresh table
+      setStationFormOpen(false)
+      setEditingStation(null)
+      refresh()
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message || 'Failed to save station')
     }
   }
 
-  const handleDecommission = async () => {
-    if (!decommissionTarget) return
-    await new Promise((r) => setTimeout(r, 200))
-    setStations((prev) => prev.map((s) => s.id === decommissionTarget.id ? { ...s, status: 'offline', is_active: false } : s))
-    setDecommissionTarget(null)
-  }
 
   const handleDeleteStation = async () => {
     if (!deleteTarget) return
-    await new Promise((r) => setTimeout(r, 300))
-    setStations((prev) => prev.filter((s) => s.id !== deleteTarget.id))
-    setDeleteTarget(null)
+    try {
+      await deleteStation(deleteTarget.id)
+      setDeleteTarget(null)
+      refresh()
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.message || 'Failed to delete station')
+    }
   }
 
   /* ── User modals ── */
@@ -276,7 +277,6 @@ export function StationManagerPage() {
               stations={stations}
               isLoading={loadingStations}
               onEdit={(s) => { setEditingStation(s); setStationFormOpen(true) }}
-              onDecommission={(s) => setDecommissionTarget(s)}
               onDelete={(s) => setDeleteTarget(s)}
             />
           </section>
@@ -323,16 +323,6 @@ export function StationManagerPage() {
         onClose={() => { setStationFormOpen(false); setEditingStation(null) }}
       />
 
-      {/* ── Decommission confirm ── */}
-      <ConfirmDialog
-        open={!!decommissionTarget}
-        title="Decommission station"
-        description={`Are you sure you want to decommission "${decommissionTarget?.name}"? The station will be marked offline and hidden from active views. This can be reversed.`}
-        confirmLabel="Decommission"
-        variant="warning"
-        onConfirm={handleDecommission}
-        onCancel={() => setDecommissionTarget(null)}
-      />
 
       {/* ── Delete station confirm ── */}
       <ConfirmDialog

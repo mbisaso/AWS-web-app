@@ -31,6 +31,9 @@ export interface Station {
   latitude: number | null
   longitude: number | null
   expected_interval_minutes: number
+  phone_number: string
+  sensors: string[]
+  notes: string
   status: StationStatus | null
 }
 

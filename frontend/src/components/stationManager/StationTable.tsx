@@ -7,13 +7,12 @@ interface StationTableProps {
   stations: StationManagementData[]
   isLoading: boolean
   onEdit: (station: StationManagementData) => void
-  onDecommission: (station: StationManagementData) => void
   onDelete: (station: StationManagementData) => void
 }
 
 type SortKey = 'name' | 'location' | 'connectivity' | 'status' | 'created_at'
 
-export function StationTable({ stations, isLoading, onEdit, onDecommission, onDelete }: StationTableProps) {
+export function StationTable({ stations, isLoading, onEdit, onDelete }: StationTableProps) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [connFilter, setConnFilter] = useState<string>('all')
@@ -145,7 +144,6 @@ export function StationTable({ stations, isLoading, onEdit, onDecommission, onDe
                 <td className="px-4 py-3.5 text-right">
                   <div className="flex items-center justify-end gap-1">
                     <ActionBtn onClick={() => onEdit(station)} label="Edit" />
-                    <ActionBtn onClick={() => onDecommission(station)} label="Decom." variant="warning" />
                     <ActionBtn onClick={() => onDelete(station)} label="Delete" variant="danger" />
                   </div>
                 </td>

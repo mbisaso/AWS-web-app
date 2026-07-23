@@ -411,13 +411,20 @@ def ingest(request):
 # API: Latest reading per station
 # ─────────────────────────────────────────────────────────
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def stations_list(request):
     """
-    Returns all registered stations with their current status.
-    Used by React sidebar/station selector.
+    GET: Returns all registered stations with their current status.
+    POST: Creates a new station.
     """
+    if request.method == 'POST':
+        serializer = StationSerializer(data=request.data)
+        if serializer.is_valid():
+            station = serializer.save()
+            return api_response(data=StationSerializer(station).data, status_code=201)
+        return api_response(error=serializer.errors, status_code=400)
+
     stations = Station.objects.select_related('status').all()
     serializer = StationSerializer(stations, many=True)
     return api_response(data=serializer.data)
@@ -469,21 +476,30 @@ def history(request, station_id):
     })
 
 
-@api_view(['GET'])
+@api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def station_detail(request, station_id):
     try:
-        station = Station.objects.select_related('status').get(
-            station_id=station_id
-        )
+        if str(station_id).isdigit():
+            station = Station.objects.select_related('status').get(id=station_id)
+        else:
+            station = Station.objects.select_related('status').get(station_id=station_id)
     except Station.DoesNotExist:
-        return api_response(
-            error=f'Station {station_id} not found',
-            status_code=404
-        )
+        return api_response(error=f'Station {station_id} not found', status_code=404)
+
+    if request.method == 'PUT':
+        serializer = StationSerializer(station, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated = serializer.save()
+            return api_response(data=StationSerializer(updated).data)
+        return api_response(error=serializer.errors, status_code=400)
+
+    if request.method == 'DELETE':
+        station.delete()
+        return api_response(message="Station deleted", status_code=200)
 
     latest_reading = SensorReading.objects.filter(
-        station_code=station_id
+        station_code=station.station_id
     ).order_by('-timestamp').first()
 
     return api_response(data={

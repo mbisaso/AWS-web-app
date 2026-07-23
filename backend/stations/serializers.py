@@ -29,6 +29,9 @@ class StationSerializer(serializers.ModelSerializer):
             'latitude',
             'longitude',
             'expected_interval_minutes',
+            'phone_number',
+            'sensors',
+            'notes',
             'status',
         ]
 

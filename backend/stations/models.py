@@ -15,6 +15,10 @@ class Station(models.Model):
     # Used by StationStatus to decide if station is DOWN
     expected_interval_minutes = models.IntegerField(default=15)
 
+    phone_number = models.CharField(max_length=20, blank=True)
+    sensors      = models.JSONField(default=list, blank=True)
+    notes        = models.TextField(blank=True)
+
     def __str__(self):
         return f"{self.name} ({self.station_id})"
 
