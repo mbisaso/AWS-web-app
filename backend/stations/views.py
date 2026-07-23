@@ -25,7 +25,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 logger = logging.getLogger(__name__)
 
-from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading
+from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading, SimCard
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
@@ -445,6 +445,113 @@ def latest(request):
             results.append(SensorReadingLatestSerializer(reading).data)
 
     return api_response(data=results)
+
+# ─────────────────────────────────────────────────────────
+# API: Dashboard Overview
+# ─────────────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_overview(request):
+    stations = Station.objects.select_related('status').all()
+    
+    # ── SIM Summary ──
+    sims = SimCard.objects.all()
+    total_sims = sims.count()
+    expired_count = 0
+    expiring_soon_count = 0
+    total_remaining_mb = 0
+    
+    today = timezone.now().date()
+    soon_threshold = today + datetime.timedelta(days=7)
+    
+    for sim in sims:
+        if sim.expiry_date:
+            if sim.expiry_date < today:
+                expired_count += 1
+            elif sim.expiry_date <= soon_threshold:
+                expiring_soon_count += 1
+        rem = sim.data_limit_mb - sim.data_used_mb
+        if rem > 0:
+            total_remaining_mb += rem
+
+    sim_summary = {
+        'total_active': total_sims,
+        'expired_count': expired_count,
+        'expiring_soon_count': expiring_soon_count,
+        'total_remaining_mb': total_remaining_mb,
+    }
+
+    # ── Stations & Sensor Data ──
+    dashboard_stations = []
+    
+    for s in stations:
+        latest = WeatherReading.objects.filter(station=s).order_by('-timestamp').first()
+        stat = getattr(s, "status", None)
+        db_status = stat.status if stat else "full"
+        if db_status == "full":
+            status_val = "online"
+        elif db_status == "down":
+            status_val = "offline"
+        else:
+            status_val = "partial"
+        
+        st = {
+            'id': s.id,
+            'name': s.name,
+            'station_code': s.station_id,
+            'location': s.location,
+            'latitude': s.latitude or 0.0,
+            'longitude': s.longitude or 0.0,
+            'status': status_val,
+            'temperature': None,
+            'humidity': None,
+            'rainfall': None,
+            'wind_speed': None,
+            'pressure': None,
+            'last_seen': latest.timestamp.isoformat() if latest else s.created_at.isoformat(),
+            'expected_interval_minutes': s.expected_interval_minutes,
+            'is_stale': False
+        }
+        
+        if latest:
+            if latest.temperature is not None:
+                st['temperature'] = {'value': latest.temperature, 'unit': '°C'}
+            if latest.humidity is not None:
+                st['humidity'] = {'value': latest.humidity, 'unit': '%'}
+            if latest.rain is not None:
+                st['rainfall'] = {'value': latest.rain, 'unit': 'mm'}
+            if latest.wind_speed is not None:
+                st['wind_speed'] = {'value': latest.wind_speed, 'unit': 'm/s'}
+            if latest.pressure is not None:
+                st['pressure'] = {'value': latest.pressure, 'unit': 'hPa'}
+                
+        dashboard_stations.append(st)
+
+    alerts = [] # Alerts to be implemented later
+    
+    online = sum(1 for s in dashboard_stations if s['status'] in ('online', 'full'))
+    offline = sum(1 for s in dashboard_stations if s['status'] in ('offline', 'down'))
+    total_st = len(dashboard_stations)
+    
+    summary = {
+        'total_stations': total_st,
+        'online_stations': online,
+        'online_percentage': round((online / total_st) * 100) if total_st else 0,
+        'offline_stations': offline,
+        'offline_percentage': round((offline / total_st) * 100) if total_st else 0,
+        'active_alerts': 0,
+        'critical_alerts': 0,
+        'warning_alerts': 0,
+        'info_alerts': 0,
+    }
+
+    return api_response(data={
+        'summary': summary,
+        'stations': dashboard_stations,
+        'alerts': alerts,
+        'sim_summary': sim_summary
+    })
 
 # ─────────────────────────────────────────────────────────
 # API: Historical readings for a station

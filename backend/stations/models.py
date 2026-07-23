@@ -20,8 +20,36 @@ class Station(models.Model):
     notes        = models.TextField(blank=True)
     created_at   = models.DateTimeField(auto_now_add=True)
 
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.phone_number:
+            # Use get_or_create or update_or_create
+            # We import SimCard locally if it's defined after
+            SimCard.objects.update_or_create(
+                station=self,
+                defaults={'phone_number': self.phone_number}
+            )
+        else:
+            SimCard.objects.filter(station=self).delete()
+
     def __str__(self):
         return f"{self.name} ({self.station_id})"
+
+
+class SimCard(models.Model):
+    """
+    Dedicated model for managing the SIM card of a station.
+    Auto-created when a Station is saved with a phone_number.
+    """
+    station = models.OneToOneField(Station, on_delete=models.CASCADE, related_name='sim_card')
+    phone_number = models.CharField(max_length=20)
+    iccid = models.CharField(max_length=50, blank=True)
+    data_limit_mb = models.FloatField(default=1024.0)  # 1GB default limit
+    data_used_mb = models.FloatField(default=0.0)
+    expiry_date = models.DateField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"SIM {self.phone_number} for {self.station.station_id}"
 
 
 class StationStatus(models.Model):
