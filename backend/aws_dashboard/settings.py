@@ -122,12 +122,12 @@ if DATABASE_URL:
 else:
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
+            'ENGINE': 'django.db.backends.mysql',
             'NAME':     os.environ.get('DB_NAME',     'aws-db'),
             'USER':     os.environ.get('DB_USER',     'aws_user'),
             'PASSWORD': os.environ.get('DB_PASSWORD', ''),
             'HOST':     os.environ.get('DB_HOST',     'localhost'),
-            'PORT':     os.environ.get('DB_PORT',     '5432'),
+            'PORT':     os.environ.get('DB_PORT',     '3306'),
         }
     }
 
