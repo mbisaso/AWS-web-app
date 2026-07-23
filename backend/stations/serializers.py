@@ -32,6 +32,7 @@ class StationSerializer(serializers.ModelSerializer):
             'phone_number',
             'sensors',
             'notes',
+            'created_at',
             'status',
         ]
 

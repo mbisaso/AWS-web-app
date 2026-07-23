@@ -34,6 +34,7 @@ export interface Station {
   phone_number: string
   sensors: string[]
   notes: string
+  created_at: string
   status: StationStatus | null
 }
 
