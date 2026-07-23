@@ -186,3 +186,11 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@awsmonitor.ug')
 NOTIFICATION_EMAIL = os.environ.get('NOTIFICATION_EMAIL', 'admin@awsmonitor.ug')
+
+# Bypass Django's MariaDB version check & feature flags for local XAMPP
+from django.db.backends.mysql.base import DatabaseWrapper
+from django.db.backends.mysql.features import DatabaseFeatures
+
+DatabaseWrapper.check_database_version_supported = lambda self: None
+DatabaseFeatures.can_return_columns_from_insert = False
+DatabaseFeatures.can_return_rows_from_bulk_insert = False
