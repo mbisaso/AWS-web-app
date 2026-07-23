@@ -1,10 +1,10 @@
 ﻿import { useEffect, useRef, useState } from 'react'
-import type { SensorMetricKey, StatsResult } from '../../types'
-import { SENSOR_METRIC_CONFIG } from '../../types'
+import type { AnalysisMetricKey, StatsResult } from '../../types'
+import { ANALYSIS_METRIC_CONFIG } from '../../types'
 
 interface StatSummaryCardProps {
   stats: StatsResult | null
-  metricKey: SensorMetricKey
+  metricKey: AnalysisMetricKey
   stationName: string
   isLoading?: boolean
 }
@@ -68,7 +68,7 @@ function Skeleton() {
 }
 
 export function StatSummaryCard({ stats, metricKey, stationName, isLoading }: StatSummaryCardProps) {
-  const cfg = SENSOR_METRIC_CONFIG[metricKey]
+  const cfg = ANALYSIS_METRIC_CONFIG[metricKey]
 
   if (isLoading) return <Skeleton />
 

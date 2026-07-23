@@ -8,9 +8,7 @@ export function HeroSection() {
   return (
     <section className="relative min-h-screen overflow-hidden">
       {/* ── Animated sky gradient background ── */}
-      <div
-        className="absolute inset-0 bg-gradient-to-br from-sky-soft via-sky-mist via-40% to-white bg-[length:200%_200%] animate-gradient-shift"
-      />
+      <div className="absolute inset-0 bg-gradient-to-br from-sky-soft via-sky-mist via-40% to-white bg-[length:200%_200%] animate-gradient-shift" />
 
       {/* ── Decorative gradient orbs ── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -71,7 +69,7 @@ export function HeroSection() {
               Live station monitoring
             </div>
 
-            <h1 className="mt-6 text-4xl font-semibold tracking-tight text-midnight sm:text-5xl lg:text-6xl font-display leading-[1.1]">
+            <h1 className="mt-6 text-4xl font-semibold tracking-tight text-midnight sm:text-5xl lg:text-6xl font-display leading-[1.1] text-balance">
               A clean control center for{' '}
               <span className="bg-gradient-to-r from-sky-primary to-sky-deep bg-clip-text text-transparent">
                 weather station
@@ -79,7 +77,7 @@ export function HeroSection() {
               operations.
             </h1>
 
-            <p className="mt-5 max-w-2xl text-base leading-8 text-storm/70 sm:text-lg">
+            <p className="mt-5 max-w-2xl text-base leading-8 text-storm/70 sm:text-lg text-balance">
               Monitor station health, review environmental data, and keep your WIMEA-ICT network
               running at peak performance — all from a single, intuitive dashboard.
             </p>
@@ -87,14 +85,14 @@ export function HeroSection() {
             <div className="mt-8 flex flex-wrap gap-4">
               <a
                 href="/dashboard"
-                className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-primary to-sky-deep px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-200/50 transition-all duration-300 hover:shadow-xl hover:shadow-sky-200/60 hover:brightness-110 cursor-pointer"
+                className="group inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-primary to-sky-deep px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-sky-200/50 transition-all duration-300 hover:shadow-xl hover:shadow-sky-200/60 hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
               >
                 Open dashboard
                 <ArrowRightIcon className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
               </a>
               <a
                 href="#features"
-                className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/60 px-6 py-3 text-sm font-semibold text-storm transition-all duration-200 hover:border-sky-bright hover:bg-white hover:text-sky-primary cursor-pointer backdrop-blur-sm"
+                className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/60 px-7 py-3.5 text-sm font-semibold text-storm transition-all duration-200 hover:border-sky-bright hover:bg-white hover:text-sky-primary cursor-pointer backdrop-blur-sm hover:-translate-y-0.5 active:translate-y-0"
               >
                 Explore features
               </a>
@@ -127,7 +125,7 @@ export function HeroSection() {
               cardVisible ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'
             }`}
           >
-            <div className="rounded-3xl border border-sky-200/60 bg-white/70 p-6 shadow-xl shadow-sky-200/20 backdrop-blur-md lg:p-8">
+            <div className="rounded-3xl border border-sky-200/60 bg-white/70 p-6 shadow-elevation-3 backdrop-blur-md lg:p-8 transition-shadow duration-300 hover:shadow-elevation-4">
               {/* Card header */}
               <div className="flex items-start justify-between">
                 <div>
@@ -182,7 +180,7 @@ function HeroMiniCard({
   description: string
 }) {
   return (
-    <article className="group cursor-pointer rounded-2xl border border-sky-100 bg-white/70 p-5 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:border-sky-200 hover:shadow-lg hover:shadow-sky-100/50 backdrop-blur-sm">
+    <article className="group cursor-pointer rounded-2xl border border-sky-100 bg-white/70 p-5 shadow-xs transition-all duration-300 hover:-translate-y-1 hover:border-sky-200 hover:shadow-elevation-2 backdrop-blur-sm">
       <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-sky-soft transition-colors duration-300 group-hover:bg-sky-mist">
         {icon}
       </div>
@@ -207,7 +205,7 @@ function PlatformMetricCard({
       : 'text-midnight'
 
   return (
-    <div className="rounded-2xl border border-sky-100 bg-white/50 p-4 transition-all duration-200 hover:border-sky-200 hover:bg-white/80">
+    <div className="rounded-2xl border border-sky-100 bg-white/50 p-4 transition-all duration-200 hover:border-sky-200 hover:bg-white/80 hover:shadow-xs">
       <p className="text-xs text-storm/50">{label}</p>
       <p className={`mt-1.5 text-2xl font-semibold ${valueColor} font-display`}>{value}</p>
     </div>

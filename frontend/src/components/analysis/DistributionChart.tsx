@@ -1,12 +1,12 @@
 ﻿import { useMemo } from 'react'
-import type { MetricReading, SensorMetricKey } from '../../types'
-import { SENSOR_METRIC_CONFIG } from '../../types'
+import type { MetricReading, AnalysisMetricKey } from '../../types'
+import { ANALYSIS_METRIC_CONFIG } from '../../types'
 
 const PAD = { top: 20, bottom: 40, left: 55, right: 20 }
 const SVG_W = 600
 const SVG_H = 350
 
-const EXPECTED_RANGES: Partial<Record<SensorMetricKey, { min: number; max: number }>> = {
+const EXPECTED_RANGES: Partial<Record<AnalysisMetricKey, { min: number; max: number }>> = {
   temperature:    { min: 10, max: 40 },
   humidity:       { min: 20, max: 90 },
   rain:           { min: 0,  max: 50 },
@@ -18,12 +18,12 @@ const EXPECTED_RANGES: Partial<Record<SensorMetricKey, { min: number; max: numbe
 
 interface DistributionChartProps {
   readings: MetricReading[]
-  metricKey: SensorMetricKey
+  metricKey: AnalysisMetricKey
   isLoading?: boolean
 }
 
 export function DistributionChart({ readings, metricKey, isLoading }: DistributionChartProps) {
-  const cfg = SENSOR_METRIC_CONFIG[metricKey]
+  const cfg = ANALYSIS_METRIC_CONFIG[metricKey]
 
   const { bins, binWidth, rangeMin, rangeMax, total } = useMemo(() => {
     if (!readings.length) return { bins: [] as { x0: number; count: number }[], binWidth: 0, rangeMin: 0, rangeMax: 0, total: 0 }

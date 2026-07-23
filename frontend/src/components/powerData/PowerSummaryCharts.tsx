@@ -33,16 +33,16 @@ export function PowerSummaryCharts({ readings, metricKey, isLoading }: PowerSumm
   if (isLoading) {
     return (
       <div className="grid gap-5 lg:grid-cols-2">
-        <div className="animate-pulse rounded-2xl border border-slate-200 bg-white p-5" aria-hidden="true">
-          <div className="mb-4 h-4 w-44 rounded-full bg-slate-200" />
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-5" aria-hidden="true">
+          <div className="mb-4 h-4 w-44 rounded-full bg-slate-200 skeleton-shimmer" />
           <div className="space-y-3">
-            {Array.from({ length: 3 }, (_, i) => <div key={i} className="h-6 w-full rounded-lg bg-slate-100" />)}
+            {Array.from({ length: 3 }, (_, i) => <div key={i} className="h-6 w-full rounded-lg bg-slate-100 skeleton-shimmer" />)}
           </div>
         </div>
-        <div className="animate-pulse rounded-2xl border border-slate-200 bg-white p-5" aria-hidden="true">
-          <div className="mb-4 h-4 w-44 rounded-full bg-slate-200" />
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-5" aria-hidden="true">
+          <div className="mb-4 h-4 w-44 rounded-full bg-slate-200 skeleton-shimmer" />
           <div className="space-y-3">
-            {Array.from({ length: 3 }, (_, i) => <div key={i} className="h-6 w-full rounded-lg bg-slate-100" />)}
+            {Array.from({ length: 3 }, (_, i) => <div key={i} className="h-6 w-full rounded-lg bg-slate-100 skeleton-shimmer" />)}
           </div>
         </div>
       </div>

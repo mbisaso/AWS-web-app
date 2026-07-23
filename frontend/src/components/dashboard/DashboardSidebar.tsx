@@ -32,13 +32,23 @@ export function DashboardSidebar() {
     return () => clearInterval(id)
   }, [])
 
+  /* Lock body scroll when mobile drawer is open */
+  useEffect(() => {
+    if (isMobileOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [isMobileOpen])
+
   return (
     <>
       {/* ── Mobile hamburger ── */}
       <button
         type="button"
         onClick={() => setIsMobileOpen(!isMobileOpen)}
-        className="fixed top-4 left-4 z-50 flex items-center justify-center rounded-xl bg-midnight p-2.5 text-white shadow-lg lg:hidden cursor-pointer"
+        className="fixed top-4 left-4 z-50 flex items-center justify-center rounded-xl bg-midnight p-2.5 text-white shadow-elevation-3 transition-all duration-200 hover:bg-storm lg:hidden cursor-pointer"
         aria-label={isMobileOpen ? "Close sidebar" : "Open sidebar"}
       >
         {isMobileOpen ? (
@@ -49,17 +59,17 @@ export function DashboardSidebar() {
       </button>
 
       {/* ── Mobile overlay ── */}
-      {isMobileOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-midnight/40 backdrop-blur-sm lg:hidden"
-          onClick={() => setIsMobileOpen(false)}
-          aria-hidden="true"
-        />
-      )}
+      <div
+        className={`fixed inset-0 z-30 bg-midnight/40 backdrop-blur-sm lg:hidden transition-opacity duration-300 ${
+          isMobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+        onClick={() => setIsMobileOpen(false)}
+        aria-hidden="true"
+      />
 
       {/* ── Mobile drawer (fixed overlay) ── */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[270px] translate-x-0 flex-col bg-midnight px-5 py-6 text-white shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-40 flex w-[270px] flex-col bg-midnight px-5 py-6 text-white shadow-2xl transition-transform duration-300 ease-in-out lg:hidden ${
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-label="Dashboard navigation (mobile)"
@@ -82,7 +92,7 @@ export function DashboardSidebar() {
 function Brand() {
   return (
     <div className="flex items-center gap-3 border-b border-white/10 pb-6">
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-primary to-sky-deep text-lg font-black text-white shadow-md">
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-primary to-sky-deep text-lg font-black text-white shadow-md transition-transform duration-300 hover:scale-105">
         A
       </div>
       <div>
@@ -181,17 +191,19 @@ function NavLinks({ onNavigate, badgeCount }: { onNavigate?: () => void; badgeCo
             onClick={onNavigate}
             end
             className={({ isActive }) =>
-              `flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors duration-200 cursor-pointer ${
+              `flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 cursor-pointer group ${
                 isActive
-                  ? "bg-white/10 text-white"
+                  ? "bg-white/10 text-white shadow-sm shadow-white/5"
                   : "text-white/50 hover:bg-white/5 hover:text-white/80"
               }`
             }
           >
-            <span className="relative shrink-0">
+            <span className={`relative shrink-0 transition-colors duration-200 ${
+              'group-hover:text-white/90'
+            }`}>
               {NAV_ICONS[item.href]}
               {showBadge && (
-                <span className="absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose px-1 text-[9px] font-bold leading-none text-white ring-2 ring-midnight">
+                <span className="absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose px-1 text-[9px] font-bold leading-none text-white ring-2 ring-midnight animate-pulse-soft">
                   {badgeCount! > 9 ? "9+" : badgeCount}
                 </span>
               )}
@@ -215,11 +227,11 @@ function UserCard() {
   }
 
   return (
-    <div className="mt-auto rounded-2xl border border-white/10 bg-white/5 p-4">
+    <div className="mt-auto rounded-2xl border border-white/10 bg-white/5 p-4 transition-all duration-200 hover:bg-white/8">
       <p className="text-[10px] uppercase tracking-[0.18em] text-white/30">
         Signed in as
       </p>
-      <p className="mt-1.5 font-semibold text-base text-white">{username}</p>
+      <p className="mt-1.5 font-semibold text-base text-white truncate">{username}</p>
       <button
         type="button"
         onClick={handleLogout}

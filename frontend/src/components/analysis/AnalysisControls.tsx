@@ -1,11 +1,10 @@
-﻿import { useState, useRef, useEffect } from 'react'
-import type { Station, SensorMetricKey } from '../../types'
-import { SENSOR_METRIC_CONFIG } from '../../types'
+﻿import type { Station, AnalysisMetricKey } from '../../types'
+import { ANALYSIS_METRIC_CONFIG } from '../../types'
 import { DateRangePicker } from '../shared/DateRangePicker'
 
 type ViewMode = 'trends' | 'comparison' | 'correlation' | 'distribution'
 
-const SENSOR_KEYS = Object.keys(SENSOR_METRIC_CONFIG) as SensorMetricKey[]
+const METRIC_KEYS = Object.keys(ANALYSIS_METRIC_CONFIG) as AnalysisMetricKey[]
 
 const VIEW_TABS: { key: ViewMode; label: string }[] = [
   { key: 'trends', label: 'Trends' },
@@ -18,10 +17,10 @@ interface AnalysisControlsProps {
   stations: Station[]
   selectedStationIds: string[]
   onStationIdsChange: (ids: string[]) => void
-  selectedMetricKey: SensorMetricKey
-  onMetricKeyChange: (key: SensorMetricKey) => void
-  correlationMetricB: SensorMetricKey
-  onCorrelationMetricBChange: (key: SensorMetricKey) => void
+  selectedMetricKey: AnalysisMetricKey
+  onMetricKeyChange: (key: AnalysisMetricKey) => void
+  correlationMetricB: AnalysisMetricKey
+  onCorrelationMetricBChange: (key: AnalysisMetricKey) => void
   dateFrom: string
   dateTo: string
   onDateChange: (from: string, to: string) => void
@@ -43,19 +42,6 @@ export function AnalysisControls({
   viewMode,
   onViewModeChange,
 }: AnalysisControlsProps) {
-  const [stationOpen, setStationOpen] = useState(false)
-  const stationRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (stationRef.current && !stationRef.current.contains(e.target as Node)) {
-        setStationOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
   const allSelected = selectedStationIds.length === 0
 
   function toggleStation(id: string) {
@@ -69,58 +55,36 @@ export function AnalysisControls({
     }
   }
 
-  const stationLabel = allSelected
-    ? `All (${stations.length})`
-    : selectedStationIds.length === 1
-      ? stations.find((s) => s.station_id === selectedStationIds[0])?.name ?? '1 station'
-      : `${selectedStationIds.length} stations`
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-wrap">
-        <div className="relative min-w-0 sm:w-56" ref={stationRef}>
+        <div className="min-w-0 flex-1">
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-storm/40">Station</p>
-          <button
-            type="button"
-            onClick={() => setStationOpen((o) => !o)}
-            className="flex w-full cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-midnight transition-colors focus:border-sky-200 focus:ring-2 focus:ring-sky-soft focus:outline-none"
-            aria-haspopup="listbox"
-            aria-expanded={stationOpen}
+          <div
+            className="flex gap-1 overflow-x-auto pb-1"
+            role="tablist"
             aria-label="Select stations"
           >
-            <span className="truncate">{stationLabel}</span>
-            <svg className={`h-4 w-4 shrink-0 text-storm/40 transition-transform ${stationOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
-
-          {stationOpen && (
-            <div className="absolute left-0 right-0 z-20 mt-1 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg" role="listbox" aria-label="Stations">
-              <label className="flex cursor-pointer items-center gap-2.5 border-b border-slate-100 px-3 py-2.5 text-xs font-medium text-storm/60 hover:bg-slate-50">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={() => onStationIdsChange([])}
-                  className="h-4 w-4 rounded border-slate-300 text-midnight focus:ring-1 focus:ring-sky-soft"
-                />
-                All stations
-              </label>
-              {stations.map((s) => (
-                <label
+            {stations.map((s) => {
+              const isActive = allSelected || selectedStationIds.includes(s.station_id)
+              return (
+                <button
                   key={s.station_id}
-                  className="flex cursor-pointer items-center gap-2.5 px-3 py-2.5 text-xs text-storm/70 hover:bg-slate-50"
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => toggleStation(s.station_id)}
+                  className={`shrink-0 cursor-pointer rounded-xl px-3 py-2 text-xs font-medium transition-colors whitespace-nowrap ${
+                    isActive
+                      ? 'bg-midnight text-white shadow-xs'
+                      : 'bg-white text-storm/60 hover:text-storm hover:bg-slate-100 border border-slate-200'
+                  }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={allSelected || selectedStationIds.includes(s.station_id)}
-                    onChange={() => toggleStation(s.station_id)}
-                    className="h-4 w-4 rounded border-slate-300 text-midnight focus:ring-1 focus:ring-sky-soft"
-                  />
-                  <span className="truncate">{s.name}</span>
-                </label>
-              ))}
-            </div>
-          )}
+                  {s.name}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={onDateChange} />
@@ -153,8 +117,8 @@ export function AnalysisControls({
           {viewMode === 'correlation' ? 'Primary metric' : 'Metric'}
         </p>
         <div className="flex flex-wrap gap-1" role="group" aria-label="Sensor metric">
-          {SENSOR_KEYS.map((key) => {
-            const cfg = SENSOR_METRIC_CONFIG[key]
+          {METRIC_KEYS.map((key) => {
+            const cfg = ANALYSIS_METRIC_CONFIG[key]
             const isActive = selectedMetricKey === key
             return (
               <button
@@ -180,8 +144,8 @@ export function AnalysisControls({
         <div>
           <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-storm/40">Secondary metric</p>
           <div className="flex flex-wrap gap-1" role="group" aria-label="Secondary sensor metric">
-            {SENSOR_KEYS.map((key) => {
-              const cfg = SENSOR_METRIC_CONFIG[key]
+            {METRIC_KEYS.map((key) => {
+              const cfg = ANALYSIS_METRIC_CONFIG[key]
               const isActive = correlationMetricB === key
               return (
                 <button

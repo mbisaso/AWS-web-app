@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { MenuIcon, CloseIcon } from './Icons'
 
 const navigationLinks = [
+  { label: 'How it works', href: '#how-it-works' },
   { label: 'Features', href: '#features' },
   { label: 'Platform', href: '#platform' },
   { label: 'Access', href: '#access' },

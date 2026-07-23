@@ -2,17 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { useScrollReveal } from '../../hooks/useScrollReveal'
 
 const stats = [
-  { value: 12, suffix: '', label: 'Stations online', description: 'Across the WIMEA-ICT network' },
-  { value: 98, suffix: '%', label: 'Data freshness', description: 'Readings updated every minute' },
-  { value: 3, suffix: '', label: 'Active alerts', description: 'Requiring attention' },
-  { value: 1.8, suffix: 's', label: 'Sync latency', description: 'Average data transmission delay' },
+  { value: 12, suffix: '', label: 'Stations online', description: 'Across the WIMEA-ICT network', icon: '📡' },
+  { value: 98, suffix: '%', label: 'Data freshness', description: 'Readings updated every minute', icon: '⚡' },
+  { value: 3, suffix: '', label: 'Active alerts', description: 'Requiring attention', icon: '🔔' },
+  { value: 1.8, suffix: 's', label: 'Sync latency', description: 'Average data transmission delay', icon: '⏱' },
 ] as const
 
 export function StatsSection() {
   const { ref, isVisible } = useScrollReveal({ threshold: 0.3 })
 
   return (
-    <section id="platform" className="border-t border-sky-100 bg-gradient-to-b from-sky-soft to-white py-20 lg:py-24">
+    <section id="platform" className="border-t border-sky-100 bg-gradient-to-b from-sky-soft/60 via-white to-white py-20 lg:py-24">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         {/* Section header */}
         <div className="mx-auto max-w-xl text-center">
@@ -36,6 +36,7 @@ export function StatsSection() {
               suffix={stat.suffix}
               label={stat.label}
               description={stat.description}
+              icon={stat.icon}
               isVisible={isVisible}
             />
           ))}
@@ -50,12 +51,14 @@ function StatCounter({
   suffix,
   label,
   description,
+  icon,
   isVisible,
 }: {
   value: number
   suffix: string
   label: string
   description: string
+  icon: string
   isVisible: boolean
 }) {
   const [displayValue, setDisplayValue] = useState(0)
@@ -86,13 +89,18 @@ function StatCounter({
   }, [isVisible, value])
 
   return (
-    <div className="group cursor-pointer rounded-3xl border border-sky-100 bg-white p-6 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-sky-200 hover:shadow-lg">
-      <p className="text-4xl font-bold tracking-tight text-midnight font-display lg:text-5xl">
-        {displayValue}
-        {suffix}
-      </p>
-      <p className="mt-2 text-sm font-semibold text-midnight">{label}</p>
-      <p className="mt-1 text-xs text-storm/50">{description}</p>
+    <div className="group relative cursor-pointer overflow-hidden rounded-3xl border border-sky-100 bg-white p-6 text-center shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-sky-200 hover:shadow-elevation-2">
+      {/* Subtle gradient background on hover */}
+      <div className="absolute inset-0 bg-gradient-to-br from-sky-soft/0 to-sky-primary/0 transition-all duration-500 group-hover:from-sky-soft/30 group-hover:to-transparent" aria-hidden="true" />
+      <div className="relative">
+        <span className="text-xl" aria-hidden="true">{icon}</span>
+        <p className="mt-2 text-4xl font-bold tracking-tight bg-gradient-to-br from-midnight to-sky-deep bg-clip-text text-transparent font-display lg:text-5xl">
+          {displayValue}
+          {suffix}
+        </p>
+        <p className="mt-2 text-sm font-semibold text-midnight">{label}</p>
+        <p className="mt-1 text-xs text-storm/50">{description}</p>
+      </div>
     </div>
   )
 }

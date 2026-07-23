@@ -125,20 +125,24 @@ function FeatureCard({
 
   return (
     <article
-      className={`group cursor-pointer rounded-3xl border border-sky-100 bg-white p-6 shadow-sm transition-all duration-500 ease-out hover:-translate-y-1.5 hover:border-sky-200 hover:shadow-xl hover:shadow-sky-100/30 ${
+      className={`group relative cursor-pointer overflow-hidden rounded-3xl border border-sky-100 bg-white p-6 shadow-sm transition-all duration-500 ease-out hover:-translate-y-1.5 hover:border-sky-200 hover:shadow-xl hover:shadow-sky-100/30 ${
         isVisible
           ? 'translate-y-0 opacity-100'
           : 'translate-y-10 opacity-0'
       }`}
       style={{ transitionDelay: isVisible ? `${delay}ms` : '0ms' }}
     >
-      <div
-        className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl transition-colors duration-300 ${iconBg} group-hover:scale-105`}
-      >
-        {icon}
+      {/* Subtle gradient background on hover */}
+      <div className="absolute inset-0 bg-gradient-to-br from-sky-soft/0 to-sky-primary/0 transition-all duration-500 group-hover:from-sky-soft/20 group-hover:to-transparent" aria-hidden="true" />
+      <div className="relative">
+        <div
+          className={`mb-4 flex h-12 w-12 items-center justify-center rounded-2xl transition-all duration-300 ${iconBg} group-hover:scale-110 group-hover:shadow-md`}
+        >
+          {icon}
+        </div>
+        <h3 className="text-lg font-semibold text-midnight font-display">{title}</h3>
+        <p className="mt-2 text-sm leading-7 text-storm/60">{description}</p>
       </div>
-      <h3 className="text-lg font-semibold text-midnight font-display">{title}</h3>
-      <p className="mt-2 text-sm leading-7 text-storm/60">{description}</p>
     </article>
   )
 }

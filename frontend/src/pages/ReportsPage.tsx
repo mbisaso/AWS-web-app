@@ -3,6 +3,7 @@ import type { ReportConfig, ReportResult, ReportType, ReportStatus, ScheduledRep
 import { generateReport, checkForEmptyData, fetchReportHistory, fetchScheduleList, createSchedule, updateSchedule, deleteSchedule, toggleSchedule } from '../services/api'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
+import { PageHeader } from '../components/shared/PageHeader'
 import { ReportBuilderForm } from '../components/reports/ReportBuilderForm'
 import { ScheduleList } from '../components/reports/ScheduleList'
 import { ScheduleFormModal } from '../components/reports/ScheduleFormModal'
@@ -180,29 +181,21 @@ export function ReportsPage() {
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}
-        <div className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-midnight via-[#1a2a4a] to-sky-deep/30 p-6 shadow-lg sm:p-8">
-          <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-sky-primary/10 blur-3xl" aria-hidden="true" />
-          <div className="pointer-events-none absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-emerald-400/8 blur-3xl" aria-hidden="true" />
-          <div className="relative z-10 flex flex-col gap-2">
-            <div className="flex items-center gap-2.5">
-              <svg className="h-5 w-5 text-sky-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <path d="M14 2v6h6" />
-                <path d="M16 13H8" />
-                <path d="M16 17H8" />
-                <path d="M10 9H8" />
-              </svg>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300/80">Data export</p>
-            </div>
-            <h1 className="text-2xl font-semibold text-white font-display sm:text-3xl">
-              Reports &amp; Export
-            </h1>
-            <p className="text-sm text-white/50">
-              Generate on-demand reports or schedule recurring exports
-            </p>
-          </div>
-          <div className="absolute bottom-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-sky-400/20 to-transparent" aria-hidden="true" />
-        </div>
+        <PageHeader
+          label="Data export"
+          title="Reports & Export"
+          subtitle="Generate on-demand reports or schedule recurring exports"
+          variant="admin"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <path d="M14 2v6h6" />
+              <path d="M16 13H8" />
+              <path d="M16 17H8" />
+              <path d="M10 9H8" />
+            </svg>
+          }
+        />
 
         {/* ── Tabs ── */}
         <div className="mb-6 border-b border-slate-200" role="tablist" aria-label="Reports sections">
@@ -214,10 +207,10 @@ export function ReportsPage() {
                 role="tab"
                 aria-selected={tab === t.key}
                 onClick={() => setTab(t.key)}
-                className={`cursor-pointer px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary ${
+                className={`cursor-pointer rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 border-b-2 -mb-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary ${
                   tab === t.key
-                    ? 'border-sky-primary text-sky-deep'
-                    : 'border-transparent text-storm/40 hover:text-storm/60 hover:border-slate-300'
+                    ? 'border-sky-primary text-sky-deep bg-sky-soft/30'
+                    : 'border-transparent text-storm/40 hover:text-storm/60 hover:border-slate-300 hover:bg-slate-50'
                 }`}
               >
                 {t.label}
@@ -232,11 +225,11 @@ export function ReportsPage() {
         {tab === 'builder' && (
           <section aria-label="Report builder" className="space-y-4">
             {dashLoading ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
-                <div className="h-5 w-40 animate-pulse rounded bg-slate-200" />
+              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+                <div className="h-5 w-40 rounded-full bg-slate-200 skeleton-shimmer" />
                 <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div className="h-32 animate-pulse rounded-xl bg-slate-200" />
-                  <div className="h-32 animate-pulse rounded-xl bg-slate-200" />
+                  <div className="h-32 rounded-xl bg-slate-200 skeleton-shimmer" />
+                  <div className="h-32 rounded-xl bg-slate-200 skeleton-shimmer" />
                 </div>
               </div>
             ) : (

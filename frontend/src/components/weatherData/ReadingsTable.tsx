@@ -63,13 +63,13 @@ export function ReadingsTable({ readings, metricKey, isLoading }: ReadingsTableP
 
   if (isLoading) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 animate-pulse" aria-hidden="true">
-        <div className="mb-4 h-4 w-32 rounded-full bg-slate-200" />
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-5" aria-hidden="true">
+        <div className="mb-4 h-4 w-32 rounded-full bg-slate-200 skeleton-shimmer" />
         {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="flex items-center gap-4 border-b border-slate-100 py-3">
-            <div className="h-3 w-24 rounded-full bg-slate-200" />
-            <div className="h-3 w-16 rounded-full bg-slate-200" />
-            <div className="h-3 w-12 rounded-full bg-slate-100" />
+            <div className="h-3 w-24 rounded-full bg-slate-200 skeleton-shimmer" />
+            <div className="h-3 w-16 rounded-full bg-slate-200 skeleton-shimmer" />
+            <div className="h-3 w-12 rounded-full bg-slate-100 skeleton-shimmer" />
           </div>
         ))}
       </div>
