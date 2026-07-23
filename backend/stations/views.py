@@ -568,7 +568,10 @@ def history(request, station_id):
     readings = SensorReading.objects.filter(
         station_code=station_id,
         timestamp__gte=since
-    ).order_by('timestamp')[:limit]
+    ).order_by('-timestamp')[:limit]
+
+    # Reverse them back to chronological order for the charts
+    readings = list(readings)[::-1]
 
     if chart_type == 'power':
         serializer = PowerChartSerializer(readings, many=True)
@@ -578,7 +581,7 @@ def history(request, station_id):
     return api_response(data={
         'station_id': station_id,
         'hours':      hours,
-        'count':      readings.count(),
+        'count':      len(readings),
         'readings':   serializer.data,
     })
 
