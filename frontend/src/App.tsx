@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import {
   AlertsCenterPage,
+  BenchmarkPage,
   DashboardPage,
   LandingPage,
   LoginPage,
@@ -13,6 +14,7 @@ import {
   WeatherAnalysisPage,
   WeatherDataPage,
 } from './pages'
+import { ThingSpeakDemoPage } from './pages/ThingSpeakDemoPage'
 import { AuthProvider } from './context/AuthContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 
@@ -67,6 +69,15 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/benchmarking"
+            element={
+              <ProtectedRoute>
+                <BenchmarkPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/thingspeak-demo" element={<ThingSpeakDemoPage />} />
           <Route
             path="/dashboard/station-manager"
             element={

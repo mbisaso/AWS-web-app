@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Station, StationStatus, SensorReading
+from .models import Station, StationStatus, SensorReading, BenchmarkReading
 
 
 # ─────────────────────────────────────────────────────────
@@ -135,3 +135,14 @@ class PowerChartSerializer(serializers.ModelSerializer):
             'curr_batt',
             'curr_solar',
         ]
+
+
+# ─────────────────────────────────────────────────────────
+# BenchmarkReading Serializers
+# ─────────────────────────────────────────────────────────
+
+class BenchmarkReadingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BenchmarkReading
+        fields = ['timestamp', 'source', 'location', 'temperature', 'humidity',
+                  'pressure', 'wind_speed', 'wind_direction', 'rain', 'light', 'soil_moisture']
