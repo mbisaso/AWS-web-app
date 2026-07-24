@@ -1,4 +1,5 @@
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps'
+import { getGoogleMapsConfig } from '../../utils/googleMaps'
 
 interface MapLocationPickerProps {
   latitude: number
@@ -6,11 +7,10 @@ interface MapLocationPickerProps {
   onChange: (lat: number, lng: number) => void
 }
 
-const MAP_ID = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID as string | undefined
-
 export function MapLocationPicker({ latitude, longitude, onChange }: MapLocationPickerProps) {
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
-  const hasValidKey = apiKey && apiKey !== 'YOUR_API_KEY_HERE' && apiKey.length > 5
+  const { apiKey, mapId } = getGoogleMapsConfig()
+  const hasValidKey = Boolean(apiKey)
+  const resolvedApiKey = apiKey ?? ''
 
   if (!hasValidKey) {
     return (
@@ -87,12 +87,12 @@ export function MapLocationPicker({ latitude, longitude, onChange }: MapLocation
           />
         </div>
       </div>
-      <APIProvider apiKey={apiKey}>
-        <div className="h-48 overflow-hidden rounded-xl border border-slate-200">
+      <APIProvider apiKey={resolvedApiKey}>
+        <div className="h-56 overflow-hidden rounded-xl border border-slate-200">
           <Map
             defaultCenter={{ lat: latitude, lng: longitude }}
             defaultZoom={8}
-            mapId={MAP_ID}
+            mapId={mapId ?? undefined}
             gestureHandling="greedy"
             onClick={(e) => {
               const ll = e.detail?.latLng
