@@ -17,43 +17,44 @@ import { StationMarker } from '../components/stationMap/StationMarker'
 import { StatusFilterBar, type StationFilter } from '../components/stationMap/StatusFilterBar'
 import { StationListPanel } from '../components/stationMap/StationListPanel'
 import { getGoogleMapsConfig } from '../utils/googleMaps'
+import { fitMapToStations, hasValidCoordinates } from '../utils/stationCoordinates'
 
 
-function toStationReading(stations: Station[]): StationReading[] {
+function toStationReading(s: Station): StationReading {
   const statusMap: Record<string, 'online' | 'partial' | 'offline'> = {
     full: 'online', partial: 'partial', down: 'offline',
   }
 
-  return stations.map((s) => {
-    const rawStatus = s.status?.status ?? 'down'
-    const lastSeen = s.status?.last_updated ?? new Date().toISOString()
-    const elapsed = Date.now() - new Date(lastSeen).getTime()
-    const isStale = elapsed > s.expected_interval_minutes * 60 * 1000 * 2
+  const rawStatus = s.status?.status ?? 'down'
+  const lastSeen = s.status?.last_updated ?? new Date().toISOString()
+  const elapsed = Date.now() - new Date(lastSeen).getTime()
+  const isStale = elapsed > s.expected_interval_minutes * 60 * 1000 * 2
+  const lat = s.latitude ?? 0
+  const lng = s.longitude ?? 0
 
-    return {
-      id: s.id,
-      name: s.name,
-      station_code: s.station_id,
-      location: s.location,
-      latitude: s.latitude ?? 0,
-      longitude: s.longitude ?? 0,
-      status: statusMap[rawStatus] ?? 'offline',
-      temperature: null,
-      humidity: null,
-      rainfall: null,
-      wind_speed: null,
-      pressure: null,
-      last_seen: lastSeen,
-      expected_interval_minutes: s.expected_interval_minutes,
-      is_stale: isStale,
-    }
-  })
+  return {
+    id: s.id,
+    name: s.name,
+    station_code: s.station_id,
+    location: s.location,
+    latitude: lat,
+    longitude: lng,
+    status: statusMap[rawStatus] ?? 'offline',
+    temperature: null,
+    humidity: null,
+    rainfall: null,
+    wind_speed: null,
+    pressure: null,
+    last_seen: lastSeen,
+    expected_interval_minutes: s.expected_interval_minutes,
+    is_stale: isStale,
+  }
 }
 
 
 export function StationMapPage() {
   const navigate = useNavigate()
-  const [allStations, setAllStations] = useState<StationReading[]>([])
+  const [rawStations, setRawStations] = useState<Station[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryTrigger, setRetryTrigger] = useState(0)
@@ -66,7 +67,7 @@ export function StationMapPage() {
       setIsLoading(true)
       try {
         const stn = await fetchStations()
-        setAllStations(toStationReading(stn))
+        setRawStations(stn)
         setError(null)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load station data')
@@ -76,6 +77,18 @@ export function StationMapPage() {
     }
     load()
   }, [retryTrigger])
+
+  const allStations = useMemo(
+    () => rawStations.map(toStationReading),
+    [rawStations],
+  )
+
+  const plottableStations = useMemo(
+    () => allStations.filter((s) => hasValidCoordinates(s.latitude, s.longitude)),
+    [allStations],
+  )
+
+  const unplottableCount = allStations.length - plottableStations.length
 
   const [filter, setFilter] = useState<StationFilter>('all')
   const [selectedStation, setSelectedStation] = useState<StationReading | null>(null)
@@ -90,27 +103,24 @@ export function StationMapPage() {
   /* ── Alerting not available (no real alerts API) ── */
   const alertStationIds = useMemo(() => new Set<number>(), [])
 
-  /* ── Filtered stations ── */
+  /* ── Filtered stations (plottable only) ── */
   const filteredStations = useMemo(() => {
-    let result = allStations.filter((s) => s.latitude != null && s.longitude != null)
+    let result = plottableStations
 
     if (filter === 'online') result = result.filter((s) => s.status === 'online')
     else if (filter === 'offline') result = result.filter((s) => s.status !== 'online')
     else if (filter === 'fault') result = result.filter((s) => alertStationIds.has(s.id))
 
     return result
-  }, [allStations, filter, alertStationIds])
+  }, [plottableStations, filter, alertStationIds])
 
   /* ── Filter counts ── */
-  const filterCounts = useMemo(() => {
-    const allPlotted = allStations.filter((s) => s.latitude != null && s.longitude != null)
-    return {
-      all: allPlotted.length,
-      online: allPlotted.filter((s) => s.status === 'online').length,
-      offline: allPlotted.filter((s) => s.status !== 'online').length,
-      fault: alertStationIds.size,
-    }
-  }, [allStations, alertStationIds])
+  const filterCounts = useMemo(() => ({
+    all: plottableStations.length,
+    online: plottableStations.filter((s) => s.status === 'online').length,
+    offline: plottableStations.filter((s) => s.status !== 'online').length,
+    fault: alertStationIds.size,
+  }), [plottableStations, alertStationIds])
 
   const handleSelect = useCallback((station: StationReading | null) => {
     setSelectedStation(station)
@@ -122,9 +132,10 @@ export function StationMapPage() {
 
   /* ── API key ── */
   const { apiKey, mapId } = getGoogleMapsConfig()
+  const useAdvancedMarkers = Boolean(mapId)
 
   /* ── Loading: no data yet ── */
-  if (isLoading && allStations.length === 0) {
+  if (isLoading && rawStations.length === 0) {
     return (
       <div className="flex h-screen bg-mist">
         <DashboardSidebar />
@@ -134,7 +145,7 @@ export function StationMapPage() {
   }
 
   /* ── Error: fetch failed, no cached data ── */
-  if (error && allStations.length === 0) {
+  if (error && rawStations.length === 0) {
     return (
       <div className="flex h-screen bg-mist">
         <DashboardSidebar />
@@ -208,15 +219,31 @@ export function StationMapPage() {
               </div>
               <div className="hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right text-xs text-storm/50 shadow-sm sm:block">
                 <p className="font-semibold text-midnight">{filteredStations.length}</p>
-                <p>stations shown</p>
+                <p>on map</p>
               </div>
             </div>
 
+            {unplottableCount > 0 && (
+              <div className="mx-4 mb-3 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 sm:mx-6">
+                <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M12 9v4M12 17h.01" strokeLinecap="round" />
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                </svg>
+                <p className="text-xs leading-relaxed text-amber-800">
+                  {unplottableCount} station{unplottableCount !== 1 ? 's' : ''} missing valid coordinates.
+                  Set latitude and longitude in Station Manager to show them on the map.
+                </p>
+              </div>
+            )}
+
             <div className="relative min-h-[62vh] flex-1 overflow-hidden lg:min-h-0">
+            {plottableStations.length === 0 ? (
+              <NoCoordinatesState totalStations={allStations.length} />
+            ) : (
             <APIProvider apiKey={apiKey}>
               <MapScreenContent
                 stations={filteredStations}
-                allStations={allStations}
+                plottableStations={plottableStations}
                 alertStationIds={alertStationIds}
                 selectedStation={selectedStation}
                 onSelect={handleSelect}
@@ -227,14 +254,16 @@ export function StationMapPage() {
                 onRecenter={handleRecenter}
                 recenterCount={recenterCount}
                 mapId={mapId}
+                useAdvancedMarkers={useAdvancedMarkers}
               />
             </APIProvider>
+            )}
             </div>
           </section>
 
           <StationListPanel
             stations={filteredStations}
-            totalCount={allStations.filter((s) => s.latitude != null && s.longitude != null).length}
+            totalCount={plottableStations.length}
             selectedId={selectedStation?.id ?? null}
             alertIds={alertStationIds}
             onSelect={handleSelect}
@@ -252,7 +281,7 @@ export function StationMapPage() {
 
 function MapScreenContent({
   stations,
-  allStations,
+  plottableStations,
   alertStationIds,
   selectedStation,
   onSelect,
@@ -263,9 +292,10 @@ function MapScreenContent({
   onRecenter,
   recenterCount,
   mapId,
+  useAdvancedMarkers,
 }: {
   stations: StationReading[]
-  allStations: StationReading[]
+  plottableStations: StationReading[]
   alertStationIds: Set<number>
   selectedStation: StationReading | null
   onSelect: (s: StationReading | null) => void
@@ -276,6 +306,7 @@ function MapScreenContent({
   onRecenter: () => void
   recenterCount: number
   mapId: string | null
+  useAdvancedMarkers: boolean
 }) {
   const apiIsLoaded = useApiIsLoaded()
   const apiStatus = useApiLoadingStatus()
@@ -320,12 +351,13 @@ function MapScreenContent({
       >
         <MapView
           stations={stations}
-          allStations={allStations}
+          plottableStations={plottableStations}
           alertStationIds={alertStationIds}
           selectedStation={selectedStation}
           onSelect={onSelect}
           onViewDetails={onViewDetails}
           recenterCount={recenterCount}
+          useAdvancedMarkers={useAdvancedMarkers}
         />
       </Map>
 
@@ -336,7 +368,7 @@ function MapScreenContent({
         </div>
 
         <div className="pointer-events-auto absolute right-4 top-4 max-w-[200px]">
-          <SearchStationInput stations={allStations} onSelect={onSelect} />
+          <SearchStationInput stations={plottableStations} onSelect={onSelect} />
         </div>
 
         <div className="pointer-events-auto absolute bottom-4 right-4">
@@ -351,50 +383,44 @@ function MapScreenContent({
 
 function MapView({
   stations,
-  allStations,
+  plottableStations,
   alertStationIds,
   selectedStation,
   onSelect,
   onViewDetails,
   recenterCount,
+  useAdvancedMarkers,
 }: {
   stations: StationReading[]
-  allStations: StationReading[]
+  plottableStations: StationReading[]
   alertStationIds: Set<number>
   selectedStation: StationReading | null
   onSelect: (s: StationReading | null) => void
   onViewDetails: (s: StationReading) => void
   recenterCount: number
+  useAdvancedMarkers: boolean
 }) {
   const map = useMap()
 
-  /* Fit bounds on first load */
-  const hasFitted = useRef(false)
+  /* Fit bounds when plottable stations load or change */
+  const stationCount = plottableStations.length
   useEffect(() => {
-    if (!map || !allStations.length || hasFitted.current) return
-    const bounds = new google.maps.LatLngBounds()
-    allStations
-      .filter((s) => s.latitude && s.longitude)
-      .forEach((s) => bounds.extend({ lat: s.latitude, lng: s.longitude }))
-    map.fitBounds(bounds, 60)
-    hasFitted.current = true
-  }, [map, allStations])
+    if (!map || stationCount === 0) return
+    fitMapToStations(map, plottableStations)
+  }, [map, stationCount, plottableStations])
 
   /* Pan to selected station */
   useEffect(() => {
     if (!map || !selectedStation) return
     map.panTo({ lat: selectedStation.latitude, lng: selectedStation.longitude })
+    if (map.getZoom()! < 10) map.setZoom(11)
   }, [map, selectedStation])
 
   /* Recenter triggered */
   useEffect(() => {
-    if (!map || !allStations.length || recenterCount === 0) return
-    const bounds = new google.maps.LatLngBounds()
-    allStations
-      .filter((s) => s.latitude && s.longitude)
-      .forEach((s) => bounds.extend({ lat: s.latitude, lng: s.longitude }))
-    map.fitBounds(bounds, 60)
-  }, [map, allStations, recenterCount])
+    if (!map || stationCount === 0 || recenterCount === 0) return
+    fitMapToStations(map, plottableStations)
+  }, [map, plottableStations, recenterCount, stationCount])
 
   return (
     <>
@@ -404,6 +430,7 @@ function MapView({
           station={station}
           hasAlerts={alertStationIds.has(station.id)}
           isSelected={selectedStation?.id === station.id}
+          useAdvancedMarkers={useAdvancedMarkers}
           onClick={() => onSelect(station)}
         />
       ))}
@@ -435,6 +462,9 @@ function InfoWindowContent({ station, onViewDetails }: { station: StationReading
       </div>
       <p className="mb-2 text-xs text-storm/50">
         {station.station_code} &middot; {station.location}
+      </p>
+      <p className="mb-2 font-mono text-[10px] text-storm/40">
+        {station.latitude.toFixed(4)}, {station.longitude.toFixed(4)}
       </p>
 
       {station.temperature ? (
@@ -615,6 +645,27 @@ function MapSkeleton() {
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-sky-light border-t-sky-primary" />
         <p className="text-sm text-storm/50">Loading station data...</p>
       </div>
+    </div>
+  )
+}
+
+function NoCoordinatesState({ totalStations }: { totalStations: number }) {
+  return (
+    <div className="flex h-full min-h-[62vh] flex-col items-center justify-center px-6 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-sky-soft text-sky-primary">
+        <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+      </div>
+      <h2 className="mt-5 text-lg font-semibold text-midnight font-display">
+        {totalStations === 0 ? 'No stations registered yet' : 'No stations on the map yet'}
+      </h2>
+      <p className="mt-2 max-w-md text-sm leading-relaxed text-storm/60">
+        {totalStations === 0
+          ? 'Add a station in Station Manager, then set its latitude and longitude to plot it here.'
+          : `${totalStations} station${totalStations !== 1 ? 's are' : ' is'} registered but none have valid coordinates. Open Station Manager, edit each station, and pin its location on the map picker.`}
+      </p>
     </div>
   )
 }
