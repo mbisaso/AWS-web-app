@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { DashboardSidebar } from "../components/dashboard/DashboardSidebar";
 import { PageHeader } from "../components/shared/PageHeader";
@@ -39,6 +40,7 @@ function toStationManagementData(s: Station): StationManagementData {
 }
 
 export function StationManagerPage() {
+  const navigate = useNavigate();
   const { user, isLoading: userLoading } = useCurrentUser();
   const isAdmin = user?.role === "admin";
 
@@ -254,6 +256,7 @@ export function StationManagerPage() {
           <StationTable
             stations={stations}
             isLoading={loadingStations}
+            onView={(s) => navigate(`/dashboard/stations/${s.station_code}`)}
             onEdit={(s) => {
               setEditingStation(s);
               setStationFormOpen(true);

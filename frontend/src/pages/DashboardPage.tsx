@@ -165,7 +165,7 @@ export function DashboardPage() {
                                 return (
                                   <tr
                                     key={station.station_id}
-                                    onClick={() => navigate(`/dashboard/weather-data?station=${station.station_id}`)}
+                                    onClick={() => navigate(`/dashboard/stations/${station.station_id}`)}
                                     className="cursor-pointer border-b border-slate-100 transition-colors duration-150 last:border-b-0 hover:bg-sky-soft/30"
                                   >
                                     <td className="px-4 py-3.5">

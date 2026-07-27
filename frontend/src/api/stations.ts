@@ -1,8 +1,13 @@
 import { apiClient } from './client'
-import type { ApiEnvelope, BenchmarkData, PowerChart, SensorReadingChart, Station } from '../types'
+import type { ApiEnvelope, BenchmarkData, PowerChart, SensorReadingChart, Station, StationDetailResponse } from '../types'
 
 export async function fetchStations(): Promise<Station[]> {
   const res = await apiClient.get<ApiEnvelope<Station[]>>('/api/stations/')
+  return res.data.data
+}
+
+export async function fetchStationDetail(id: string | number): Promise<StationDetailResponse> {
+  const res = await apiClient.get<ApiEnvelope<StationDetailResponse>>(`/api/stations/${id}/`)
   return res.data.data
 }
 

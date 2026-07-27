@@ -5,13 +5,14 @@ import { StatusBadge } from '../dashboard/StatusIndicator'
 interface StationTableProps {
   stations: StationManagementData[]
   isLoading: boolean
+  onView: (station: StationManagementData) => void
   onEdit: (station: StationManagementData) => void
   onDelete: (station: StationManagementData) => void
 }
 
 type SortKey = 'name' | 'location' | 'connectivity' | 'status' | 'created_at'
 
-export function StationTable({ stations, isLoading, onEdit, onDelete }: StationTableProps) {
+export function StationTable({ stations, isLoading, onView, onEdit, onDelete }: StationTableProps) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [sortKey, setSortKey] = useState<SortKey>('name')
@@ -112,7 +113,11 @@ export function StationTable({ stations, isLoading, onEdit, onDelete }: StationT
             </thead>
             <tbody>
               {filtered.map((station) => (
-                <tr key={station.id} className="group border-b border-slate-100 last:border-0 hover:bg-sky-50/30 transition-colors">
+                <tr
+                  key={station.id}
+                  onClick={() => onView(station)}
+                  className="group cursor-pointer border-b border-slate-100 last:border-0 hover:bg-sky-50/30 transition-colors"
+                >
                   <td className="px-5 py-4">
                     <div className="flex flex-col">
                       <span className="text-sm font-semibold text-midnight group-hover:text-sky-700 transition-colors">{station.name}</span>
@@ -132,7 +137,8 @@ export function StationTable({ stations, isLoading, onEdit, onDelete }: StationT
                     </span>
                   </td>
                   <td className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2" onClick={(e) => e.stopPropagation()}>
+                      <ActionBtn onClick={() => onView(station)} label="View" />
                       <ActionBtn onClick={() => onEdit(station)} label="Edit" />
                       <ActionBtn onClick={() => onDelete(station)} label="Delete" variant="danger" />
                     </div>

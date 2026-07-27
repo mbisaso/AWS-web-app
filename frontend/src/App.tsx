@@ -11,6 +11,7 @@ import {
   SimManagementPage,
   StationManagerPage,
   StationMapPage,
+  StationDetailPage,
   WeatherAnalysisPage,
   WeatherDataPage,
 } from './pages'
@@ -58,6 +59,10 @@ function AnimatedRoutes() {
         <Route
           path="/dashboard/station-manager"
           element={<ProtectedRoute><StationManagerPage /></ProtectedRoute>}
+        />
+        <Route
+          path="/dashboard/stations/:stationId"
+          element={<ProtectedRoute><StationDetailPage /></ProtectedRoute>}
         />
         <Route
           path="/dashboard/sim-management"

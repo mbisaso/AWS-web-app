@@ -38,6 +38,11 @@ export interface Station {
   status: StationStatus | null
 }
 
+export interface StationDetailResponse {
+  station: Station
+  latest_reading: SensorReadingLatest | null
+}
+
 // Full reading - used for history/detail views
 export interface SensorReading {
   id: number
