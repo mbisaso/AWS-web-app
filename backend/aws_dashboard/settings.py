@@ -23,24 +23,32 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from backend/.env
 load_dotenv(BASE_DIR / '.env')
 
+
+def _csv_env(name: str, default: str) -> list[str]:
+    value = os.environ.get(name, '').strip()
+    source = value or default
+    return [item.strip() for item in source.split(',') if item.strip()]
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-fallback-do-not-use-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get(
+ALLOWED_HOSTS = _csv_env(
     'DJANGO_ALLOWED_HOSTS',
-    'localhost,127.0.0.1,.ngrok-free.dev,.ngrok-free.app,.onrender.com,.trycloudflare.com,.lhr.life'
-    'localhost,127.0.0.1,.trycloudflare.com'
-).split(',')
+    'localhost,127.0.0.1,.ngrok-free.dev,.ngrok-free.app,.onrender.com,.trycloudflare.com,.lhr.life,.trycloudflare.com',
+)
 
-CSRF_TRUSTED_ORIGINS = os.environ.get(
+CSRF_TRUSTED_ORIGINS = _csv_env(
     'CSRF_TRUSTED_ORIGINS',
-    'https://*.ngrok-free.dev,https://*.ngrok-free.app,https://*.onrender.com,https://*.trycloudflare.com,https://*.lhr.life,http://localhost:5173'
-).split(',')
+    'https://*.ngrok-free.dev,https://*.ngrok-free.app,https://*.onrender.com,https://*.trycloudflare.com,https://*.lhr.life,http://localhost:5173,http://127.0.0.1:5173',
+)
 
-CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173').split(',')
+CORS_ALLOWED_ORIGINS = _csv_env(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:5173,http://127.0.0.1:5173',
+)
 CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
