@@ -2,9 +2,9 @@
 
 A web platform for monitoring a network of Automatic Weather Stations (AWS) deployed across Uganda. Built at IoT-ra Lab, Makerere University as part of the AdEMNEA Project (formerly WIMEA-ICT).
 
-Physical stations are built around ESP32 microcontrollers that measure weather and environmental conditions and transmit readings via GSM. This platform receives that data, stores it in PostgreSQL, tracks each station's health, and exposes a React dashboard for meteorologists, farmers, and administrators to view live and historical readings.
+Physical stations are built around ESP32 microcontrollers that measure weather and environmental conditions and transmit readings via GSM. This platform receives that data, stores it in MySQL, tracks each station's health, and exposes a React dashboard for meteorologists, farmers, and administrators to view live and historical readings.
 
-This replaces a previous ThingSpeak-based pipeline with a fully in-house Django + PostgreSQL + React stack.
+This replaces a previous ThingSpeak-based pipeline with a fully in-house Django + MySQL + React stack.
 
 ---
 
@@ -16,8 +16,8 @@ This replaces a previous ThingSpeak-based pipeline with a fully in-house Django 
 - Django 5.2.3
 - Django REST Framework
 - djangorestframework-simplejwt — JWT authentication
-- psycopg2-binary — PostgreSQL driver
-- PostgreSQL 13+
+- PyMySQL / mysqlclient — MySQL driver
+- MySQL 8.0+ / MariaDB
 
 **Frontend**
 
@@ -35,7 +35,7 @@ Make sure these are installed before starting:
 - Python 3.11 or higher
 - Node.js v18 or higher
 - npm (comes with Node)
-- PostgreSQL 13 or higher
+- MySQL 8.0 or higher (or MariaDB)
 
 ---
 
@@ -79,20 +79,21 @@ AWS-web-app/
 
 ## Setup
 
-### 1. Create the PostgreSQL database
+### 1. Create the MySQL database
 
-Open your PostgreSQL shell (`psql -U postgres`) and run:
+Open your MySQL shell (`mysql -u root -p`) and run:
 
 ```sql
-CREATE USER aws_user WITH PASSWORD 'aws@2026';
-CREATE DATABASE "aws-db" OWNER aws_user;
-GRANT ALL PRIVILEGES ON DATABASE "aws-db" TO aws_user;
-\q
+CREATE DATABASE aws_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'aws_user'@'localhost' IDENTIFIED BY 'aws@2026';
+GRANT ALL PRIVILEGES ON aws_db.* TO 'aws_user'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
 ```
 
 ### 2. Check the database port
 
-Open `backend/aws_dashboard/settings.py` and verify the `PORT` under `DATABASES` matches your local PostgreSQL port. The default PostgreSQL port is `5432`.
+Open `backend/aws_dashboard/settings.py` and verify the `PORT` under `DATABASES` matches your local MySQL port. The default MySQL port is `3306`.
 
 ### 3. Set up the Python virtual environment
 
