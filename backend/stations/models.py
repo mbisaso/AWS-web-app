@@ -46,6 +46,7 @@ class SimCard(models.Model):
     iccid = models.CharField(max_length=50, blank=True)
     data_limit_mb = models.FloatField(default=1024.0)  # 1GB default limit
     data_used_mb = models.FloatField(default=0.0)
+    date_loaded = models.DateField(null=True, blank=True)
     expiry_date = models.DateField(null=True, blank=True)
     
     def __str__(self):

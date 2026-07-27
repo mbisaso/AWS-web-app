@@ -11,7 +11,7 @@ import {
   sendSimEmailAlert,
   topUpSim,
 } from '../services/api'
-import { usePollingData } from '../hooks/usePollingData'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { PageHeader } from '../components/shared/PageHeader'
 import { SimFleetSummaryCard } from '../components/simManagement/SimFleetSummaryCard'
@@ -32,12 +32,14 @@ export function SimManagementPage() {
   const selectedSimId = searchParams.get('selected')
 
   /* ── Data fetching (cached) ── */
-  const { data, isLoading, error, retry } = usePollingData(
-    () => fetchSimManagementData(),
-    ['sim-management'],
-    30_000,
-    'sim_management',
-  )
+  const queryClient = useQueryClient()
+  const { data, isLoading, error: queryError, refetch } = useQuery({
+    queryKey: ['sim-management'],
+    queryFn: fetchSimManagementData,
+    refetchInterval: 30_000,
+  })
+  const error = queryError instanceof Error ? queryError.message : (queryError as string | null)
+  const retry = () => refetch()
 
   const sims = data?.sims ?? []
   const summary: SimFleetSummary = data?.summary ?? {
@@ -125,9 +127,12 @@ export function SimManagementPage() {
         return next
       }, { replace: true })
     }
+    /* Invalidate react-query cache to fetch updated data */
+    queryClient.invalidateQueries({ queryKey: ['sim-management'] })
+    
     /* Clear success toast after a few seconds */
     setTimeout(() => setTopUpResult(null), 4000)
-  }, [topUpTarget, selectedSim])
+  }, [topUpTarget, selectedSim, queryClient])
 
   /* ── Filter from URL ── */
   const handleFilterChange = useCallback((filter: 'all' | 'expiring' | 'expired') => {

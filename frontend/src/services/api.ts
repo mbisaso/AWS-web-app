@@ -3,7 +3,7 @@
   Uses backend APIs where available.
    ───────────────────────────────────────────── */
 
-import { apiClient } from "../api/client";
+import { apiClient, API_BASE_URL } from "../api/client";
 
 /* ── Types matching Django models ── */
 
@@ -1149,6 +1149,7 @@ export interface SimAccount {
   bundle_size_mb: number;
   usage_mb: number;
   expiry_date: string;
+  date_loaded?: string;
   status: "active" | "inactive";
   station_id: number | null;
 }
@@ -1242,7 +1243,7 @@ export async function topUpSim(
   amountMb: number,
   note: string,
 ): Promise<SimManagementData> {
-  const response = await apiClient.post<ApiEnvelope<SimAccount>>(
+  await apiClient.post<ApiEnvelope<SimAccount>>(
     `/api/sims/${simId}/topup/`,
     { amount_mb: amountMb, note },
   );
@@ -2164,4 +2165,33 @@ export async function toggleSchedule(id: number): Promise<ScheduledReport> {
   if (idx === -1) throw new Error("Schedule not found");
   MOCK_SCHEDULES[idx].is_active = !MOCK_SCHEDULES[idx].is_active;
   return MOCK_SCHEDULES[idx];
+}
+
+
+export interface ExportConfig {
+  station_id?: string;
+  hours: number;
+  fields: 'all' | 'sensor' | 'power';
+}
+
+export async function exportDataJson(config: ExportConfig): Promise<any> {
+  const { data } = await apiClient.get('/api/export/', {
+    params: {
+      station_id: config.station_id || undefined,
+      hours: config.hours,
+      fields: config.fields,
+      output: 'json'
+    }
+  });
+  return data;
+}
+
+export function getExportCsvUrl(config: ExportConfig): string {
+  const params = new URLSearchParams();
+  if (config.station_id) params.append('station_id', config.station_id);
+  params.append('hours', config.hours.toString());
+  params.append('fields', config.fields);
+  params.append('output', 'csv');
+
+  return `${API_BASE_URL}/api/export/?${params.toString()}`;
 }

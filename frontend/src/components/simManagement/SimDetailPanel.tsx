@@ -34,8 +34,6 @@ export function SimDetailPanel({ data, isLoading, onTopUp, onClose }: SimDetailP
   /* ── Local editing state ── */
 
   const [phone, setPhone] = useState(data.sim.phone_number)
-  const [editingPhone, setEditingPhone] = useState(false)
-  const [phoneDraft, setPhoneDraft] = useState('')
 
   const [bundle, setBundle] = useState(data.sim.bundle_size_mb)
   const [editingBundle, setEditingBundle] = useState(false)
@@ -50,16 +48,10 @@ export function SimDetailPanel({ data, isLoading, onTopUp, onClose }: SimDetailP
     setPhone(data.sim.phone_number)
     setBundle(data.sim.bundle_size_mb)
     setExpiry(data.sim.expiry_date)
-    setEditingPhone(false)
     setEditingBundle(false)
     setEditingExpiry(false)
   }, [data.sim.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSavePhone = async () => {
-    await updateSimAccount(data.sim.id, { phone_number: phoneDraft })
-    setPhone(phoneDraft)
-    setEditingPhone(false)
-  }
 
   const handleSaveBundle = async () => {
     if (bundleDraft > 0) {
@@ -91,44 +83,7 @@ export function SimDetailPanel({ data, isLoading, onTopUp, onClose }: SimDetailP
             {data.station_name ?? 'Unassigned SIM'}
           </h3>
           <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-storm/60">
-            <span>{data.sim.carrier}</span>
-            <span className="font-mono">…{data.sim.iccid.slice(-6)}</span>
-            {editingPhone ? (
-              <div className="flex items-center gap-1">
-                <input
-                  type="text"
-                  value={phoneDraft}
-                  onChange={(e) => setPhoneDraft(e.target.value)}
-                  className="w-28 rounded border border-sky-200 px-1.5 py-0.5 text-xs text-midnight focus:outline-2 focus:outline-offset-1 focus:outline-sky-primary"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={handleSavePhone}
-                  className="cursor-pointer rounded bg-sky-primary px-1.5 py-0.5 text-[10px] font-semibold text-white hover:bg-sky-deep"
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditingPhone(false)}
-                  className="cursor-pointer rounded px-1.5 py-0.5 text-[10px] text-storm/50 hover:text-storm/70"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => { setPhoneDraft(phone); setEditingPhone(true) }}
-                className="group flex items-center gap-1 hover:text-storm/80"
-              >
-                <span>{phone || <span className="italic text-storm/40">No phone</span>}</span>
-                <svg className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
-                </svg>
-              </button>
-            )}
+            <span>{phone || <span className="italic text-storm/40">No phone</span>}</span>
           </div>
         </div>
         <div className="flex gap-2">

@@ -1057,3 +1057,138 @@ def benchmark_import(request):
         'imported': len(readings),
         'skipped':  skipped,
     })
+# ── SIM Management APIs ──
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def sim_management_data(request):
+    sims = SimCard.objects.select_related('station').all()
+    
+    total_active = 0
+    expired_count = 0
+    expiring_soon_count = 0
+    total_remaining_mb = 0
+    
+    today = timezone.now().date()
+    soon_threshold = today + datetime.timedelta(days=30)
+    
+    sims_data = []
+    
+    for sim in sims:
+        is_expired = sim.expiry_date and sim.expiry_date < today
+        is_active = not is_expired
+        
+        if is_active:
+            total_active += 1
+        else:
+            expired_count += 1
+            
+        if sim.expiry_date and today <= sim.expiry_date <= soon_threshold:
+            expiring_soon_count += 1
+            
+        usage = sim.data_used_mb or 0
+        bundle = sim.data_limit_mb or 1024.0
+        rem = max(0, bundle - usage)
+        if is_active:
+            total_remaining_mb += rem
+            
+        est_days = None
+        if sim.expiry_date:
+            diff = (sim.expiry_date - today).days
+            est_days = max(0, diff)
+            
+        sims_data.append({
+            'sim': {
+                'id': sim.id,
+                'iccid': sim.iccid or '',
+                'carrier': 'MTN',
+                'phone_number': sim.phone_number,
+                'bundle_size_mb': bundle,
+                'usage_mb': usage,
+                'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
+                'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+                'status': 'active' if is_active else 'inactive'
+            },
+            'station_name': sim.station.name if sim.station else 'Unknown',
+            'station_id': sim.station.id if sim.station else None,
+            'estimated_days_remaining': est_days,
+            'projected_expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+            'forecast_confidence_note': 'Based on linear projection.' if est_days else 'Not enough data for projection.',
+            'daily_usage': [],
+            'top_up_history': []
+        })
+        
+    return Response({
+        'status': 'success',
+        'data': {
+            'sims': sims_data,
+            'summary': {
+                'total_active': total_active,
+                'expired_count': expired_count,
+                'expiring_soon_count': expiring_soon_count,
+                'total_remaining_mb': total_remaining_mb,
+                'expiring_soon_threshold_days': 30
+            }
+        }
+    })
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_sim_account(request, sim_id):
+    from django.shortcuts import get_object_or_404
+    sim = get_object_or_404(SimCard, id=sim_id)
+    
+    if 'date_loaded' in request.data:
+        d = request.data['date_loaded']
+        sim.date_loaded = d if d else None
+    if 'expiry_date' in request.data:
+        e = request.data['expiry_date']
+        sim.expiry_date = e if e else None
+        
+    sim.save()
+    
+    is_expired = sim.expiry_date and sim.expiry_date < timezone.now().date()
+    is_active = not is_expired
+    
+    return Response({
+        'status': 'success',
+        'data': {
+            'id': sim.id,
+            'iccid': sim.iccid or '',
+            'carrier': 'MTN',
+            'phone_number': sim.phone_number,
+            'bundle_size_mb': sim.data_limit_mb or 1024.0,
+            'usage_mb': sim.data_used_mb or 0,
+            'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
+            'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+            'status': 'active' if is_active else 'inactive'
+        }
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def topup_sim_account(request, sim_id):
+    from django.shortcuts import get_object_or_404
+    sim = get_object_or_404(SimCard, id=sim_id)
+    amount_mb = request.data.get('amount_mb', 0)
+    
+    sim.data_limit_mb += float(amount_mb)
+    sim.save()
+    
+    is_expired = sim.expiry_date and sim.expiry_date < timezone.now().date()
+    is_active = not is_expired
+    
+    return Response({
+        'status': 'success',
+        'data': {
+            'id': sim.id,
+            'iccid': sim.iccid or '',
+            'carrier': 'MTN',
+            'phone_number': sim.phone_number,
+            'bundle_size_mb': sim.data_limit_mb or 1024.0,
+            'usage_mb': sim.data_used_mb or 0,
+            'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
+            'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+            'status': 'active' if is_active else 'inactive'
+        }
+    })
