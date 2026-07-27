@@ -213,3 +213,4 @@ class BenchmarkReadingSerializer(serializers.ModelSerializer):
         model = BenchmarkReading
         fields = ['timestamp', 'source', 'location', 'temperature', 'humidity',
                   'pressure', 'wind_speed', 'wind_direction', 'rain', 'light', 'soil_moisture']
+        
