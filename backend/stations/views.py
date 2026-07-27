@@ -25,7 +25,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 logger = logging.getLogger(__name__)
 
-from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading, SimCard, TopUpRecord
+from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading, SimCard
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
