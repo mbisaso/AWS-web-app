@@ -147,7 +147,7 @@ export const SENSOR_METRIC_CONFIG: Record<SensorMetricKey, { label: string; unit
   wind_speed:     { label: 'Wind Speed',     unit: 'm/s',  color: '#22C55E' },
   wind_direction: { label: 'Wind Direction', unit: '°',    color: '#94A3B8' },
   rain:           { label: 'Rainfall',       unit: 'mm',   color: '#38BDF8' },
-  light:          { label: 'Solar Radiation',unit: 'W/m²', color: '#F59E0B' },
+  light:          { label: 'Light level',    unit: 'lux',  color: '#F59E0B' },
   soil_moisture:  { label: 'Soil Moisture',  unit: '%',    color: '#84CC16' },
 }
 

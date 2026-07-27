@@ -76,14 +76,25 @@ function AnimatedRoutes() {
       </Routes>
   )
 }
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AnimatedRoutes />
-      </BrowserRouter>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <BrowserRouter>
+          <AnimatedRoutes />
+        </BrowserRouter>
+      </AuthProvider>
+    </QueryClientProvider>
   )
 }
 

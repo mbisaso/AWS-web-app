@@ -559,6 +559,40 @@ def dashboard_overview(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def bulk_history(request):
+    """
+    Fetch history for multiple stations at once.
+    Expects ?station_ids=AWS-001,AWS-002&hours=24&limit=5000
+    """
+    station_ids_str = request.query_params.get('station_ids', '')
+    if not station_ids_str:
+        return api_response(error='station_ids is required', status_code=400)
+    
+    station_ids = [s.strip() for s in station_ids_str.split(',') if s.strip()]
+    hours = int(request.query_params.get('hours', 24))
+    
+    # We remove the hardcoded 200 limit to fix the issue. We'll use a larger safety limit for bulk.
+    limit = int(request.query_params.get('limit', 5000))
+    since = timezone.now() - datetime.timedelta(hours=hours)
+
+    readings = SensorReading.objects.filter(
+        station_code__in=station_ids,
+        timestamp__gte=since
+    ).order_by('-timestamp')[:limit]
+
+    # Reverse to chronological
+    readings = list(readings)[::-1]
+
+    serializer = SensorReadingSerializer(readings, many=True)
+    
+    return api_response(data={
+        'hours': hours,
+        'count': len(readings),
+        'readings': serializer.data,
+    })
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def history(request, station_id):
     hours      = int(request.query_params.get('hours', 24))
     limit      = int(request.query_params.get('limit', 200))

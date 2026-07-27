@@ -7,8 +7,12 @@ const SENSOR_OPTIONS = [
   { value: 'humidity', label: 'Humidity' },
   { value: 'rainfall', label: 'Rainfall' },
   { value: 'wind_speed', label: 'Wind Speed' },
+  { value: 'wind_direction', label: 'Wind Direction' },
   { value: 'pressure', label: 'Pressure' },
-  { value: 'solar_radiation', label: 'Solar Radiation' },
+  { value: 'light', label: 'Light level' },
+  { value: 'soil_moisture', label: 'Soil Moisture' },
+  { value: 'curr_batt', label: 'Battery Current' },
+  { value: 'curr_solar', label: 'Solar Current' },
 ]
 
 interface StationFormModalProps {

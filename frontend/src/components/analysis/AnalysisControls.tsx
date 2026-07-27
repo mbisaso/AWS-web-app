@@ -1,4 +1,4 @@
-﻿import type { Station, AnalysisMetricKey } from '../../types'
+import type { Station, AnalysisMetricKey } from '../../types'
 import { ANALYSIS_METRIC_CONFIG } from '../../types'
 import { DateRangePicker } from '../shared/DateRangePicker'
 
@@ -42,49 +42,34 @@ export function AnalysisControls({
   viewMode,
   onViewModeChange,
 }: AnalysisControlsProps) {
-  const allSelected = selectedStationIds.length === 0
-
-  function toggleStation(id: string) {
-    if (allSelected) {
-      onStationIdsChange([id])
-    } else {
-      const next = selectedStationIds.includes(id)
-        ? selectedStationIds.filter((sid) => sid !== id)
-        : [...selectedStationIds, id]
-      onStationIdsChange(next.length === stations.length ? [] : next)
-    }
-  }
+  // Removed allSelected and toggleStation
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-wrap">
-        <div className="min-w-0 flex-1">
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-storm/40">Station</p>
-          <div
-            className="flex gap-1 overflow-x-auto pb-1"
-            role="tablist"
-            aria-label="Select stations"
+        <div className="min-w-0 sm:w-56">
+          <label htmlFor="analysis-station-select" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-storm/40">
+            Station
+          </label>
+          <select
+            id="analysis-station-select"
+            value={selectedStationIds.length === 1 ? selectedStationIds[0] : (selectedStationIds.length === 0 ? '' : 'multiple')}
+            onChange={(e) => {
+              const val = e.target.value
+              onStationIdsChange(val === '' ? [] : [val])
+            }}
+            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-midnight transition-colors focus:border-sky-200 focus:ring-2 focus:ring-sky-soft focus:outline-none"
           >
-            {stations.map((s) => {
-              const isActive = allSelected || selectedStationIds.includes(s.station_id)
-              return (
-                <button
-                  key={s.station_id}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={() => toggleStation(s.station_id)}
-                  className={`shrink-0 cursor-pointer rounded-xl px-3 py-2 text-xs font-medium transition-colors whitespace-nowrap ${
-                    isActive
-                      ? 'bg-midnight text-white shadow-xs'
-                      : 'bg-white text-storm/60 hover:text-storm hover:bg-slate-100 border border-slate-200'
-                  }`}
-                >
-                  {s.name}
-                </button>
-              )
-            })}
-          </div>
+            <option value="">All Stations</option>
+            {selectedStationIds.length > 1 && (
+              <option value="multiple" disabled>Multiple selected</option>
+            )}
+            {stations.map((s) => (
+              <option key={s.station_id} value={s.station_id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <DateRangePicker dateFrom={dateFrom} dateTo={dateTo} onChange={onDateChange} />

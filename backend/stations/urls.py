@@ -7,6 +7,7 @@ urlpatterns = [
     path('api/latest/',                               views.latest,         name='latest'),
     path('api/export/',                               views.export,         name='export'),
     path('api/stations/',                             views.stations_list,  name='stations_list'),
+    path('api/stations/bulk-history/',                views.bulk_history,   name='bulk_history'),
     path('api/stations/<str:station_id>/',            views.station_detail, name='station_detail'),
     path('api/stations/<str:station_id>/history/',    views.history,        name='history'),
     path('api/ingest/weather/', views.ingest_weather, name='ingest_weather'),

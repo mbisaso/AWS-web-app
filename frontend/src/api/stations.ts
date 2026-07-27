@@ -58,6 +58,24 @@ export async function fetchSensorHistory(
   return res.data.data.readings
 }
 
+export interface BulkHistoryData {
+  hours: number
+  count: number
+  readings: (SensorReadingChart & PowerChart & { station_code: string })[]
+}
+
+export async function fetchBulkHistory(
+  stationIds: string[],
+  hours: number,
+  limit = 5000,
+): Promise<BulkHistoryData['readings']> {
+  const res = await apiClient.get<ApiEnvelope<BulkHistoryData>>(
+    `/api/stations/bulk-history/`,
+    { params: { station_ids: stationIds.join(','), hours, limit } },
+  )
+  return res.data.data.readings
+}
+
 export async function fetchBenchmark(
   stationId: string,
   hours: number,
