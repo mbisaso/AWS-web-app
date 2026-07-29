@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   APIProvider,
   Map,
@@ -94,6 +94,21 @@ export function StationMapPage() {
   const [selectedStation, setSelectedStation] = useState<StationReading | null>(null)
   const [isListOpen, setIsListOpen] = useState(true)
   const [recenterCount, setRecenterCount] = useState(0)
+
+  const [searchParams] = useSearchParams()
+  const targetStationCode = searchParams.get('station')
+
+  /* ── Auto-select station from URL query param ── */
+  useEffect(() => {
+    if (targetStationCode && plottableStations.length > 0) {
+      const found = plottableStations.find(
+        (s) => s.station_code.toLowerCase() === targetStationCode.toLowerCase()
+      )
+      if (found) {
+        setSelectedStation(found)
+      }
+    }
+  }, [targetStationCode, plottableStations])
 
   const handleViewDetails = useCallback(
     (station: StationReading) => navigate(`/dashboard/stations/${station.station_code}`),
