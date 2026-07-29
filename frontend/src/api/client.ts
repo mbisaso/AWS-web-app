@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "https://api.wimea-ict.net"; // When deploying replace with https://api.wimea-ict.net
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/"; // When deploying replace with https://api.wimea-ict.net
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
