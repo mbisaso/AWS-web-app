@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { SummaryCharts } from '../components/dashboard/SummaryCharts'
+import { CompactMapPreview } from '../components/dashboard/CompactMapPreview'
 import { RecentAlertsPreview } from '../components/dashboard/RecentAlertsPreview'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { fetchStations } from '../api/stations'
@@ -306,6 +307,11 @@ export function DashboardPage() {
                 {alerts.length > 0 && (
                   <RecentAlertsPreview alerts={alerts.slice(0, 5)} />
                 )}
+
+                {/* ── Compact Real Google Map Preview (Bottom of Page) ── */}
+                <section className="pt-2">
+                  <CompactMapPreview stations={dashStations.length > 0 ? dashStations : stations} />
+                </section>
               </>
             )}
           </div>
