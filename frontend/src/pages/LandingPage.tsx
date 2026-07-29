@@ -1,5 +1,6 @@
 import { Navigation } from '../components/landing/Navigation'
 import { HeroSection } from '../components/landing/HeroSection'
+import { HowItWorksSection } from '../components/landing/HowItWorksSection'
 import { FeaturesSection } from '../components/landing/FeaturesSection'
 import { StatsSection } from '../components/landing/StatsSection'
 import { CallToAction } from '../components/landing/CallToAction'
@@ -12,6 +13,7 @@ export function LandingPage() {
 
       <main>
         <HeroSection />
+        <HowItWorksSection />
         <FeaturesSection />
         <StatsSection />
         <CallToAction />

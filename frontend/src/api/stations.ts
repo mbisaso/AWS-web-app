@@ -1,9 +1,28 @@
 import { apiClient } from './client'
-import type { ApiEnvelope, BenchmarkData, PowerChart, SensorReadingChart, Station } from '../types'
+import type { ApiEnvelope, BenchmarkData, PowerChart, SensorReadingChart, Station, StationDetailResponse } from '../types'
 
 export async function fetchStations(): Promise<Station[]> {
   const res = await apiClient.get<ApiEnvelope<Station[]>>('/api/stations/')
   return res.data.data
+}
+
+export async function fetchStationDetail(id: string | number): Promise<StationDetailResponse> {
+  const res = await apiClient.get<ApiEnvelope<StationDetailResponse>>(`/api/stations/${id}/`)
+  return res.data.data
+}
+
+export async function createStation(data: Partial<Station>): Promise<Station> {
+  const res = await apiClient.post<ApiEnvelope<Station>>('/api/stations/', data)
+  return res.data.data
+}
+
+export async function updateStation(id: number | string, data: Partial<Station>): Promise<Station> {
+  const res = await apiClient.put<ApiEnvelope<Station>>(`/api/stations/${id}/`, data)
+  return res.data.data
+}
+
+export async function deleteStation(id: number | string): Promise<void> {
+  await apiClient.delete(`/api/stations/${id}/`)
 }
 
 interface PowerHistoryData {
@@ -40,6 +59,24 @@ export async function fetchSensorHistory(
   const res = await apiClient.get<ApiEnvelope<SensorHistoryData>>(
     `/api/stations/${stationId}/history/`,
     { params: { type: 'sensor', hours, limit } },
+  )
+  return res.data.data.readings
+}
+
+export interface BulkHistoryData {
+  hours: number
+  count: number
+  readings: (SensorReadingChart & PowerChart & { station_code: string })[]
+}
+
+export async function fetchBulkHistory(
+  stationIds: string[],
+  hours: number,
+  limit = 5000,
+): Promise<BulkHistoryData['readings']> {
+  const res = await apiClient.get<ApiEnvelope<BulkHistoryData>>(
+    `/api/stations/bulk-history/`,
+    { params: { station_ids: stationIds.join(','), hours, limit } },
   )
   return res.data.data.readings
 }

@@ -25,17 +25,28 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 logger = logging.getLogger(__name__)
 
+<<<<<<< HEAD
 from .models import Station, StationStatus, SensorReading, BenchmarkReading, WeatherReading, VoltageReading, CurrentReading
+=======
+from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading, SimCard
+>>>>>>> f2af3e450cbce9c5c4169f8626f32b672cec06e5
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
     SensorReadingChartSerializer,
     PowerChartSerializer,
     StationSerializer,
+<<<<<<< HEAD
     BenchmarkReadingSerializer,
     WeatherReadingSerializer,
     VoltageReadingSerializer,
     CurrentReadingSerializer,
+=======
+    WeatherReadingSerializer,
+    VoltageReadingSerializer,
+    CurrentReadingSerializer,
+    BenchmarkReadingSerializer,
+>>>>>>> f2af3e450cbce9c5c4169f8626f32b672cec06e5
 )
 
 
@@ -411,13 +422,20 @@ def ingest(request):
 # API: Latest reading per station
 # ─────────────────────────────────────────────────────────
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def stations_list(request):
     """
-    Returns all registered stations with their current status.
-    Used by React sidebar/station selector.
+    GET: Returns all registered stations with their current status.
+    POST: Creates a new station.
     """
+    if request.method == 'POST':
+        serializer = StationSerializer(data=request.data)
+        if serializer.is_valid():
+            station = serializer.save()
+            return api_response(data=StationSerializer(station).data, status_code=201)
+        return api_response(error=serializer.errors, status_code=400)
+
     stations = Station.objects.select_related('status').all()
     serializer = StationSerializer(stations, many=True)
     return api_response(data=serializer.data)
@@ -440,8 +458,149 @@ def latest(request):
     return api_response(data=results)
 
 # ─────────────────────────────────────────────────────────
+# API: Dashboard Overview
+# ─────────────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_overview(request):
+    stations = Station.objects.select_related('status').all()
+    
+    # ── SIM Summary ──
+    sims = SimCard.objects.all()
+    total_sims = sims.count()
+    expired_count = 0
+    expiring_soon_count = 0
+    total_remaining_mb = 0
+    
+    today = timezone.now().date()
+    soon_threshold = today + datetime.timedelta(days=7)
+    
+    for sim in sims:
+        if sim.expiry_date:
+            if sim.expiry_date < today:
+                expired_count += 1
+            elif sim.expiry_date <= soon_threshold:
+                expiring_soon_count += 1
+        rem = sim.data_limit_mb - sim.data_used_mb
+        if rem > 0:
+            total_remaining_mb += rem
+
+    sim_summary = {
+        'total_active': total_sims,
+        'expired_count': expired_count,
+        'expiring_soon_count': expiring_soon_count,
+        'total_remaining_mb': total_remaining_mb,
+    }
+
+    # ── Stations & Sensor Data ──
+    dashboard_stations = []
+    
+    for s in stations:
+        latest = WeatherReading.objects.filter(station=s).order_by('-timestamp').first()
+        stat = getattr(s, "status", None)
+        db_status = stat.status if stat else "full"
+        if db_status == "full":
+            status_val = "online"
+        elif db_status == "down":
+            status_val = "offline"
+        else:
+            status_val = "partial"
+        
+        st = {
+            'id': s.id,
+            'name': s.name,
+            'station_code': s.station_id,
+            'location': s.location,
+            'latitude': s.latitude or 0.0,
+            'longitude': s.longitude or 0.0,
+            'status': status_val,
+            'temperature': None,
+            'humidity': None,
+            'rainfall': None,
+            'wind_speed': None,
+            'pressure': None,
+            'last_seen': latest.timestamp.isoformat() if latest else s.created_at.isoformat(),
+            'expected_interval_minutes': s.expected_interval_minutes,
+            'is_stale': False
+        }
+        
+        if latest:
+            if latest.temperature is not None:
+                st['temperature'] = {'value': latest.temperature, 'unit': '°C'}
+            if latest.humidity is not None:
+                st['humidity'] = {'value': latest.humidity, 'unit': '%'}
+            if latest.rain is not None:
+                st['rainfall'] = {'value': latest.rain, 'unit': 'mm'}
+            if latest.wind_speed is not None:
+                st['wind_speed'] = {'value': latest.wind_speed, 'unit': 'm/s'}
+            if latest.pressure is not None:
+                st['pressure'] = {'value': latest.pressure, 'unit': 'hPa'}
+                
+        dashboard_stations.append(st)
+
+    alerts = [] # Alerts to be implemented later
+    
+    online = sum(1 for s in dashboard_stations if s['status'] in ('online', 'full'))
+    offline = sum(1 for s in dashboard_stations if s['status'] in ('offline', 'down'))
+    total_st = len(dashboard_stations)
+    
+    summary = {
+        'total_stations': total_st,
+        'online_stations': online,
+        'online_percentage': round((online / total_st) * 100) if total_st else 0,
+        'offline_stations': offline,
+        'offline_percentage': round((offline / total_st) * 100) if total_st else 0,
+        'active_alerts': 0,
+        'critical_alerts': 0,
+        'warning_alerts': 0,
+        'info_alerts': 0,
+    }
+
+    return api_response(data={
+        'summary': summary,
+        'stations': dashboard_stations,
+        'alerts': alerts,
+        'sim_summary': sim_summary
+    })
+
+# ─────────────────────────────────────────────────────────
 # API: Historical readings for a station
 # ─────────────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def bulk_history(request):
+    """
+    Fetch history for multiple stations at once.
+    Expects ?station_ids=AWS-001,AWS-002&hours=24&limit=5000
+    """
+    station_ids_str = request.query_params.get('station_ids', '')
+    if not station_ids_str:
+        return api_response(error='station_ids is required', status_code=400)
+    
+    station_ids = [s.strip() for s in station_ids_str.split(',') if s.strip()]
+    hours = int(request.query_params.get('hours', 24))
+    
+    # We remove the hardcoded 200 limit to fix the issue. We'll use a larger safety limit for bulk.
+    limit = int(request.query_params.get('limit', 5000))
+    since = timezone.now() - datetime.timedelta(hours=hours)
+
+    readings = SensorReading.objects.filter(
+        station_code__in=station_ids,
+        timestamp__gte=since
+    ).order_by('-timestamp')[:limit]
+
+    # Reverse to chronological
+    readings = list(readings)[::-1]
+
+    serializer = SensorReadingSerializer(readings, many=True)
+    
+    return api_response(data={
+        'hours': hours,
+        'count': len(readings),
+        'readings': serializer.data,
+    })
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -454,7 +613,10 @@ def history(request, station_id):
     readings = SensorReading.objects.filter(
         station_code=station_id,
         timestamp__gte=since
-    ).order_by('timestamp')[:limit]
+    ).order_by('-timestamp')[:limit]
+
+    # Reverse them back to chronological order for the charts
+    readings = list(readings)[::-1]
 
     if chart_type == 'power':
         serializer = PowerChartSerializer(readings, many=True)
@@ -464,26 +626,35 @@ def history(request, station_id):
     return api_response(data={
         'station_id': station_id,
         'hours':      hours,
-        'count':      readings.count(),
+        'count':      len(readings),
         'readings':   serializer.data,
     })
 
 
-@api_view(['GET'])
+@api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def station_detail(request, station_id):
     try:
-        station = Station.objects.select_related('status').get(
-            station_id=station_id
-        )
+        if str(station_id).isdigit():
+            station = Station.objects.select_related('status').get(id=station_id)
+        else:
+            station = Station.objects.select_related('status').get(station_id=station_id)
     except Station.DoesNotExist:
-        return api_response(
-            error=f'Station {station_id} not found',
-            status_code=404
-        )
+        return api_response(error=f'Station {station_id} not found', status_code=404)
+
+    if request.method == 'PUT':
+        serializer = StationSerializer(station, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated = serializer.save()
+            return api_response(data=StationSerializer(updated).data)
+        return api_response(error=serializer.errors, status_code=400)
+
+    if request.method == 'DELETE':
+        station.delete()
+        return api_response(message="Station deleted", status_code=200)
 
     latest_reading = SensorReading.objects.filter(
-        station_code=station_id
+        station_code=station.station_id
     ).order_by('-timestamp').first()
 
     return api_response(data={
@@ -538,6 +709,122 @@ def export(request):
     })
 
 
+<<<<<<< HEAD
+=======
+# ─────────────────────────────────────────────────────────
+# API: Split ingest endpoints — mirror the 3 ThingSpeak channels
+# ─────────────────────────────────────────────────────────
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def ingest_weather(request):
+    """
+    Channel 1 equivalent. Expects pre-parsed JSON:
+    { "station_id": "AWS-UG-001", "timestamp": "...", "pressure": .., ... }
+    """
+    data       = request.data
+    station_id = data.get('station_id', 'AWS-UG-001')
+    station    = get_or_none(station_id)
+
+    timestamp = parse_datetime(str(data.get('timestamp', '')))
+    if timestamp is None:
+        return api_response(error='timestamp is required and must be ISO format', status_code=400)
+
+    fields = dict(
+        pressure       = safe_float(data.get('pressure')),
+        altitude       = safe_float(data.get('altitude')),
+        temperature    = safe_float(data.get('temperature')),
+        humidity       = safe_float(data.get('humidity')),
+        light          = safe_float(data.get('light')),
+        soil_moisture  = safe_float(data.get('soil_moisture')),
+        rain           = safe_int(data.get('rain')),
+        wind_speed     = safe_float(data.get('wind_speed')),
+        wind_direction = safe_int(data.get('wind_direction')),
+    )
+
+    weather = WeatherReading.objects.create(
+        station=station, station_code=station_id, timestamp=timestamp, **fields
+    )
+
+    # Dual-write: keep SensorReading in sync for existing dashboard/history/export
+    reading, _ = SensorReading.objects.get_or_create(
+        station_code=station_id, timestamp=timestamp,
+        defaults={'station': station}
+    )
+    for k, v in fields.items():
+        setattr(reading, k, v)
+    reading.save()
+
+    return api_response({'status': 'ok', 'id': weather.id}, status_code=201)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def ingest_voltage(request):
+    """Channel 2 equivalent."""
+    data       = request.data
+    station_id = data.get('station_id', 'AWS-UG-001')
+    station    = get_or_none(station_id)
+
+    timestamp = parse_datetime(str(data.get('timestamp', '')))
+    if timestamp is None:
+        return api_response(error='timestamp is required and must be ISO format', status_code=400)
+
+    fields = dict(
+        volt_3v3   = safe_float(data.get('volt_3v3')),
+        volt_5v    = safe_float(data.get('volt_5v')),
+        volt_batt  = safe_float(data.get('volt_batt')),
+        volt_solar = safe_float(data.get('volt_solar')),
+        volt_dc    = safe_float(data.get('volt_dc')),
+    )
+
+    voltage = VoltageReading.objects.create(
+        station=station, station_code=station_id, timestamp=timestamp, **fields
+    )
+
+    reading, _ = SensorReading.objects.get_or_create(
+        station_code=station_id, timestamp=timestamp,
+        defaults={'station': station}
+    )
+    for k, v in fields.items():
+        setattr(reading, k, v)
+    reading.save()
+
+    return api_response({'status': 'ok', 'id': voltage.id}, status_code=201)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def ingest_current(request):
+    """Channel 3 equivalent."""
+    data       = request.data
+    station_id = data.get('station_id', 'AWS-UG-001')
+    station    = get_or_none(station_id)
+
+    timestamp = parse_datetime(str(data.get('timestamp', '')))
+    if timestamp is None:
+        return api_response(error='timestamp is required and must be ISO format', status_code=400)
+
+    fields = dict(
+        curr_batt  = safe_float(data.get('curr_batt')),
+        curr_solar = safe_float(data.get('curr_solar')),
+    )
+
+    current = CurrentReading.objects.create(
+        station=station, station_code=station_id, timestamp=timestamp, **fields
+    )
+
+    reading, _ = SensorReading.objects.get_or_create(
+        station_code=station_id, timestamp=timestamp,
+        defaults={'station': station}
+    )
+    for k, v in fields.items():
+        setattr(reading, k, v)
+    reading.save()
+
+    return api_response({'status': 'ok', 'id': current.id}, status_code=201)
+
+>>>>>>> f2af3e450cbce9c5c4169f8626f32b672cec06e5
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -784,6 +1071,7 @@ def benchmark_import(request):
         'imported': len(readings),
         'skipped':  skipped,
     })
+<<<<<<< HEAD
 
 
 # ─────────────────────────────────────────────────────────
@@ -898,3 +1186,140 @@ def ingest_current(request):
     reading.save()
 
     return api_response({'status': 'ok', 'id': current.id}, status_code=201)
+=======
+# ── SIM Management APIs ──
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def sim_management_data(request):
+    sims = SimCard.objects.select_related('station').all()
+    
+    total_active = 0
+    expired_count = 0
+    expiring_soon_count = 0
+    total_remaining_mb = 0
+    
+    today = timezone.now().date()
+    soon_threshold = today + datetime.timedelta(days=30)
+    
+    sims_data = []
+    
+    for sim in sims:
+        is_expired = sim.expiry_date and sim.expiry_date < today
+        is_active = not is_expired
+        
+        if is_active:
+            total_active += 1
+        else:
+            expired_count += 1
+            
+        if sim.expiry_date and today <= sim.expiry_date <= soon_threshold:
+            expiring_soon_count += 1
+            
+        usage = sim.data_used_mb or 0
+        bundle = sim.data_limit_mb or 1024.0
+        rem = max(0, bundle - usage)
+        if is_active:
+            total_remaining_mb += rem
+            
+        est_days = None
+        if sim.expiry_date:
+            diff = (sim.expiry_date - today).days
+            est_days = max(0, diff)
+            
+        sims_data.append({
+            'sim': {
+                'id': sim.id,
+                'iccid': sim.iccid or '',
+                'carrier': 'MTN',
+                'phone_number': sim.phone_number,
+                'bundle_size_mb': bundle,
+                'usage_mb': usage,
+                'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
+                'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+                'status': 'active' if is_active else 'inactive'
+            },
+            'station_name': sim.station.name if sim.station else 'Unknown',
+            'station_id': sim.station.id if sim.station else None,
+            'estimated_days_remaining': est_days,
+            'projected_expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+            'forecast_confidence_note': 'Based on linear projection.' if est_days else 'Not enough data for projection.',
+            'daily_usage': [],
+            'top_up_history': []
+        })
+        
+    return Response({
+        'status': 'success',
+        'data': {
+            'sims': sims_data,
+            'summary': {
+                'total_active': total_active,
+                'expired_count': expired_count,
+                'expiring_soon_count': expiring_soon_count,
+                'total_remaining_mb': total_remaining_mb,
+                'expiring_soon_threshold_days': 30
+            }
+        }
+    })
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_sim_account(request, sim_id):
+    from django.shortcuts import get_object_or_404
+    sim = get_object_or_404(SimCard, id=sim_id)
+    
+    if 'date_loaded' in request.data:
+        d = request.data['date_loaded']
+        sim.date_loaded = d if d else None
+    if 'expiry_date' in request.data:
+        e = request.data['expiry_date']
+        sim.expiry_date = e if e else None
+        
+    sim.save()
+    
+    is_expired = sim.expiry_date and sim.expiry_date < timezone.now().date()
+    is_active = not is_expired
+    
+    return Response({
+        'status': 'success',
+        'data': {
+            'id': sim.id,
+            'iccid': sim.iccid or '',
+            'carrier': 'MTN',
+            'phone_number': sim.phone_number,
+            'bundle_size_mb': sim.data_limit_mb or 1024.0,
+            'usage_mb': sim.data_used_mb or 0,
+            'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
+            'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+            'status': 'active' if is_active else 'inactive'
+        }
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def topup_sim_account(request, sim_id):
+    from django.shortcuts import get_object_or_404
+    sim = get_object_or_404(SimCard, id=sim_id)
+    amount_mb = request.data.get('amount_mb', 0)
+    
+    sim.data_limit_mb += float(amount_mb)
+    sim.save()
+    
+    is_expired = sim.expiry_date and sim.expiry_date < timezone.now().date()
+    is_active = not is_expired
+    
+    return Response({
+        'status': 'success',
+        'data': {
+            'id': sim.id,
+            'iccid': sim.iccid or '',
+            'carrier': 'MTN',
+            'phone_number': sim.phone_number,
+            'bundle_size_mb': sim.data_limit_mb or 1024.0,
+            'usage_mb': sim.data_used_mb or 0,
+            'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
+            'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+            'status': 'active' if is_active else 'inactive'
+        }
+    })
+>>>>>>> f2af3e450cbce9c5c4169f8626f32b672cec06e5

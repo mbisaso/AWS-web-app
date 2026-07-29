@@ -23,24 +23,33 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from backend/.env
 load_dotenv(BASE_DIR / '.env')
 
+
+def _csv_env(name: str, default: str) -> list[str]:
+    value = os.environ.get(name, '').strip()
+    source = value or default
+    return [item.strip() for item in source.split(',') if item.strip()]
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-fallback-do-not-use-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.environ.get(
+ALLOWED_HOSTS = _csv_env(
     'DJANGO_ALLOWED_HOSTS',
-    'localhost,127.0.0.1,.ngrok-free.dev,.ngrok-free.app,.onrender.com,.trycloudflare.com,.lhr.life'
-    'localhost,127.0.0.1,.trycloudflare.com'
-).split(',')
+    'localhost,127.0.0.1,.ngrok-free.dev,.ngrok-free.app,.onrender.com,.trycloudflare.com,.lhr.life,.trycloudflare.com',
+)
 
-CSRF_TRUSTED_ORIGINS = os.environ.get(
+CSRF_TRUSTED_ORIGINS = _csv_env(
     'CSRF_TRUSTED_ORIGINS',
-    'https://*.ngrok-free.dev,https://*.ngrok-free.app,https://*.onrender.com,https://*.trycloudflare.com,https://*.lhr.life,http://localhost:5173'
-).split(',')
+    'https://*.ngrok-free.dev,https://*.ngrok-free.app,https://*.onrender.com,https://*.trycloudflare.com,https://*.lhr.life,http://localhost:5173,http://127.0.0.1:5173',
+)
 
-CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173').split(',')
+CORS_ALLOWED_ORIGINS = _csv_env(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:5173,http://127.0.0.1:5173',
+)
+CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
 
@@ -123,12 +132,12 @@ if DATABASE_URL:
 else:
     DATABASES = {
         'default': {
-            'ENGINE': 'django.db.backends.postgresql',
+            'ENGINE': 'django.db.backends.mysql',
             'NAME':     os.environ.get('DB_NAME',     'aws-db'),
             'USER':     os.environ.get('DB_USER',     'aws_user'),
             'PASSWORD': os.environ.get('DB_PASSWORD', ''),
             'HOST':     os.environ.get('DB_HOST',     'localhost'),
-            'PORT':     os.environ.get('DB_PORT',     '5432'),
+            'PORT':     os.environ.get('DB_PORT',     '3306'),
         }
     }
 
@@ -168,7 +177,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'  
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -187,3 +197,11 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@awsmonitor.ug')
 NOTIFICATION_EMAIL = os.environ.get('NOTIFICATION_EMAIL', 'admin@awsmonitor.ug')
+
+# Bypass Django's MariaDB version check & feature flags for local XAMPP
+from django.db.backends.mysql.base import DatabaseWrapper
+from django.db.backends.mysql.features import DatabaseFeatures
+
+DatabaseWrapper.check_database_version_supported = lambda self: None
+DatabaseFeatures.can_return_columns_from_insert = False
+DatabaseFeatures.can_return_rows_from_bulk_insert = False

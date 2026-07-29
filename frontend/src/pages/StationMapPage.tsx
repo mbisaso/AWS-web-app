@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   APIProvider,
   Map,
@@ -15,42 +16,45 @@ import { StatusBadge } from '../components/dashboard/StatusIndicator'
 import { StationMarker } from '../components/stationMap/StationMarker'
 import { StatusFilterBar, type StationFilter } from '../components/stationMap/StatusFilterBar'
 import { StationListPanel } from '../components/stationMap/StationListPanel'
+import { getGoogleMapsConfig } from '../utils/googleMaps'
+import { fitMapToStations, hasValidCoordinates } from '../utils/stationCoordinates'
 
 
-function toStationReading(stations: Station[]): StationReading[] {
+function toStationReading(s: Station): StationReading {
   const statusMap: Record<string, 'online' | 'partial' | 'offline'> = {
     full: 'online', partial: 'partial', down: 'offline',
   }
 
-  return stations.map((s) => {
-    const rawStatus = s.status?.status ?? 'down'
-    const lastSeen = s.status?.last_updated ?? new Date().toISOString()
-    const elapsed = Date.now() - new Date(lastSeen).getTime()
-    const isStale = elapsed > s.expected_interval_minutes * 60 * 1000 * 2
+  const rawStatus = s.status?.status ?? 'down'
+  const lastSeen = s.status?.last_updated ?? new Date().toISOString()
+  const elapsed = Date.now() - new Date(lastSeen).getTime()
+  const isStale = elapsed > s.expected_interval_minutes * 60 * 1000 * 2
+  const lat = s.latitude ?? 0
+  const lng = s.longitude ?? 0
 
-    return {
-      id: s.id,
-      name: s.name,
-      station_code: s.station_id,
-      location: s.location,
-      latitude: s.latitude ?? 0,
-      longitude: s.longitude ?? 0,
-      status: statusMap[rawStatus] ?? 'offline',
-      temperature: null,
-      humidity: null,
-      rainfall: null,
-      wind_speed: null,
-      pressure: null,
-      last_seen: lastSeen,
-      expected_interval_minutes: s.expected_interval_minutes,
-      is_stale: isStale,
-    }
-  })
+  return {
+    id: s.id,
+    name: s.name,
+    station_code: s.station_id,
+    location: s.location,
+    latitude: lat,
+    longitude: lng,
+    status: statusMap[rawStatus] ?? 'offline',
+    temperature: null,
+    humidity: null,
+    rainfall: null,
+    wind_speed: null,
+    pressure: null,
+    last_seen: lastSeen,
+    expected_interval_minutes: s.expected_interval_minutes,
+    is_stale: isStale,
+  }
 }
 
 
 export function StationMapPage() {
-  const [allStations, setAllStations] = useState<StationReading[]>([])
+  const navigate = useNavigate()
+  const [rawStations, setRawStations] = useState<Station[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryTrigger, setRetryTrigger] = useState(0)
@@ -63,7 +67,7 @@ export function StationMapPage() {
       setIsLoading(true)
       try {
         const stn = await fetchStations()
-        setAllStations(toStationReading(stn))
+        setRawStations(stn)
         setError(null)
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Failed to load station data')
@@ -74,36 +78,49 @@ export function StationMapPage() {
     load()
   }, [retryTrigger])
 
+  const allStations = useMemo(
+    () => rawStations.map(toStationReading),
+    [rawStations],
+  )
+
+  const plottableStations = useMemo(
+    () => allStations.filter((s) => hasValidCoordinates(s.latitude, s.longitude)),
+    [allStations],
+  )
+
+  const unplottableCount = allStations.length - plottableStations.length
+
   const [filter, setFilter] = useState<StationFilter>('all')
   const [selectedStation, setSelectedStation] = useState<StationReading | null>(null)
-  const [detailStation, setDetailStation] = useState<StationReading | null>(null)
   const [isListOpen, setIsListOpen] = useState(true)
   const [recenterCount, setRecenterCount] = useState(0)
+
+  const handleViewDetails = useCallback(
+    (station: StationReading) => navigate(`/dashboard/stations/${station.station_code}`),
+    [navigate],
+  )
 
   /* ── Alerting not available (no real alerts API) ── */
   const alertStationIds = useMemo(() => new Set<number>(), [])
 
-  /* ── Filtered stations ── */
+  /* ── Filtered stations (plottable only) ── */
   const filteredStations = useMemo(() => {
-    let result = allStations.filter((s) => s.latitude && s.longitude)
+    let result = plottableStations
 
     if (filter === 'online') result = result.filter((s) => s.status === 'online')
     else if (filter === 'offline') result = result.filter((s) => s.status !== 'online')
     else if (filter === 'fault') result = result.filter((s) => alertStationIds.has(s.id))
 
     return result
-  }, [allStations, filter, alertStationIds])
+  }, [plottableStations, filter, alertStationIds])
 
   /* ── Filter counts ── */
-  const filterCounts = useMemo(() => {
-    const allPlotted = allStations.filter((s) => s.latitude && s.longitude)
-    return {
-      all: allPlotted.length,
-      online: allPlotted.filter((s) => s.status === 'online').length,
-      offline: allPlotted.filter((s) => s.status !== 'online').length,
-      fault: alertStationIds.size,
-    }
-  }, [allStations, alertStationIds])
+  const filterCounts = useMemo(() => ({
+    all: plottableStations.length,
+    online: plottableStations.filter((s) => s.status === 'online').length,
+    offline: plottableStations.filter((s) => s.status !== 'online').length,
+    fault: alertStationIds.size,
+  }), [plottableStations, alertStationIds])
 
   const handleSelect = useCallback((station: StationReading | null) => {
     setSelectedStation(station)
@@ -114,10 +131,11 @@ export function StationMapPage() {
   }, [])
 
   /* ── API key ── */
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined
+  const { apiKey, mapId } = getGoogleMapsConfig()
+  const useAdvancedMarkers = Boolean(mapId)
 
   /* ── Loading: no data yet ── */
-  if (isLoading && allStations.length === 0) {
+  if (isLoading && rawStations.length === 0) {
     return (
       <div className="flex h-screen bg-mist">
         <DashboardSidebar />
@@ -127,7 +145,7 @@ export function StationMapPage() {
   }
 
   /* ── Error: fetch failed, no cached data ── */
-  if (error && allStations.length === 0) {
+  if (error && rawStations.length === 0) {
     return (
       <div className="flex h-screen bg-mist">
         <DashboardSidebar />
@@ -175,6 +193,7 @@ export function StationMapPage() {
               to enable the station map.
             </p>
             <p className="mt-3 text-xs text-storm/40">
+              If you just edited frontend/.env, restart the Vite dev server so it reloads the key.
               Remember to restrict the key by domain/referrer in Google Cloud Console.
             </p>
           </div>
@@ -183,56 +202,77 @@ export function StationMapPage() {
     )
   }
 
-  /* ── Main render ── */
-  const hasPlottedStations = allStations.some((s) => s.latitude && s.longitude)
-
   return (
     <>
-      <div className="flex h-screen bg-mist">
+      <div className="flex min-h-[100dvh] bg-mist lg:h-screen lg:overflow-hidden">
         <DashboardSidebar />
 
-        <main className="flex min-w-0 flex-1">
-          <div className="relative flex-1">
+        <main className="flex min-w-0 flex-1 flex-col lg:flex-row">
+          <section className="flex min-w-0 flex-1 flex-col overflow-hidden border-b border-slate-200/80 bg-white/80 backdrop-blur-sm lg:rounded-r-[28px] lg:border-b-0 lg:border-r lg:border-slate-200/80 lg:shadow-[0_20px_70px_rgba(15,23,42,0.08)]">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200/80 px-4 py-4 sm:px-6">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-sky-primary">Station map</p>
+                <h1 className="mt-1 text-2xl font-semibold text-midnight font-display">Live station locations</h1>
+                <p className="mt-1 text-sm text-storm/60">
+                  Search, filter, and inspect station markers across the map.
+                </p>
+              </div>
+              <div className="hidden rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right text-xs text-storm/50 shadow-sm sm:block">
+                <p className="font-semibold text-midnight">{filteredStations.length}</p>
+                <p>on map</p>
+              </div>
+            </div>
+
+            {unplottableCount > 0 && (
+              <div className="mx-4 mb-3 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 sm:mx-6">
+                <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M12 9v4M12 17h.01" strokeLinecap="round" />
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                </svg>
+                <p className="text-xs leading-relaxed text-amber-800">
+                  {unplottableCount} station{unplottableCount !== 1 ? 's' : ''} missing valid coordinates.
+                  Set latitude and longitude in Station Manager to show them on the map.
+                </p>
+              </div>
+            )}
+
+            <div className="relative min-h-[62vh] flex-1 overflow-hidden lg:min-h-0">
+            {plottableStations.length === 0 ? (
+              <NoCoordinatesState totalStations={allStations.length} />
+            ) : (
             <APIProvider apiKey={apiKey}>
-              {!hasPlottedStations && !isLoading ? (
-                <EmptyMapState
-                  onAdd={() => {
-                    /* future: navigate to station registration */
-                  }}
-                />
-              ) : (
-                <MapScreenContent
-                  stations={filteredStations}
-                  allStations={allStations}
-                  alertStationIds={alertStationIds}
-                  selectedStation={selectedStation}
-                  onSelect={handleSelect}
-                  onViewDetails={setDetailStation}
-                  filter={filter}
-                  filterCounts={filterCounts}
-                  onFilterChange={setFilter}
-                  onRecenter={handleRecenter}
-                  recenterCount={recenterCount}
-                />
-              )}
+              <MapScreenContent
+                stations={filteredStations}
+                plottableStations={plottableStations}
+                alertStationIds={alertStationIds}
+                selectedStation={selectedStation}
+                onSelect={handleSelect}
+                onViewDetails={handleViewDetails}
+                filter={filter}
+                filterCounts={filterCounts}
+                onFilterChange={setFilter}
+                onRecenter={handleRecenter}
+                recenterCount={recenterCount}
+                mapId={mapId}
+                useAdvancedMarkers={useAdvancedMarkers}
+              />
             </APIProvider>
-          </div>
+            )}
+            </div>
+          </section>
 
           <StationListPanel
             stations={filteredStations}
-            totalCount={
-              allStations.filter((s) => s.latitude && s.longitude).length
-            }
+            totalCount={plottableStations.length}
             selectedId={selectedStation?.id ?? null}
             alertIds={alertStationIds}
             onSelect={handleSelect}
+            onViewDetails={handleViewDetails}
             isOpen={isListOpen}
             onToggle={() => setIsListOpen((o) => !o)}
           />
         </main>
       </div>
-
-      {detailStation && <StationDetailDialog station={detailStation} onClose={() => setDetailStation(null)} />}
     </>
   )
 }
@@ -241,7 +281,7 @@ export function StationMapPage() {
 
 function MapScreenContent({
   stations,
-  allStations,
+  plottableStations,
   alertStationIds,
   selectedStation,
   onSelect,
@@ -251,9 +291,11 @@ function MapScreenContent({
   onFilterChange,
   onRecenter,
   recenterCount,
+  mapId,
+  useAdvancedMarkers,
 }: {
   stations: StationReading[]
-  allStations: StationReading[]
+  plottableStations: StationReading[]
   alertStationIds: Set<number>
   selectedStation: StationReading | null
   onSelect: (s: StationReading | null) => void
@@ -263,12 +305,14 @@ function MapScreenContent({
   onFilterChange: (f: StationFilter) => void
   onRecenter: () => void
   recenterCount: number
+  mapId: string | null
+  useAdvancedMarkers: boolean
 }) {
   const apiIsLoaded = useApiIsLoaded()
   const apiStatus = useApiLoadingStatus()
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full min-h-[62vh]">
       {apiStatus === 'FAILED' && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-mist">
           <div className="max-w-sm px-6 text-center">
@@ -294,7 +338,7 @@ function MapScreenContent({
       )}
 
       <Map
-        className="h-full w-full"
+        className="h-full w-full min-h-[62vh]"
         defaultZoom={7}
         defaultCenter={{ lat: 1.5, lng: 32.5 }}
         gestureHandling="greedy"
@@ -302,16 +346,18 @@ function MapScreenContent({
         fullscreenControl={false}
         mapTypeControl={false}
         clickableIcons={false}
+        mapId={mapId ?? undefined}
         onClick={() => onSelect(null)}
       >
         <MapView
           stations={stations}
-          allStations={allStations}
+          plottableStations={plottableStations}
           alertStationIds={alertStationIds}
           selectedStation={selectedStation}
           onSelect={onSelect}
           onViewDetails={onViewDetails}
           recenterCount={recenterCount}
+          useAdvancedMarkers={useAdvancedMarkers}
         />
       </Map>
 
@@ -322,7 +368,7 @@ function MapScreenContent({
         </div>
 
         <div className="pointer-events-auto absolute right-4 top-4 max-w-[200px]">
-          <SearchStationInput stations={allStations} onSelect={onSelect} />
+          <SearchStationInput stations={plottableStations} onSelect={onSelect} />
         </div>
 
         <div className="pointer-events-auto absolute bottom-4 right-4">
@@ -337,50 +383,44 @@ function MapScreenContent({
 
 function MapView({
   stations,
-  allStations,
+  plottableStations,
   alertStationIds,
   selectedStation,
   onSelect,
   onViewDetails,
   recenterCount,
+  useAdvancedMarkers,
 }: {
   stations: StationReading[]
-  allStations: StationReading[]
+  plottableStations: StationReading[]
   alertStationIds: Set<number>
   selectedStation: StationReading | null
   onSelect: (s: StationReading | null) => void
   onViewDetails: (s: StationReading) => void
   recenterCount: number
+  useAdvancedMarkers: boolean
 }) {
   const map = useMap()
 
-  /* Fit bounds on first load */
-  const hasFitted = useRef(false)
+  /* Fit bounds when plottable stations load or change */
+  const stationCount = plottableStations.length
   useEffect(() => {
-    if (!map || !allStations.length || hasFitted.current) return
-    const bounds = new google.maps.LatLngBounds()
-    allStations
-      .filter((s) => s.latitude && s.longitude)
-      .forEach((s) => bounds.extend({ lat: s.latitude, lng: s.longitude }))
-    map.fitBounds(bounds, 60)
-    hasFitted.current = true
-  }, [map, allStations])
+    if (!map || stationCount === 0) return
+    fitMapToStations(map, plottableStations)
+  }, [map, stationCount, plottableStations])
 
   /* Pan to selected station */
   useEffect(() => {
     if (!map || !selectedStation) return
     map.panTo({ lat: selectedStation.latitude, lng: selectedStation.longitude })
+    if (map.getZoom()! < 10) map.setZoom(11)
   }, [map, selectedStation])
 
   /* Recenter triggered */
   useEffect(() => {
-    if (!map || !allStations.length || recenterCount === 0) return
-    const bounds = new google.maps.LatLngBounds()
-    allStations
-      .filter((s) => s.latitude && s.longitude)
-      .forEach((s) => bounds.extend({ lat: s.latitude, lng: s.longitude }))
-    map.fitBounds(bounds, 60)
-  }, [map, allStations, recenterCount])
+    if (!map || stationCount === 0 || recenterCount === 0) return
+    fitMapToStations(map, plottableStations)
+  }, [map, plottableStations, recenterCount, stationCount])
 
   return (
     <>
@@ -390,6 +430,7 @@ function MapView({
           station={station}
           hasAlerts={alertStationIds.has(station.id)}
           isSelected={selectedStation?.id === station.id}
+          useAdvancedMarkers={useAdvancedMarkers}
           onClick={() => onSelect(station)}
         />
       ))}
@@ -422,6 +463,9 @@ function InfoWindowContent({ station, onViewDetails }: { station: StationReading
       <p className="mb-2 text-xs text-storm/50">
         {station.station_code} &middot; {station.location}
       </p>
+      <p className="mb-2 font-mono text-[10px] text-storm/40">
+        {station.latitude.toFixed(4)}, {station.longitude.toFixed(4)}
+      </p>
 
       {station.temperature ? (
         <div className="mb-2 grid grid-cols-2 gap-x-4 gap-y-1">
@@ -450,100 +494,6 @@ function InfoWindowContent({ station, onViewDetails }: { station: StationReading
       >
         View station details &rarr;
       </button>
-    </div>
-  )
-}
-
-/* ── Station Detail Dialog ── */
-
-function StationDetailDialog({ station, onClose }: { station: StationReading; onClose: () => void }) {
-  useEffect(() => {
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = '' }
-  }, [])
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-midnight/40 backdrop-blur-sm p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl animate-fade-in-up motion-reduce:animate-none">
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{station.station_code}</p>
-            <h2 className="mt-1 text-lg font-semibold text-midnight">{station.name}</h2>
-          </div>
-          <button type="button" onClick={onClose} className="cursor-pointer rounded-lg p-1.5 text-storm/40 transition-colors hover:bg-slate-100 hover:text-storm/70" aria-label="Close">
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <path d="M18 6 6 18M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="space-y-5 px-6 py-5">
-          <div className="flex flex-wrap gap-2">
-            <StatusBadge status={station.status} />
-            {station.is_stale && (
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Stale data</span>
-            )}
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-xl bg-[#f8fafc] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Location</p>
-              <p className="mt-1 text-sm text-midnight">{station.location || '—'}</p>
-            </div>
-            <div className="rounded-xl bg-[#f8fafc] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Coordinates</p>
-              <p className="mt-1 text-sm text-midnight">
-                {station.latitude != null && station.longitude != null
-                  ? `${station.latitude.toFixed(4)}, ${station.longitude.toFixed(4)}`
-                  : '—'}
-              </p>
-            </div>
-            <div className="rounded-xl bg-[#f8fafc] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Expected Interval</p>
-              <p className="mt-1 text-sm text-midnight">{station.expected_interval_minutes} min</p>
-            </div>
-            <div className="rounded-xl bg-[#f8fafc] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Last Seen</p>
-              <p className="mt-1 text-sm text-midnight">{new Date(station.last_seen).toLocaleString()}</p>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">Latest Sensor Readings</p>
-            {station.temperature ? (
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs text-slate-500">Temperature</p>
-                  <p className="mt-0.5 text-sm font-semibold text-midnight">{station.temperature ? `${station.temperature.value.toFixed(1)}°C` : '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Humidity</p>
-                  <p className="mt-0.5 text-sm font-semibold text-midnight">{station.humidity ? `${station.humidity.value.toFixed(0)}%` : '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Rainfall</p>
-                  <p className="mt-0.5 text-sm font-semibold text-midnight">{station.rainfall ? `${station.rainfall.value.toFixed(1)}mm` : '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Wind Speed</p>
-                  <p className="mt-0.5 text-sm font-semibold text-midnight">{station.wind_speed ? `${station.wind_speed.value.toFixed(1)}m/s` : '—'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-slate-500">Pressure</p>
-                  <p className="mt-0.5 text-sm font-semibold text-midnight">{station.pressure ? `${station.pressure.value.toFixed(1)}hPa` : '—'}</p>
-                </div>
-              </div>
-            ) : (
-              <p className="mt-3 text-xs text-storm/50">No sensor data available yet.</p>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
@@ -699,38 +649,24 @@ function MapSkeleton() {
   )
 }
 
-function EmptyMapState({ onAdd }: { onAdd: () => void }) {
+function NoCoordinatesState({ totalStations }: { totalStations: number }) {
   return (
-    <div className="flex h-full w-full items-center justify-center bg-mist">
-      <div className="max-w-md px-6 text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-sky-soft">
-          <svg
-            className="h-8 w-8 text-sky-primary"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-            <circle cx="12" cy="10" r="3" />
-          </svg>
-        </div>
-        <h2 className="text-lg font-semibold text-midnight font-display">No stations registered</h2>
-        <p className="mt-2 text-sm leading-relaxed text-storm/60">
-          Your weather network is empty. Add your first station to start monitoring temperature,
-          humidity, rainfall, and wind data in real time.
-        </p>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="mt-6 inline-flex cursor-pointer items-center gap-2 rounded-full bg-gradient-to-r from-sky-primary to-sky-deep px-6 py-3 text-sm font-semibold text-white shadow-md transition-all duration-200 hover:shadow-lg hover:brightness-110"
-        >
-          Add your first station
-        </button>
+    <div className="flex h-full min-h-[62vh] flex-col items-center justify-center px-6 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-sky-soft text-sky-primary">
+        <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
       </div>
+      <h2 className="mt-5 text-lg font-semibold text-midnight font-display">
+        {totalStations === 0 ? 'No stations registered yet' : 'No stations on the map yet'}
+      </h2>
+      <p className="mt-2 max-w-md text-sm leading-relaxed text-storm/60">
+        {totalStations === 0
+          ? 'Add a station in Station Manager, then set its latitude and longitude to plot it here.'
+          : `${totalStations} station${totalStations !== 1 ? 's are' : ' is'} registered but none have valid coordinates. Open Station Manager, edit each station, and pin its location on the map picker.`}
+      </p>
     </div>
   )
 }
+

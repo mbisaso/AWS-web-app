@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { StationManagementData, ConnectivityType } from '../../services/api'
-import { CONNECTIVITY_LABELS } from '../../services/api'
+import type { StationManagementData } from '../../services/api'
 import { MapLocationPicker } from './MapLocationPicker'
 
 const SENSOR_OPTIONS = [
@@ -8,8 +7,12 @@ const SENSOR_OPTIONS = [
   { value: 'humidity', label: 'Humidity' },
   { value: 'rainfall', label: 'Rainfall' },
   { value: 'wind_speed', label: 'Wind Speed' },
+  { value: 'wind_direction', label: 'Wind Direction' },
   { value: 'pressure', label: 'Pressure' },
-  { value: 'solar_radiation', label: 'Solar Radiation' },
+  { value: 'light', label: 'Light level' },
+  { value: 'soil_moisture', label: 'Soil Moisture' },
+  { value: 'curr_batt', label: 'Battery Current' },
+  { value: 'curr_solar', label: 'Solar Current' },
 ]
 
 interface StationFormModalProps {
@@ -33,7 +36,6 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
   const [location, setLocation] = useState('')
   const [latitude, setLatitude] = useState(1.5)
   const [longitude, setLongitude] = useState(32.5)
-  const [connectivity, setConnectivity] = useState<ConnectivityType>('gsm')
   const [expectedInterval, setExpectedInterval] = useState(15)
   const [sensors, setSensors] = useState<string[]>([])
   const [notes, setNotes] = useState('')
@@ -50,7 +52,6 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
         setLocation(station.location)
         setLatitude(station.latitude)
         setLongitude(station.longitude)
-        setConnectivity(station.connectivity)
         setExpectedInterval(station.expected_interval_minutes)
         setSensors(station.sensors)
         setNotes(station.notes)
@@ -61,7 +62,6 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
         setLocation('')
         setLatitude(1.5)
         setLongitude(32.5)
-        setConnectivity('gsm')
         setExpectedInterval(15)
         setSensors([])
         setNotes('')
@@ -103,7 +103,6 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
         location: location.trim(),
         latitude,
         longitude,
-        connectivity,
         expected_interval_minutes: expectedInterval,
         sensors,
         notes: notes.trim(),
@@ -123,7 +122,6 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-midnight/40 backdrop-blur-sm p-4"
-      onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose() }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="station-form-title"
@@ -181,15 +179,7 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
             )}
           </div>
 
-          {/* ── Connectivity ── */}
-          <div>
-            <label htmlFor="sf-connectivity" className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-storm/40">Connectivity</label>
-            <select id="sf-connectivity" value={connectivity} onChange={(e) => setConnectivity(e.target.value as ConnectivityType)} className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-midnight focus:outline-2 focus:outline-offset-2 focus:outline-sky-primary">
-              {(Object.keys(CONNECTIVITY_LABELS) as ConnectivityType[]).map((c) => (
-                <option key={c} value={c}>{CONNECTIVITY_LABELS[c]}</option>
-              ))}
-            </select>
-          </div>
+
 
           {/* ── Phone Number ── */}
           <div>

@@ -43,7 +43,7 @@ const footerSections: FooterSection[] = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-sky-100 bg-white">
+    <footer className="border-t border-sky-100 bg-gradient-to-b from-white to-sky-soft/20">
       <div className="mx-auto max-w-7xl px-6 py-16 lg:px-8">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand column */}
@@ -64,12 +64,12 @@ export function Footer() {
             </p>
 
             {/* Live status mini-badge */}
-            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-sky-100 bg-sky-soft px-3 py-1.5">
+            <div className="mt-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1.5">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
               </span>
-              <span className="text-xs font-medium text-storm/60">All systems operational</span>
+              <span className="text-xs font-medium text-emerald-700">All systems operational</span>
             </div>
           </div>
 
@@ -84,10 +84,10 @@ export function Footer() {
                   <li key={link.label}>
                     <a
                       href={link.href}
-                      className="inline-flex items-center gap-1.5 text-sm text-storm/60 transition-colors duration-200 hover:text-sky-primary cursor-pointer"
+                      className="group inline-flex items-center gap-1.5 text-sm text-storm/60 transition-colors duration-200 hover:text-sky-primary cursor-pointer"
                     >
                       {link.label}
-                      {link.external && <ExternalLinkIcon className="h-3 w-3" />}
+                      {link.external && <ExternalLinkIcon className="h-3 w-3 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />}
                     </a>
                   </li>
                 ))}
@@ -97,7 +97,7 @@ export function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-14 border-t border-sky-100 pt-8 flex flex-col items-center justify-between gap-4 sm:flex-row">
+        <div className="mt-14 border-t border-sky-100/80 pt-8 flex flex-col items-center justify-between gap-4 sm:flex-row">
           <p className="text-xs text-storm/40">
             &copy; {new Date().getFullYear()} AWS Monitor — WIMEA-ICT weather station platform.
           </p>

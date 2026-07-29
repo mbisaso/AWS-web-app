@@ -85,8 +85,8 @@ export function SummaryCard({
         group relative overflow-hidden rounded-2xl border p-5 text-left shadow-xs
         transition-all duration-200
         ${isActive
-          ? 'border-sky-300 bg-gradient-to-br from-sky-soft/60 to-white shadow-md shadow-sky-200/30'
-          : 'border-slate-200 bg-white hover:shadow-md'
+          ? 'border-sky-300 bg-gradient-to-br from-sky-soft/60 to-white shadow-elevation-2 shadow-sky-200/30'
+          : 'border-slate-200 bg-white hover:shadow-elevation-2 hover:-translate-y-0.5'
         }
         ${onClick ? 'cursor-pointer' : ''}
         ${styles.ring}
