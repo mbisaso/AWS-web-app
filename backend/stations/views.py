@@ -25,28 +25,17 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 logger = logging.getLogger(__name__)
 
-<<<<<<< HEAD
-from .models import Station, StationStatus, SensorReading, BenchmarkReading, WeatherReading, VoltageReading, CurrentReading
-=======
 from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading, SimCard
->>>>>>> f2af3e450cbce9c5c4169f8626f32b672cec06e5
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
     SensorReadingChartSerializer,
     PowerChartSerializer,
     StationSerializer,
-<<<<<<< HEAD
-    BenchmarkReadingSerializer,
-    WeatherReadingSerializer,
-    VoltageReadingSerializer,
-    CurrentReadingSerializer,
-=======
     WeatherReadingSerializer,
     VoltageReadingSerializer,
     CurrentReadingSerializer,
     BenchmarkReadingSerializer,
->>>>>>> f2af3e450cbce9c5c4169f8626f32b672cec06e5
 )
 
 
@@ -181,98 +170,47 @@ def get_or_none(station_code):
 
 def call_ml_service(reading, station_code):
     """
-    Calls the FastAPI inference service with features derived from the reading.
-    Returns the prediction dict on success, None on any failure.
-    Ingest always succeeds regardless of what this returns.
-    """
-    # Only temperature and humidity are required — model tolerates null for everything else
-    if any(v is None for v in [reading.temperature, reading.humidity]):
-        return None
+    Calls the sensor-fault detection service with a ~6-hour WINDOW of readings for
+    this station. The model's features include a 6-hour rolling variance, so it needs
+    recent history — we send the window and the service stays stateless.
 
-    # Last 3 readings for this station, reversed to oldest-first for trend computation
-    recent = list(reversed(list(
+    Returns the per-sensor result dict on success, None on any failure. Ingest always
+    succeeds regardless of what this returns.
+    """
+    window_start = reading.timestamp - datetime.timedelta(hours=6)
+    recent = list(
         SensorReading.objects.filter(
             station_code=station_code,
-        ).order_by('-timestamp').values(
-            'temperature', 'wind_speed', 'soil_moisture',
-            'volt_batt', 'volt_solar', 'curr_batt', 'curr_solar',
-        )[:3]
-    )))
-
-    if not recent:
-        return None
-
-    # Rolling helpers — skip None values so a broken sensor doesn't block the call
-    def _mean(vals):
-        valid = [v for v in vals if v is not None]
-        return sum(valid) / len(valid) if valid else None
-
-    def _trend(vals):
-        first = next((v for v in vals           if v is not None), None)
-        last  = next((v for v in reversed(vals) if v is not None), None)
-        return (last - first) if first is not None and last is not None else None
-
-    temp_vals = [r['temperature']   for r in recent]
-    ws_vals   = [r['wind_speed']    for r in recent]
-    sm_vals   = [r['soil_moisture'] for r in recent]
-    vb_vals   = [r['volt_batt']     for r in recent]
-    vs_vals   = [r['volt_solar']    for r in recent]
-    cb_vals   = [r['curr_batt']     for r in recent]
-    cs_vals   = [r['curr_solar']    for r in recent]
-
-    # Time elapsed since the previous reading — 0.0 if this is the first reading
-    prev = SensorReading.objects.filter(
-        station_code=station_code,
-        timestamp__lt=reading.timestamp,
-    ).order_by('-timestamp').first()
-
-    hours_since_last = (
-        (reading.timestamp - prev.timestamp).total_seconds() / 3600
-        if prev else 0.0
+            timestamp__gte=window_start,
+            timestamp__lte=reading.timestamp,
+        ).order_by('timestamp').values(
+            'timestamp', 'temperature', 'humidity', 'pressure',
+            'wind_speed', 'wind_direction', 'soil_moisture', 'light', 'rain',
+        )
     )
 
-    payload = {
-        # Direct sensor readings from the current ESP32 post
-        'temperature':    reading.temperature,
-        'humidity':       reading.humidity,
-        'pressure':       reading.pressure,
-        'rain':           reading.rain,
-        'wind_speed':     reading.wind_speed,
-        'wind_direction': reading.wind_direction,
-        'light':          reading.light,
-        'soil_moisture':  reading.soil_moisture,
-        'volt_3v3':       reading.volt_3v3,
-        'volt_5v':        reading.volt_5v,
-        'volt_batt':      reading.volt_batt,
-        'volt_solar':     reading.volt_solar,
-        'volt_dc':        reading.volt_dc,
-        'curr_batt':      reading.curr_batt,
-        'curr_solar':     reading.curr_solar,
-        # Rolling features over the last 3 readings
-        'temperature_mean_3':    _mean(temp_vals),
-        'temperature_trend_3':   _trend(temp_vals),
-        'wind_speed_mean_3':     _mean(ws_vals),
-        'wind_speed_trend_3':    _trend(ws_vals),
-        'soil_moisture_mean_3':  _mean(sm_vals),
-        'soil_moisture_trend_3': _trend(sm_vals),
-        'volt_batt_mean_3':      _mean(vb_vals),
-        'volt_batt_trend_3':     _trend(vb_vals),
-        'volt_solar_mean_3':     _mean(vs_vals),
-        'volt_solar_trend_3':    _trend(vs_vals),
-        'curr_batt_mean_3':      _mean(cb_vals),
-        'curr_batt_trend_3':     _trend(cb_vals),
-        'curr_solar_mean_3':     _mean(cs_vals),
-        'curr_solar_trend_3':    _trend(cs_vals),
-        # Time features
-        'hour_of_day':      reading.timestamp.hour,
-        'hours_since_last': hours_since_last,
-    }
+    # Need at least two readings for a rate of change; a short window simply yields
+    # fewer scored sensors, never an error.
+    if len(recent) < 2:
+        return None
+
+    readings = [{
+        'timestamp':      r['timestamp'].isoformat(),
+        'temperature':    r['temperature'],
+        'humidity':       r['humidity'],
+        'pressure':       r['pressure'],
+        'wind_speed':     r['wind_speed'],
+        'wind_direction': r['wind_direction'],
+        'soil_moisture':  r['soil_moisture'],
+        'light':          r['light'],
+        'rain':           r['rain'],
+    } for r in recent]
 
     try:
         resp = requests.post(
             os.environ.get('ML_SERVICE_URL', 'http://localhost:8001/predict'),
-            json=payload,
-            timeout=2,
+            json={'station_id': station_code, 'readings': readings},
+            timeout=3,
         )
         if resp.status_code == 200:
             return resp.json()
@@ -379,26 +317,28 @@ def ingest(request):
 
     reading.save()
 
-    # Update StationStatus — ML prediction if available, rule-based fallback
+    # Update StationStatus — per-sensor fault detection if available, else fallback.
     if station:
         prediction = call_ml_service(reading, station_id)
 
-        if prediction:
+        if prediction and 'sensors' in prediction:
+            # PARTIAL if any sensor is flagged faulty, otherwise FULL. The specific
+            # faulty sensors and their reasons are kept in details for the dashboard.
+            faulty = prediction.get('faulty_sensors', [])
             ml_status = (
-                StationStatus.Status.FULL
-                if prediction['prediction'] == 'healthy'
-                else StationStatus.Status.PARTIAL
+                StationStatus.Status.PARTIAL if faulty
+                else StationStatus.Status.FULL
             )
             StationStatus.objects.update_or_create(
                 station=station,
                 defaults={
                     'status':      ml_status,
-                    'computed_by': 'ml_model',
+                    'computed_by': 'ml_sensor_fault',
                     'details': {
                         'last_reading_id': reading.id,
-                        'prediction':      prediction['prediction'],
-                        'at_risk_proba':   prediction['at_risk_proba'],
-                        'threshold_used':  prediction['threshold_used'],
+                        'as_of':           prediction.get('as_of'),
+                        'faulty_sensors':  faulty,
+                        'sensors':         prediction.get('sensors', {}),
                     }
                 }
             )
@@ -709,8 +649,6 @@ def export(request):
     })
 
 
-<<<<<<< HEAD
-=======
 # ─────────────────────────────────────────────────────────
 # API: Split ingest endpoints — mirror the 3 ThingSpeak channels
 # ─────────────────────────────────────────────────────────
@@ -824,7 +762,6 @@ def ingest_current(request):
 
     return api_response({'status': 'ok', 'id': current.id}, status_code=201)
 
->>>>>>> f2af3e450cbce9c5c4169f8626f32b672cec06e5
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -1071,122 +1008,6 @@ def benchmark_import(request):
         'imported': len(readings),
         'skipped':  skipped,
     })
-<<<<<<< HEAD
-
-
-# ─────────────────────────────────────────────────────────
-# API: Split ingest endpoints — mirror the 3 ThingSpeak channels
-# ─────────────────────────────────────────────────────────
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def ingest_weather(request):
-    """
-    Channel 1 equivalent. Expects pre-parsed JSON:
-    { "station_id": "AWS-UG-001", "timestamp": "...", "pressure": .., ... }
-    """
-    data       = request.data
-    station_id = data.get('station_id', 'AWS-UG-001')
-    station    = get_or_none(station_id)
-
-    timestamp = parse_datetime(str(data.get('timestamp', '')))
-    if timestamp is None:
-        return api_response(error='timestamp is required and must be ISO format', status_code=400)
-
-    fields = dict(
-        pressure       = safe_float(data.get('pressure')),
-        altitude       = safe_float(data.get('altitude')),
-        temperature    = safe_float(data.get('temperature')),
-        humidity       = safe_float(data.get('humidity')),
-        light          = safe_float(data.get('light')),
-        soil_moisture  = safe_float(data.get('soil_moisture')),
-        rain           = safe_int(data.get('rain')),
-        wind_speed     = safe_float(data.get('wind_speed')),
-        wind_direction = safe_int(data.get('wind_direction')),
-    )
-
-    weather = WeatherReading.objects.create(
-        station=station, station_code=station_id, timestamp=timestamp, **fields
-    )
-
-    # Dual-write: keep SensorReading in sync for existing dashboard/history/export
-    reading, _ = SensorReading.objects.get_or_create(
-        station_code=station_id, timestamp=timestamp,
-        defaults={'station': station}
-    )
-    for k, v in fields.items():
-        setattr(reading, k, v)
-    reading.save()
-
-    return api_response({'status': 'ok', 'id': weather.id}, status_code=201)
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def ingest_voltage(request):
-    """Channel 2 equivalent."""
-    data       = request.data
-    station_id = data.get('station_id', 'AWS-UG-001')
-    station    = get_or_none(station_id)
-
-    timestamp = parse_datetime(str(data.get('timestamp', '')))
-    if timestamp is None:
-        return api_response(error='timestamp is required and must be ISO format', status_code=400)
-
-    fields = dict(
-        volt_3v3   = safe_float(data.get('volt_3v3')),
-        volt_5v    = safe_float(data.get('volt_5v')),
-        volt_batt  = safe_float(data.get('volt_batt')),
-        volt_solar = safe_float(data.get('volt_solar')),
-        volt_dc    = safe_float(data.get('volt_dc')),
-    )
-
-    voltage = VoltageReading.objects.create(
-        station=station, station_code=station_id, timestamp=timestamp, **fields
-    )
-
-    reading, _ = SensorReading.objects.get_or_create(
-        station_code=station_id, timestamp=timestamp,
-        defaults={'station': station}
-    )
-    for k, v in fields.items():
-        setattr(reading, k, v)
-    reading.save()
-
-    return api_response({'status': 'ok', 'id': voltage.id}, status_code=201)
-
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def ingest_current(request):
-    """Channel 3 equivalent."""
-    data       = request.data
-    station_id = data.get('station_id', 'AWS-UG-001')
-    station    = get_or_none(station_id)
-
-    timestamp = parse_datetime(str(data.get('timestamp', '')))
-    if timestamp is None:
-        return api_response(error='timestamp is required and must be ISO format', status_code=400)
-
-    fields = dict(
-        curr_batt  = safe_float(data.get('curr_batt')),
-        curr_solar = safe_float(data.get('curr_solar')),
-    )
-
-    current = CurrentReading.objects.create(
-        station=station, station_code=station_id, timestamp=timestamp, **fields
-    )
-
-    reading, _ = SensorReading.objects.get_or_create(
-        station_code=station_id, timestamp=timestamp,
-        defaults={'station': station}
-    )
-    for k, v in fields.items():
-        setattr(reading, k, v)
-    reading.save()
-
-    return api_response({'status': 'ok', 'id': current.id}, status_code=201)
-=======
 # ── SIM Management APIs ──
 
 @api_view(['GET'])
@@ -1322,4 +1143,3 @@ def topup_sim_account(request, sim_id):
             'status': 'active' if is_active else 'inactive'
         }
     })
->>>>>>> f2af3e450cbce9c5c4169f8626f32b672cec06e5

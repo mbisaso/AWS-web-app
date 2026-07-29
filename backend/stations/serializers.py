@@ -1,9 +1,5 @@
 from rest_framework import serializers
-<<<<<<< HEAD
-from .models import Station, StationStatus, SensorReading, BenchmarkReading, WeatherReading, VoltageReading, CurrentReading
-=======
 from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading
->>>>>>> f2af3e450cbce9c5c4169f8626f32b672cec06e5
 
 
 # ─────────────────────────────────────────────────────────
@@ -143,23 +139,7 @@ class PowerChartSerializer(serializers.ModelSerializer):
             'curr_batt',
             'curr_solar',
         ]
-<<<<<<< HEAD
-
-
-# ─────────────────────────────────────────────────────────
-# BenchmarkReading Serializers
-# ─────────────────────────────────────────────────────────
-
-class BenchmarkReadingSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = BenchmarkReading
-        fields = ['timestamp', 'source', 'location', 'temperature', 'humidity',
-                  'pressure', 'wind_speed', 'wind_direction', 'rain', 'light', 'soil_moisture']
-
-
-=======
         
->>>>>>> f2af3e450cbce9c5c4169f8626f32b672cec06e5
 # ─────────────────────────────────────────────────────────
 # WeatherReading Serializers
 # ─────────────────────────────────────────────────────────
@@ -222,8 +202,6 @@ class CurrentReadingSerializer(serializers.ModelSerializer):
             'curr_solar',
         ]
         read_only_fields = ['id', 'received_at']
-<<<<<<< HEAD
-=======
 
 
 # ─────────────────────────────────────────────────────────
@@ -236,4 +214,3 @@ class BenchmarkReadingSerializer(serializers.ModelSerializer):
         fields = ['timestamp', 'source', 'location', 'temperature', 'humidity',
                   'pressure', 'wind_speed', 'wind_direction', 'rain', 'light', 'soil_moisture']
         
->>>>>>> f2af3e450cbce9c5c4169f8626f32b672cec06e5

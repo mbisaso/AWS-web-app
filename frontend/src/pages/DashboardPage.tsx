@@ -6,6 +6,7 @@ import { RecentAlertsPreview } from '../components/dashboard/RecentAlertsPreview
 import { useDashboardData } from '../hooks/useDashboardData'
 import { fetchStations } from '../api/stations'
 import type { Station, StationOperationalStatus } from '../types'
+import { deriveHealth, healthBadge } from '../utils/sensorHealth'
 
 const STATUS_LABELS: Record<StationOperationalStatus, { title: string; tone: string; description: string }> = {
   full: { title: 'Fully transmitting', tone: 'bg-emerald-50 text-emerald-700', description: 'Stations reporting on schedule' },
@@ -19,18 +20,8 @@ const STATUS_BADGE: Record<StationOperationalStatus, string> = {
   down: 'bg-rose-50 text-rose-700',
 }
 
-const PREDICTION_BADGE: Record<string, string> = {
-  healthy: 'bg-emerald-50 text-emerald-700',
-  at_risk: 'bg-rose-50 text-rose-700',
-  unknown: 'bg-slate-100 text-slate-500',
-}
-
 function statusOf(station: Station): StationOperationalStatus {
   return station.status?.status ?? 'full'
-}
-
-function predictionOf(station: Station): string {
-  return station.status?.details?.prediction ?? 'unknown'
 }
 
 export function DashboardPage() {
@@ -154,14 +145,15 @@ export function DashboardPage() {
                                 <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 sticky top-0 bg-slate-50/80">Station</th>
                                 <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 sticky top-0 bg-slate-50/80">Location</th>
                                 <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 sticky top-0 bg-slate-50/80">Status</th>
-                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 sticky top-0 bg-slate-50/80">Prediction</th>
+                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 sticky top-0 bg-slate-50/80">Sensor health</th>
                                 <th className="px-4 py-3 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 sticky top-0 bg-slate-50/80">Last Updated</th>
                               </tr>
                             </thead>
                             <tbody>
                               {stations.map((station) => {
                                 const status = statusOf(station)
-                                const prediction = predictionOf(station)
+                                const health = deriveHealth(station)
+                                const badge = healthBadge(health)
                                 return (
                                   <tr
                                     key={station.station_id}
@@ -179,9 +171,14 @@ export function DashboardPage() {
                                       </span>
                                     </td>
                                     <td className="px-4 py-3.5">
-                                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${PREDICTION_BADGE[prediction] ?? PREDICTION_BADGE.unknown}`}>
-                                        {prediction === 'healthy' ? 'Healthy' : prediction === 'at_risk' ? 'At Risk' : 'Unknown'}
+                                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.tone}`}>
+                                        {badge.label}
                                       </span>
+                                      {health.faultyCount > 0 && (
+                                        <p className="mt-1 text-[11px] text-slate-400">
+                                          {health.faulty.map((s) => s.label).join(', ')}
+                                        </p>
+                                      )}
                                     </td>
                                     <td className="px-4 py-3.5 text-xs text-slate-400 tabular-nums">
                                       {station.status?.last_updated
@@ -205,29 +202,34 @@ export function DashboardPage() {
                     </div>
                     <div className="mt-5 space-y-4">
                       {stations.length > 0 && (() => {
-                        const atRisk = stations.filter((s) => predictionOf(s) === 'at_risk').length
-                        const healthy = stations.filter((s) => predictionOf(s) === 'healthy').length
-                        const unknown = stations.filter((s) => predictionOf(s) === 'unknown').length
-                        const atRiskPct = Math.round((atRisk / stations.length) * 100)
+                        const health = stations.map((s) => deriveHealth(s))
+                        const analysed = health.filter((h) => h.hasData)
+                        const withFaults = analysed.filter((h) => h.summary === 'fault').length
+                        const healthy = analysed.filter((h) => h.summary === 'ok').length
+                        const awaiting = health.length - analysed.length
+                        const faultyPct = analysed.length
+                          ? Math.round((withFaults / analysed.length) * 100)
+                          : 0
+                        const stroke = faultyPct > 0 ? '#E11D48' : '#10B981'
                         return (
                           <>
                             <div className="flex items-center justify-center">
                               <div className="relative flex h-24 w-24 items-center justify-center">
-                                <svg viewBox="0 0 120 120" className="h-24 w-24 -rotate-90" role="img" aria-label={`${atRiskPct}% at risk`}>
+                                <svg viewBox="0 0 120 120" className="h-24 w-24 -rotate-90" role="img" aria-label={`${faultyPct}% of analysed stations have sensor faults`}>
                                   <circle cx="60" cy="60" r="48" fill="none" stroke="#E2E8F0" strokeWidth="10" />
                                   <circle
                                     cx="60" cy="60" r="48"
-                                    fill="none" stroke="#E11D48"
+                                    fill="none" stroke={stroke}
                                     strokeWidth="10"
-                                    strokeDasharray={`${atRiskPct * 3.016} ${(100 - atRiskPct) * 3.016}`}
+                                    strokeDasharray={`${faultyPct * 3.016} ${(100 - faultyPct) * 3.016}`}
                                     strokeLinecap="round"
                                     className="transition-all duration-700"
                                   />
                                 </svg>
                                 <div className="absolute inset-0 flex items-center justify-center">
                                   <div className="text-center">
-                                    <p className="text-xl font-bold text-midnight font-display">{atRiskPct}%</p>
-                                    <p className="text-[10px] font-medium text-storm/40">at risk</p>
+                                    <p className="text-xl font-bold text-midnight font-display">{faultyPct}%</p>
+                                    <p className="text-[10px] font-medium text-storm/40">with faults</p>
                                   </div>
                                 </div>
                               </div>
@@ -235,28 +237,29 @@ export function DashboardPage() {
                             <div className="space-y-2.5">
                               <div className="flex items-center justify-between text-xs">
                                 <span className="flex items-center gap-1.5 text-storm/60">
-                                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" /> Healthy
+                                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" /> All sensors OK
                                 </span>
                                 <span className="font-semibold tabular-nums text-midnight">{healthy}</span>
                               </div>
                               <div className="flex items-center justify-between text-xs">
                                 <span className="flex items-center gap-1.5 text-storm/60">
-                                  <span className="inline-block h-2 w-2 rounded-full bg-rose-500" aria-hidden="true" /> At risk
+                                  <span className="inline-block h-2 w-2 rounded-full bg-rose-500" aria-hidden="true" /> Sensor fault(s)
                                 </span>
-                                <span className="font-semibold tabular-nums text-midnight">{atRisk}</span>
+                                <span className="font-semibold tabular-nums text-midnight">{withFaults}</span>
                               </div>
                               <div className="flex items-center justify-between text-xs">
                                 <span className="flex items-center gap-1.5 text-storm/60">
-                                  <span className="inline-block h-2 w-2 rounded-full bg-slate-300" aria-hidden="true" /> Unknown
+                                  <span className="inline-block h-2 w-2 rounded-full bg-slate-300" aria-hidden="true" /> Awaiting analysis
                                 </span>
-                                <span className="font-semibold tabular-nums text-midnight">{unknown}</span>
+                                <span className="font-semibold tabular-nums text-midnight">{awaiting}</span>
                               </div>
                             </div>
                           </>
                         )
                       })()}
                       <p className="text-xs leading-relaxed text-slate-500">
-                        Click a station row to view its detailed weather readings, charts, and AI diagnostics.
+                        The fault detector flags which sensors are sending bad data. Click a
+                        station row to see its per-sensor diagnosis.
                       </p>
                     </div>
                   </aside>

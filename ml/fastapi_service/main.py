@@ -1,75 +1,84 @@
-from pathlib import Path
+"""
+AWS sensor-fault detection service.
 
-import joblib
-import numpy as np
+Replaces the previous supervised station-health classifier. This service loads the
+general Isolation Forest (one model for the whole network) and scores a WINDOW of
+recent readings for a station, returning a per-sensor fault verdict.
+
+Why a window and not a single reading: the model's features include a 6-hour rolling
+variance, so it needs recent history. The Django backend sends the last ~6 hours of
+readings for the station (its "Option B" — the service stays stateless, which suits
+shared/cPanel hosting).
+
+Endpoints:
+  GET  /            health check + model metadata
+  POST /predict     score a window -> per-sensor flags
+"""
+
+import sys
+from pathlib import Path
+from typing import List, Optional
+
 import pandas as pd
 from fastapi import FastAPI
 from pydantic import BaseModel
-from typing import Optional
 
-# Absolute path anchored to this file's location — works regardless of working directory
+# aws_anomaly.py lives one level up (shared by training and serving).
 BASE_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(BASE_DIR))
+import aws_anomaly as A  # noqa: E402
 
-# Load model, threshold and feature list on startup
-model     = joblib.load(BASE_DIR / 'models' / 'station_health_model.pkl')
-threshold = joblib.load(BASE_DIR / 'models' / 'classification_threshold.pkl')
-features  = joblib.load(BASE_DIR / 'models' / 'feature_cols.pkl')
+MODEL_PATH = BASE_DIR / "models" / "general_model.joblib"
+bundle = A.load_bundle(MODEL_PATH)
 
-app = FastAPI(title="AWS Station Health Predictor")
+app = FastAPI(title="AWS Sensor-Fault Detector")
 
-class SensorInput(BaseModel):
-    # Direct sensor readings
+
+class Reading(BaseModel):
+    timestamp: str
     temperature:    Optional[float] = None
     humidity:       Optional[float] = None
     pressure:       Optional[float] = None
-    rain:           Optional[float] = None
     wind_speed:     Optional[float] = None
     wind_direction: Optional[float] = None
-    light:          Optional[float] = None
     soil_moisture:  Optional[float] = None
-    volt_3v3:       Optional[float] = None
-    volt_5v:        Optional[float] = None
-    volt_batt:      Optional[float] = None
-    volt_solar:     Optional[float] = None
-    volt_dc:        Optional[float] = None
-    curr_batt:      Optional[float] = None
-    curr_solar:     Optional[float] = None
-    # Rolling features over the last 3 readings
-    temperature_mean_3:    Optional[float] = None
-    temperature_trend_3:   Optional[float] = None
-    wind_speed_mean_3:     Optional[float] = None
-    wind_speed_trend_3:    Optional[float] = None
-    soil_moisture_mean_3:  Optional[float] = None
-    soil_moisture_trend_3: Optional[float] = None
-    volt_batt_mean_3:      Optional[float] = None
-    volt_batt_trend_3:     Optional[float] = None
-    volt_solar_mean_3:     Optional[float] = None
-    volt_solar_trend_3:    Optional[float] = None
-    curr_batt_mean_3:      Optional[float] = None
-    curr_batt_trend_3:     Optional[float] = None
-    curr_solar_mean_3:     Optional[float] = None
-    curr_solar_trend_3:    Optional[float] = None
-    # Time features
-    hour_of_day:      Optional[int]   = None
-    hours_since_last: Optional[float] = None
+    light:          Optional[float] = None
+    rain:           Optional[float] = None
+
+
+class Window(BaseModel):
+    station_id: str
+    readings: List[Reading]      # oldest -> newest, ideally >= 6 hours
+
 
 @app.get("/")
 def root():
-    return {"status": "AWS Health Predictor running"}
+    return {
+        "status": "AWS sensor-fault detector running",
+        "model": bundle.get("trained_on", "general"),
+        "sensors": bundle["sensors"],
+        "needs_history_hours": 6,
+    }
+
 
 @app.post("/predict")
-def predict(data: SensorInput):
-    # Build a single-row DataFrame in the exact feature order the model expects
-    row = pd.DataFrame([{f: getattr(data, f) for f in features}])
+def predict(win: Window):
+    """Score the latest reading in the window against each sensor's own threshold."""
+    if not win.readings:
+        return {"station_id": win.station_id, "error": "empty window", "sensors": {}}
 
-    # Get probability of at_risk (column 0)
-    at_risk_proba = model.predict_proba(row)[0][0]
+    df = pd.DataFrame([r.model_dump() for r in win.readings])
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    df = df.dropna(subset=["timestamp"])
 
-    # Apply tuned threshold
-    prediction = "at_risk" if at_risk_proba >= threshold else "healthy"
+    sensors = A.score_window(bundle, df, station_id=win.station_id)
+    faulty = [s for s, v in sensors.items() if v["flag"] == 1]
 
     return {
-        "prediction":    prediction,
-        "at_risk_proba": round(float(at_risk_proba), 4),
-        "threshold_used": threshold
+        "station_id": win.station_id,
+        "as_of": df["timestamp"].max().isoformat() if len(df) else None,
+        "n_readings": len(df),
+        "sensors": sensors,           # {sensor: {flag, score, reason}}
+        "faulty_sensors": faulty,
+        "any_fault": bool(faulty),
     }

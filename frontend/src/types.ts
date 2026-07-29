@@ -9,11 +9,21 @@ export interface StationSummary {
   lastUpdated: string
 }
 
+// One sensor's verdict from the sensor-fault model.
+//   flag   0 = OK, 1 = faulty
+//   reason 'ok' | 'anomaly' | 'stuck' | 'rain_rate' (and spike/drift/jitter in tests)
+//   score  margin past the sensor's threshold (null for rule-based verdicts)
+export interface SensorVerdict {
+  flag: 0 | 1
+  score: number | null
+  reason: string
+}
+
 export interface StationHealthDetails {
-  prediction: string
-  at_risk_proba: number
-  threshold_used: number
-  last_reading_id: number
+  last_reading_id?: number
+  as_of?: string | null
+  faulty_sensors?: string[]
+  sensors?: Record<string, SensorVerdict>
 }
 
 export interface StationStatus {

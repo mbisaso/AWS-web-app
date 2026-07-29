@@ -9,6 +9,7 @@ import type {
   StationOperationalStatus,
 } from '../types'
 import { POWER_METRIC_CONFIG, SENSOR_METRIC_CONFIG } from '../types'
+import { deriveHealth, healthBadge, reasonMeta } from '../utils/sensorHealth'
 import { useStationDetail } from '../hooks/useStationDetail'
 import { useWeatherData } from '../hooks/useWeatherData'
 import { usePowerData } from '../hooks/usePowerData'
@@ -37,12 +38,6 @@ const STATUS_LABEL: Record<StationOperationalStatus, string> = {
   full: 'Online',
   partial: 'Partial',
   down: 'Down',
-}
-
-const PREDICTION_BADGE: Record<string, string> = {
-  healthy: 'bg-emerald-50 text-emerald-700',
-  at_risk: 'bg-rose-50 text-rose-700',
-  unknown: 'bg-slate-100 text-slate-500',
 }
 
 const POWER_SECONDARY: Partial<Record<PowerMetricKey, PowerMetricKey>> = {
@@ -115,7 +110,8 @@ function OverviewTab({
   onNavigateTab: (tab: DetailTab) => void
 }) {
   const status = station.status?.status ?? 'down'
-  const prediction = station.status?.details?.prediction ?? 'unknown'
+  const health = deriveHealth(station)
+  const badge = healthBadge(health)
 
   return (
     <div className="space-y-6">
@@ -123,12 +119,12 @@ function OverviewTab({
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_BADGE[status]}`}>
           {STATUS_LABEL[status]}
         </span>
-        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${PREDICTION_BADGE[prediction] ?? PREDICTION_BADGE.unknown}`}>
-          {prediction === 'healthy' ? 'Healthy' : prediction === 'at_risk' ? 'At risk' : 'Unknown prediction'}
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badge.tone}`}>
+          {badge.label}
         </span>
         {station.status?.computed_by && (
           <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
-            via {station.status.computed_by.replace('_', ' ')}
+            via {station.status.computed_by.replace(/_/g, ' ')}
           </span>
         )}
       </div>
@@ -186,19 +182,49 @@ function OverviewTab({
         </section>
       )}
 
-      {station.status?.details && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Health & AI prediction</h3>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <InfoCard label="Prediction" value={station.status.details.prediction} />
-            <InfoCard
-              label="At-risk probability"
-              value={`${(station.status.details.at_risk_proba * 100).toFixed(1)}%`}
-            />
-            <InfoCard label="Threshold used" value={String(station.status.details.threshold_used)} />
-          </div>
-        </section>
-      )}
+      <section className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Sensor health</h3>
+          {health.asOf && (
+            <span className="text-[11px] text-slate-400">
+              analysed {new Date(health.asOf).toLocaleString()}
+            </span>
+          )}
+        </div>
+
+        {!health.hasData ? (
+          <p className="mt-3 text-sm text-storm/50">
+            No sensor diagnosis yet — the detector needs about 6 hours of recent
+            readings before it can score this station.
+          </p>
+        ) : (
+          <>
+            <p className="mt-2 text-sm text-storm/70">
+              {health.summary === 'ok'
+                ? `All ${health.scoredCount} monitored sensors are transmitting normally.`
+                : `${health.faultyCount} of ${health.scoredCount} sensors need attention.`}
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {health.sensors.map((s) => {
+                const meta = reasonMeta(s.reason)
+                return (
+                  <div
+                    key={s.key}
+                    className={`flex items-center justify-between rounded-xl border px-3 py-2.5 ${
+                      s.ok ? 'border-slate-200 bg-[#f8fafc]' : 'border-rose-200 bg-rose-50/40'
+                    }`}
+                  >
+                    <span className="text-sm font-medium text-midnight">{s.label}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${meta.tone}`}>
+                      {s.ok ? 'OK' : meta.label}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
