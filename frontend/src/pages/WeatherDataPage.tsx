@@ -104,7 +104,12 @@ export function WeatherDataPage() {
 
   useEffect(() => {
     fetchStations()
-      .then(setStations)
+      .then((data) => {
+        setStations(data)
+        if (data.length > 0 && !urlStation && !stationId) {
+          setStationId(data[0].station_id)
+        }
+      })
       .finally(() => setStationsLoading(false))
   }, [])
 

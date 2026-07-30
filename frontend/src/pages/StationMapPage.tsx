@@ -441,10 +441,10 @@ function MapView({
     <>
       {stations.map((station) => (
         <StationMarker
-          key={station.id}
+          key={station.station_id}
           station={station}
-          hasAlerts={alertStationIds.has(station.id)}
-          isSelected={selectedStation?.id === station.id}
+          hasAlerts={alertStationIds.has(station.station_id)}
+          isSelected={selectedStation?.station_id === station.station_id}
           useAdvancedMarkers={useAdvancedMarkers}
           onClick={() => onSelect(station)}
         />
@@ -590,7 +590,7 @@ function SearchStationInput({
         <div className="absolute top-full mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
           {results.map((station) => (
             <button
-              key={station.id}
+              key={station.station_id}
               type="button"
               onClick={() => {
                 onSelect(station)

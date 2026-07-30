@@ -5,7 +5,8 @@ import logging
 import math
 import os
 
-import requests
+from django.db import models
+from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.http import HttpResponse, JsonResponse
@@ -482,15 +483,29 @@ def bulk_history(request):
     
     station_ids = [s.strip() for s in station_ids_str.split(',') if s.strip()]
     hours = int(request.query_params.get('hours', 24))
-    
-    # We remove the hardcoded 200 limit to fix the issue. We'll use a larger safety limit for bulk.
     limit = int(request.query_params.get('limit', 5000))
     since = timezone.now() - datetime.timedelta(hours=hours)
 
+    codes = set(station_ids)
+    numeric_ids = []
+    for sid in station_ids:
+        if str(sid).isdigit():
+            numeric_ids.append(int(sid))
+            st = Station.objects.filter(id=sid).first()
+            if st:
+                codes.add(st.station_id)
+
+    query = models.Q(station_code__in=codes)
+    if numeric_ids:
+        query |= models.Q(station__id__in=numeric_ids)
+
     readings = SensorReading.objects.filter(
-        station_code__in=station_ids,
+        query,
         timestamp__gte=since
     ).order_by('-timestamp')[:limit]
+
+    if not readings.exists() and hours > 0:
+        readings = SensorReading.objects.filter(query).order_by('-timestamp')[:limit]
 
     # Reverse to chronological
     readings = list(readings)[::-1]
@@ -511,10 +526,25 @@ def history(request, station_id):
     chart_type = request.query_params.get('type', 'sensor')
     since      = timezone.now() - datetime.timedelta(hours=hours)
 
+    # Resolve station_id if numeric ID (e.g. 1 -> "AWS-001")
+    code = station_id
+    if str(station_id).isdigit():
+        st = Station.objects.filter(id=station_id).first()
+        if st:
+            code = st.station_id
+
+    query = models.Q(station_code=code) | models.Q(station_code=station_id)
+    if str(station_id).isdigit():
+        query |= models.Q(station__id=int(station_id))
+
     readings = SensorReading.objects.filter(
-        station_code=station_id,
+        query,
         timestamp__gte=since
     ).order_by('-timestamp')[:limit]
+
+    # Fallback: if no readings found in timeframe, fetch most recent readings for this station
+    if not readings.exists() and hours > 0:
+        readings = SensorReading.objects.filter(query).order_by('-timestamp')[:limit]
 
     # Reverse them back to chronological order for the charts
     readings = list(readings)[::-1]
