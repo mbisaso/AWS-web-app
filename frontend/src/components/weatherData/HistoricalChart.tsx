@@ -72,7 +72,7 @@ export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalCh
     const cH = SVG_H - PAD.top - PAD.bottom
 
     if (!sorted.length) {
-      return { path: '', yMin: 0, yMax: 1, xMin: 0, xMax: 1, yTicks: [], xTicks: [], cW, cH }
+      return { path: '', areaPath: '', yMin: 0, yMax: 1, xMin: 0, xMax: 1, yTicks: [], xTicks: [], cW, cH }
     }
 
     let yLo = Infinity, yHi = -Infinity
@@ -100,6 +100,23 @@ export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalCh
 
     const gapMs = (sorted.length > 1 ? (xHi - xLo) / sorted.length : 3 * 60 * 60 * 1000) * 2.5
 
+    const path = buildPath(sorted, metricKey, sx, sy, gapMs)
+
+    // Build area path for gradient fill
+    let areaPath = ''
+    if (path) {
+      // Get the bottom of chart area
+      const bottomY = PAD.top + cH
+      // Find first and last x positions of the line
+      const firstNonNull = sorted.find((r) => r[metricKey] !== null)
+      const lastNonNull = [...sorted].reverse().find((r) => r[metricKey] !== null)
+      if (firstNonNull && lastNonNull) {
+        const x1 = sx(new Date(firstNonNull.timestamp).getTime())
+        const x2 = sx(new Date(lastNonNull.timestamp).getTime())
+        areaPath = `${path} L ${x2},${bottomY} L ${x1},${bottomY} Z`
+      }
+    }
+
     const range = yHiS - yLoS
     const rough = range / 5
     const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)))
@@ -118,13 +135,13 @@ export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalCh
       : [new Date(xLo)]
 
     return {
-      path: buildPath(sorted, metricKey, sx, sy, gapMs),
+      path, areaPath,
       yMin: yLoS, yMax: yHiS, xMin: xLo, xMax: xHi,
       yTicks: yTicksArr, xTicks: xTicksArr, cW, cH,
     }
   }, [sorted, metricKey])
 
-  const { path, yMin, yMax, xMin, xMax, yTicks, xTicks, cW, cH } = computed
+  const { path, areaPath, yMin, yMax, xMin, xMax, yTicks, xTicks, cW, cH } = computed
 
   function sxVal(t: number) { return PAD.left + ((t - xMin) / (xMax - xMin || 1)) * cW }
   function syVal(v: number) { return PAD.top + cH - ((v - yMin) / (yMax - yMin || 1)) * cH }
@@ -156,9 +173,9 @@ export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalCh
 
   if (isLoading) {
     return (
-      <div className="animate-pulse rounded-2xl border border-slate-200 bg-white p-5" aria-hidden="true">
-        <div className="mb-4 h-4 w-32 rounded-full bg-slate-200" />
-        <div className="h-[260px] rounded-xl bg-slate-100" />
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-5" aria-hidden="true">
+        <div className="mb-4 h-4 w-32 rounded-full bg-slate-200 skeleton-shimmer" />
+        <div className="h-[260px] rounded-xl bg-slate-50 skeleton-shimmer" />
       </div>
     )
   }
@@ -174,8 +191,10 @@ export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalCh
     )
   }
 
+  const gradientId = `grad-${metricKey}`
+
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition-shadow duration-300 hover:shadow-xs">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-midnight font-display">
           {cfg.label} — Historical{' '}
@@ -199,12 +218,19 @@ export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalCh
           role="img"
           aria-label={`${cfg.label} chart`}
         >
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={cfg.color} stopOpacity="0.2" />
+              <stop offset="100%" stopColor={cfg.color} stopOpacity="0.02" />
+            </linearGradient>
+          </defs>
+
           {yTicks.map((v) => {
             const y = syVal(v)
             return (
               <g key={v}>
-                <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="#E2E8F0" strokeWidth="0.5" />
-                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#94A3B8">{v}</text>
+                <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="#F1F5F9" strokeWidth="0.5" />
+                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#94A3B8" fontFamily="Inter, sans-serif">{v}</text>
               </g>
             )
           })}
@@ -213,19 +239,38 @@ export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalCh
             const label = d.toLocaleString(undefined, { month: 'short', day: 'numeric' })
             return (
               <g key={i}>
-                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + cH} stroke="#F1F5F9" strokeWidth="0.5" />
-                <text x={x} y={SVG_H - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="#94A3B8">{label}</text>
+                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + cH} stroke="#F8FAFC" strokeWidth="0.5" />
+                <text x={x} y={SVG_H - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="#94A3B8" fontFamily="Inter, sans-serif">{label}</text>
               </g>
             )
           })}
-          <text x={14} y={PAD.top + cH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 14, ${PAD.top + cH / 2})`}>
+          <text x={14} y={PAD.top + cH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 14, ${PAD.top + cH / 2})`} fontFamily="Inter, sans-serif">
             {cfg.unit}
           </text>
-          {path && (
-            <path d={path} fill="none" stroke={cfg.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+
+          {/* Area fill */}
+          {areaPath && (
+            <path d={areaPath} fill={`url(#${gradientId})`} className="transition-opacity duration-500" />
           )}
+
+          {/* Line */}
+          {path && (
+            <path
+              d={path}
+              fill="none"
+              stroke={cfg.color}
+              strokeWidth="2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              className="transition-all duration-300"
+            />
+          )}
+
           {tooltip && (
-            <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + cH} stroke="#94A3B8" strokeWidth="0.5" strokeDasharray="3,3" />
+            <>
+              <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + cH} stroke="#CBD5E1" strokeWidth="0.5" strokeDasharray="3,3" />
+              <circle cx={tooltip.x} cy={tooltip.y} r="4" fill={cfg.color} stroke="white" strokeWidth="2" />
+            </>
           )}
         </svg>
 
@@ -237,7 +282,7 @@ export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalCh
               top: `${Math.min(tooltip.y / SVG_H, 0.85) * 100}%`,
             }}
           >
-            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-lg -translate-y-full">
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-elevation-3 -translate-y-full">
               <span className="text-sm font-bold text-midnight font-display">
                 {tooltip.value}{cfg.unit}
               </span>

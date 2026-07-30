@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { StationManagementData, ConnectivityType } from '../../services/api'
-import { CONNECTIVITY_LABELS } from '../../services/api'
+import type { StationManagementData } from '../../services/api'
 import { MapLocationPicker } from './MapLocationPicker'
 
 const SENSOR_OPTIONS = [
@@ -8,8 +7,12 @@ const SENSOR_OPTIONS = [
   { value: 'humidity', label: 'Humidity' },
   { value: 'rainfall', label: 'Rainfall' },
   { value: 'wind_speed', label: 'Wind Speed' },
+  { value: 'wind_direction', label: 'Wind Direction' },
   { value: 'pressure', label: 'Pressure' },
-  { value: 'solar_radiation', label: 'Solar Radiation' },
+  { value: 'light', label: 'Light level' },
+  { value: 'soil_moisture', label: 'Soil Moisture' },
+  { value: 'curr_batt', label: 'Battery Current' },
+  { value: 'curr_solar', label: 'Solar Current' },
 ]
 
 interface StationFormModalProps {
@@ -20,6 +23,7 @@ interface StationFormModalProps {
 }
 
 interface FormErrors {
+  stationCode?: string
   name?: string
   latitude?: string
   longitude?: string
@@ -27,14 +31,15 @@ interface FormErrors {
 }
 
 export function StationFormModal({ open, station, onSave, onClose }: StationFormModalProps) {
+  const [stationCode, setStationCode] = useState('')
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
   const [latitude, setLatitude] = useState(1.5)
   const [longitude, setLongitude] = useState(32.5)
-  const [connectivity, setConnectivity] = useState<ConnectivityType>('gsm')
   const [expectedInterval, setExpectedInterval] = useState(15)
   const [sensors, setSensors] = useState<string[]>([])
   const [notes, setNotes] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [errors, setErrors] = useState<FormErrors>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -42,23 +47,25 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
   useEffect(() => {
     if (open) {
       if (station) {
+        setStationCode(station.station_code)
         setName(station.name)
         setLocation(station.location)
         setLatitude(station.latitude)
         setLongitude(station.longitude)
-        setConnectivity(station.connectivity)
         setExpectedInterval(station.expected_interval_minutes)
         setSensors(station.sensors)
         setNotes(station.notes)
+        setPhoneNumber(station.phone_number)
       } else {
+        setStationCode('')
         setName('')
         setLocation('')
         setLatitude(1.5)
         setLongitude(32.5)
-        setConnectivity('gsm')
         setExpectedInterval(15)
         setSensors([])
         setNotes('')
+        setPhoneNumber('')
       }
       setErrors({})
       setSaved(false)
@@ -76,12 +83,13 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
 
   const validate = useCallback((): FormErrors => {
     const errs: FormErrors = {}
+    if (!stationCode.trim()) errs.stationCode = 'Station code is required'
     if (!name.trim()) errs.name = 'Station name is required'
     if (latitude < -90 || latitude > 90) errs.latitude = 'Latitude must be between -90 and 90'
     if (longitude < -180 || longitude > 180) errs.longitude = 'Longitude must be between -180 and 180'
     if (expectedInterval < 1 || expectedInterval > 1440) errs.expected_interval_minutes = 'Interval must be 1–1440 minutes'
     return errs
-  }, [name, latitude, longitude, expectedInterval])
+  }, [stationCode, name, latitude, longitude, expectedInterval])
 
   const handleSubmit = async () => {
     const errs = validate()
@@ -90,14 +98,15 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
     setSaving(true)
     try {
       await onSave({
+        station_code: stationCode.trim().toUpperCase(),
         name: name.trim(),
         location: location.trim(),
         latitude,
         longitude,
-        connectivity,
         expected_interval_minutes: expectedInterval,
         sensors,
         notes: notes.trim(),
+        phone_number: phoneNumber.trim(),
       })
       setSaved(true)
       setTimeout(() => onClose(), 1200)
@@ -113,7 +122,6 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-midnight/40 backdrop-blur-sm p-4"
-      onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose() }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="station-form-title"
@@ -137,6 +145,14 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
         </div>
 
         <div className="space-y-5 px-6 py-5">
+          {/* ── Station Code (short name) ── */}
+          <div>
+            <label htmlFor="sf-code" className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-storm/40">Station Code *</label>
+            <input id="sf-code" type="text" value={stationCode} onChange={(e) => setStationCode(e.target.value)} placeholder="e.g. AWS-001" className={`w-full rounded-xl border bg-white px-3.5 py-2 text-sm text-midnight placeholder:text-storm/30 focus:outline-2 focus:outline-offset-2 focus:outline-sky-primary ${errors.stationCode ? 'border-red-300' : 'border-slate-200'}`} />
+            {errors.stationCode && <p className="mt-1 text-xs text-red-500">{errors.stationCode}</p>}
+            <p className="mt-1 text-[10px] text-storm/30">Short unique identifier for the station</p>
+          </div>
+
           {/* ── Name ── */}
           <div>
             <label htmlFor="sf-name" className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-storm/40">Station Name *</label>
@@ -163,14 +179,13 @@ export function StationFormModal({ open, station, onSave, onClose }: StationForm
             )}
           </div>
 
-          {/* ── Connectivity ── */}
+
+
+          {/* ── Phone Number ── */}
           <div>
-            <label htmlFor="sf-connectivity" className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-storm/40">Connectivity</label>
-            <select id="sf-connectivity" value={connectivity} onChange={(e) => setConnectivity(e.target.value as ConnectivityType)} className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-midnight focus:outline-2 focus:outline-offset-2 focus:outline-sky-primary">
-              {(Object.keys(CONNECTIVITY_LABELS) as ConnectivityType[]).map((c) => (
-                <option key={c} value={c}>{CONNECTIVITY_LABELS[c]}</option>
-              ))}
-            </select>
+            <label htmlFor="sf-phone" className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-storm/40">Data Phone Number</label>
+            <input id="sf-phone" type="text" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g. +256 712 345 678" className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-midnight placeholder:text-storm/30 focus:outline-2 focus:outline-offset-2 focus:outline-sky-primary" />
+            <p className="mt-1 text-[10px] text-storm/30">Phone number used for cellular data transmission</p>
           </div>
 
           {/* ── Expected interval ── */}

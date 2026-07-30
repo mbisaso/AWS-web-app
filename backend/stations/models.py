@@ -1,6 +1,5 @@
 from django.db import models
 
-
 class Station(models.Model):
     """
     Represents a physical AWS station.
@@ -16,8 +15,42 @@ class Station(models.Model):
     # Used by StationStatus to decide if station is DOWN
     expected_interval_minutes = models.IntegerField(default=15)
 
+    phone_number = models.CharField(max_length=20, blank=True)
+    sensors      = models.JSONField(default=list, blank=True)
+    notes        = models.TextField(blank=True)
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.phone_number:
+            # Use get_or_create or update_or_create
+            # We import SimCard locally if it's defined after
+            SimCard.objects.update_or_create(
+                station=self,
+                defaults={'phone_number': self.phone_number}
+            )
+        else:
+            SimCard.objects.filter(station=self).delete()
+
     def __str__(self):
         return f"{self.name} ({self.station_id})"
+
+
+class SimCard(models.Model):
+    """
+    Dedicated model for managing the SIM card of a station.
+    Auto-created when a Station is saved with a phone_number.
+    """
+    station = models.OneToOneField(Station, on_delete=models.CASCADE, related_name='sim_card')
+    phone_number = models.CharField(max_length=20)
+    iccid = models.CharField(max_length=50, blank=True)
+    data_limit_mb = models.FloatField(default=1024.0)  # 1GB default limit
+    data_used_mb = models.FloatField(default=0.0)
+    date_loaded = models.DateField(null=True, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
+    
+    def __str__(self):
+        return f"SIM {self.phone_number} for {self.station.station_id}"
 
 
 class StationStatus(models.Model):
@@ -320,3 +353,31 @@ class CurrentReading(models.Model):
 
     def __str__(self):
         return f"Current {self.station_code} @ {self.timestamp}"
+
+
+class BenchmarkReading(models.Model):
+    """
+    Reference-data reading imported from an external meteorological
+    authority (e.g. UNMA) — used to benchmark AWS station accuracy.
+    """
+    source    = models.CharField(max_length=100, default='UNMA')
+    location  = models.CharField(max_length=100, blank=True)
+    timestamp = models.DateTimeField(db_index=True)
+
+    temperature    = models.FloatField(null=True, blank=True)
+    humidity       = models.FloatField(null=True, blank=True)
+    pressure       = models.FloatField(null=True, blank=True)
+    wind_speed     = models.FloatField(null=True, blank=True)
+    wind_direction = models.FloatField(null=True, blank=True)
+    rain           = models.FloatField(null=True, blank=True)
+    light          = models.FloatField(null=True, blank=True)
+    soil_moisture  = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['source', 'timestamp'], name='idx_benchmark_source_time'),
+        ]
+
+    def __str__(self):
+        return f"{self.source} @ {self.timestamp}"

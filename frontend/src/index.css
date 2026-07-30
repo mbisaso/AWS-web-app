@@ -21,9 +21,40 @@
   --color-surface: #FFFFFF;
   --color-mist: #F8FAFC;
 
+  /* ── Semantic status colors ── */
+  --color-success: #22C55E;
+  --color-success-light: #DCFCE7;
+  --color-warning: #F59E0B;
+  --color-warning-light: #FEF3C7;
+  --color-danger: #EF4444;
+  --color-danger-light: #FEE2E2;
+  --color-info: #0EA5E9;
+  --color-info-light: #E0F2FE;
+
   /* ── Custom font family token ── */
   --font-display: 'Space Grotesk', sans-serif;
   --font-body: 'Inter', sans-serif;
+
+  /* ── Shadow / elevation scale ── */
+  --shadow-elevation-0: 0 0 0 transparent;
+  --shadow-elevation-1: 0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.06);
+  --shadow-elevation-2: 0 2px 4px rgba(15,23,42,0.04), 0 4px 8px rgba(15,23,42,0.06);
+  --shadow-elevation-3: 0 4px 8px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.08);
+  --shadow-elevation-4: 0 8px 16px rgba(15,23,42,0.06), 0 16px 48px rgba(15,23,42,0.10);
+  --shadow-elevation-5: 0 16px 32px rgba(15,23,42,0.08), 0 32px 64px rgba(15,23,42,0.12);
+  --shadow-glow-sky: 0 0 20px rgba(14,165,233,0.15);
+  --shadow-glow-success: 0 0 20px rgba(34,197,94,0.15);
+  --shadow-glow-danger: 0 0 20px rgba(239,68,68,0.15);
+
+  /* ── Border radius scale ── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 28px;
+  --radius-full: 9999px;
 
   /* ── Custom animations ── */
   --animate-fade-in-up: fade-in-up 0.6s ease-out forwards;
@@ -34,6 +65,9 @@
   --animate-gradient-shift: gradient-shift 15s ease infinite;
   --animate-pulse-soft: pulse-soft 3s ease-in-out infinite;
   --animate-shimmer: shimmer 2s ease-in-out infinite;
+  --animate-scale-in: scale-in 0.2s ease-out forwards;
+  --animate-slide-in-right: slide-in-right 0.3s ease-out forwards;
+  --animate-slide-in-left: slide-in-left 0.3s ease-out forwards;
 }
 
 @keyframes fade-in-up {
@@ -92,6 +126,30 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes draw-line {
+  from { stroke-dashoffset: 1000; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes progress-fill {
+  from { width: 0%; }
+}
+
 @utility animation-delay-100 {
   animation-delay: 100ms;
 }
@@ -110,6 +168,31 @@
 @utility animation-delay-700 {
   animation-delay: 700ms;
 }
+@utility animation-delay-800 {
+  animation-delay: 800ms;
+}
+@utility animation-delay-900 {
+  animation-delay: 900ms;
+}
+@utility animation-delay-1000 {
+  animation-delay: 1000ms;
+}
+
+@utility glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+@utility glass-dark {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+@utility text-balance {
+  text-wrap: balance;
+}
 
 :root {
   font-family: 'Inter', sans-serif;
@@ -119,6 +202,18 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* ── Semantic surface tokens (light mode) ── */
+  --surface-primary: #FFFFFF;
+  --surface-secondary: #F8FAFC;
+  --surface-tertiary: #F1F5F9;
+  --surface-elevated: #FFFFFF;
+  --border-default: #E2E8F0;
+  --border-subtle: #F1F5F9;
+  --text-primary: #0F172A;
+  --text-secondary: #334155;
+  --text-tertiary: #64748B;
+  --text-muted: #94A3B8;
 }
 
 html {
@@ -146,6 +241,36 @@ body {
 
 .font-display {
   font-family: 'Space Grotesk', sans-serif;
+}
+
+/* Smooth focus ring for accessibility */
+:focus-visible {
+  outline: 2px solid #0EA5E9;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Enhanced scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Skeleton shimmer gradient */
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 37%, #F1F5F9 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

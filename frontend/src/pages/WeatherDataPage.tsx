@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { SensorMetricKey, SensorReadingChart, Station } from '../types'
 import { SENSOR_METRIC_CONFIG } from '../types'
 import { fetchStations } from '../api/stations'
 import { useWeatherData } from '../hooks/useWeatherData'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
+import { PageHeader } from '../components/shared/PageHeader'
 import { StationSensorSelector } from '../components/weatherData/StationSensorSelector'
 import { ReadingSummaryCard } from '../components/weatherData/ReadingSummaryCard'
 import { HistoricalChart } from '../components/weatherData/HistoricalChart'
@@ -96,6 +98,7 @@ function WeatherContent({
 
 /* ── Main page ── */
 export function WeatherDataPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [stations, setStations] = useState<Station[]>([])
   const [stationsLoading, setStationsLoading] = useState(true)
 
@@ -105,15 +108,55 @@ export function WeatherDataPage() {
       .finally(() => setStationsLoading(false))
   }, [])
 
-  const [stationId, setStationId] = useState<string | null>(null)
-  const [metricKey, setMetricKey] = useState<SensorMetricKey>('temperature')
-  const [dateFrom, setDateFrom] = useState(() => daysAgo(7))
-  const [dateTo, setDateTo] = useState(() => today())
+  const urlStation = searchParams.get('station')
+  const urlMetric = searchParams.get('metric') as SensorMetricKey | null
+  const urlDateFrom = searchParams.get('from')
+  const urlDateTo = searchParams.get('to')
+
+  const [stationId, setStationId] = useState<string | null>(urlStation)
+
+  // Sync URL param → state when navigating from another page
+  useEffect(() => {
+    if (urlStation && urlStation !== stationId) {
+      setStationId(urlStation)
+    }
+  }, [urlStation]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [metricKey, setMetricKey] = useState<SensorMetricKey>(
+    urlMetric && SENSOR_METRICS.includes(urlMetric) ? urlMetric : 'temperature',
+  )
+  const [dateFrom, setDateFrom] = useState(urlDateFrom ?? daysAgo(7))
+  const [dateTo, setDateTo] = useState(urlDateTo ?? today())
+
+  const handleStationChange = useCallback((id: string | null) => {
+    setStationId(id)
+    const next = new URLSearchParams()
+    if (id) next.set('station', id)
+    if (metricKey !== 'temperature') next.set('metric', metricKey)
+    if (dateFrom !== daysAgo(7)) next.set('from', dateFrom)
+    if (dateTo !== today()) next.set('to', dateTo)
+    setSearchParams(next, { replace: true })
+  }, [setSearchParams, metricKey, dateFrom, dateTo])
 
   const hours = useMemo(
     () => Math.max(1, Math.ceil((Date.parse(dateTo) - Date.parse(dateFrom)) / 3600000)),
     [dateFrom, dateTo],
   )
+
+  /* ── Sync metric/date to URL ── */
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    if (stationId) next.set('station', stationId)
+    else { next.delete('station') }
+    if (metricKey !== 'temperature') next.set('metric', metricKey)
+    else { next.delete('metric') }
+    if (dateFrom !== daysAgo(7)) next.set('from', dateFrom)
+    else { next.delete('from') }
+    if (dateTo !== today()) next.set('to', dateTo)
+    else { next.delete('to') }
+    setSearchParams(next, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metricKey, dateFrom, dateTo])
 
   const handleDateChange = useCallback((from: string, to: string) => {
     setDateFrom(from)
@@ -126,24 +169,24 @@ export function WeatherDataPage() {
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}
-        <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-midnight to-ocean p-6 shadow-md sm:p-8">
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300">Weather Data</p>
-            <h1 className="text-2xl font-semibold text-white font-display sm:text-3xl">
-              Detailed readings
-            </h1>
-            <p className="text-sm text-white/50">
-              {stationsLoading ? 'Loading stations...' : `${stations.length} stations · ${SENSOR_METRIC_CONFIG[metricKey].label}`}
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          label="Weather Data"
+          title="Detailed readings"
+          subtitle={stationsLoading ? 'Loading stations...' : `${stations.length} stations · ${SENSOR_METRIC_CONFIG[metricKey].label}`}
+          variant="data"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
+            </svg>
+          }
+        />
 
         {/* ── Station & sensor selector ── */}
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
           <StationSensorSelector
             stations={stations}
             selectedStationId={stationId}
-            onStationChange={setStationId}
+            onStationChange={handleStationChange}
             selectedMetric={metricKey}
             onMetricChange={setMetricKey}
             dateFrom={dateFrom}

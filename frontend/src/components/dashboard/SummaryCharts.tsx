@@ -34,7 +34,7 @@ export function SummaryCharts({
     <div className="grid gap-5 lg:grid-cols-2">
       {/* ── Donut: status distribution ── */}
       <section
-        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs"
+        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition-shadow duration-300 hover:shadow-xs"
         aria-label="Station status distribution"
       >
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">
@@ -76,7 +76,7 @@ export function SummaryCharts({
 
       {/* ── Temperature bar chart ── */}
       <section
-        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs"
+        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs transition-shadow duration-300 hover:shadow-xs"
         aria-label="Station temperature comparison"
       >
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">
@@ -101,9 +101,9 @@ export function SummaryCharts({
                   {station.name}
                 </span>
                 <div className="relative flex-1">
-                  <div className="h-5 bg-slate-100" style={{ width: '100%' }}>
+                  <div className="h-5 rounded-full bg-slate-100" style={{ width: '100%' }}>
                     <div
-                      className="h-full bg-sky-primary transition-all duration-700 ease-out"
+                      className="h-full rounded-full bg-gradient-to-r from-sky-primary to-sky-deep transition-all duration-700 ease-out"
                       style={{ width: `${barPct}%` }}
                       role="progressbar"
                       aria-valuenow={tempVal}

@@ -1,16 +1,21 @@
 import csv
 import datetime
+import io
+import logging
 import math
 import os
 
 import requests
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
+from django.core.mail import send_mail
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.conf import settings
 
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -18,7 +23,9 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading
+logger = logging.getLogger(__name__)
+
+from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading, SimCard
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
@@ -28,6 +35,7 @@ from .serializers import (
     WeatherReadingSerializer,
     VoltageReadingSerializer,
     CurrentReadingSerializer,
+    BenchmarkReadingSerializer,
 )
 
 
@@ -403,13 +411,20 @@ def ingest(request):
 # API: Latest reading per station
 # ─────────────────────────────────────────────────────────
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def stations_list(request):
     """
-    Returns all registered stations with their current status.
-    Used by React sidebar/station selector.
+    GET: Returns all registered stations with their current status.
+    POST: Creates a new station.
     """
+    if request.method == 'POST':
+        serializer = StationSerializer(data=request.data)
+        if serializer.is_valid():
+            station = serializer.save()
+            return api_response(data=StationSerializer(station).data, status_code=201)
+        return api_response(error=serializer.errors, status_code=400)
+
     stations = Station.objects.select_related('status').all()
     serializer = StationSerializer(stations, many=True)
     return api_response(data=serializer.data)
@@ -432,8 +447,149 @@ def latest(request):
     return api_response(data=results)
 
 # ─────────────────────────────────────────────────────────
+# API: Dashboard Overview
+# ─────────────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def dashboard_overview(request):
+    stations = Station.objects.select_related('status').all()
+    
+    # ── SIM Summary ──
+    sims = SimCard.objects.all()
+    total_sims = sims.count()
+    expired_count = 0
+    expiring_soon_count = 0
+    total_remaining_mb = 0
+    
+    today = timezone.now().date()
+    soon_threshold = today + datetime.timedelta(days=7)
+    
+    for sim in sims:
+        if sim.expiry_date:
+            if sim.expiry_date < today:
+                expired_count += 1
+            elif sim.expiry_date <= soon_threshold:
+                expiring_soon_count += 1
+        rem = sim.data_limit_mb - sim.data_used_mb
+        if rem > 0:
+            total_remaining_mb += rem
+
+    sim_summary = {
+        'total_active': total_sims,
+        'expired_count': expired_count,
+        'expiring_soon_count': expiring_soon_count,
+        'total_remaining_mb': total_remaining_mb,
+    }
+
+    # ── Stations & Sensor Data ──
+    dashboard_stations = []
+    
+    for s in stations:
+        latest = WeatherReading.objects.filter(station=s).order_by('-timestamp').first()
+        stat = getattr(s, "status", None)
+        db_status = stat.status if stat else "full"
+        if db_status == "full":
+            status_val = "online"
+        elif db_status == "down":
+            status_val = "offline"
+        else:
+            status_val = "partial"
+        
+        st = {
+            'id': s.id,
+            'name': s.name,
+            'station_code': s.station_id,
+            'location': s.location,
+            'latitude': s.latitude or 0.0,
+            'longitude': s.longitude or 0.0,
+            'status': status_val,
+            'temperature': None,
+            'humidity': None,
+            'rainfall': None,
+            'wind_speed': None,
+            'pressure': None,
+            'last_seen': latest.timestamp.isoformat() if latest else s.created_at.isoformat(),
+            'expected_interval_minutes': s.expected_interval_minutes,
+            'is_stale': False
+        }
+        
+        if latest:
+            if latest.temperature is not None:
+                st['temperature'] = {'value': latest.temperature, 'unit': '°C'}
+            if latest.humidity is not None:
+                st['humidity'] = {'value': latest.humidity, 'unit': '%'}
+            if latest.rain is not None:
+                st['rainfall'] = {'value': latest.rain, 'unit': 'mm'}
+            if latest.wind_speed is not None:
+                st['wind_speed'] = {'value': latest.wind_speed, 'unit': 'm/s'}
+            if latest.pressure is not None:
+                st['pressure'] = {'value': latest.pressure, 'unit': 'hPa'}
+                
+        dashboard_stations.append(st)
+
+    alerts = [] # Alerts to be implemented later
+    
+    online = sum(1 for s in dashboard_stations if s['status'] in ('online', 'full'))
+    offline = sum(1 for s in dashboard_stations if s['status'] in ('offline', 'down'))
+    total_st = len(dashboard_stations)
+    
+    summary = {
+        'total_stations': total_st,
+        'online_stations': online,
+        'online_percentage': round((online / total_st) * 100) if total_st else 0,
+        'offline_stations': offline,
+        'offline_percentage': round((offline / total_st) * 100) if total_st else 0,
+        'active_alerts': 0,
+        'critical_alerts': 0,
+        'warning_alerts': 0,
+        'info_alerts': 0,
+    }
+
+    return api_response(data={
+        'summary': summary,
+        'stations': dashboard_stations,
+        'alerts': alerts,
+        'sim_summary': sim_summary
+    })
+
+# ─────────────────────────────────────────────────────────
 # API: Historical readings for a station
 # ─────────────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def bulk_history(request):
+    """
+    Fetch history for multiple stations at once.
+    Expects ?station_ids=AWS-001,AWS-002&hours=24&limit=5000
+    """
+    station_ids_str = request.query_params.get('station_ids', '')
+    if not station_ids_str:
+        return api_response(error='station_ids is required', status_code=400)
+    
+    station_ids = [s.strip() for s in station_ids_str.split(',') if s.strip()]
+    hours = int(request.query_params.get('hours', 24))
+    
+    # We remove the hardcoded 200 limit to fix the issue. We'll use a larger safety limit for bulk.
+    limit = int(request.query_params.get('limit', 5000))
+    since = timezone.now() - datetime.timedelta(hours=hours)
+
+    readings = SensorReading.objects.filter(
+        station_code__in=station_ids,
+        timestamp__gte=since
+    ).order_by('-timestamp')[:limit]
+
+    # Reverse to chronological
+    readings = list(readings)[::-1]
+
+    serializer = SensorReadingSerializer(readings, many=True)
+    
+    return api_response(data={
+        'hours': hours,
+        'count': len(readings),
+        'readings': serializer.data,
+    })
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -446,7 +602,10 @@ def history(request, station_id):
     readings = SensorReading.objects.filter(
         station_code=station_id,
         timestamp__gte=since
-    ).order_by('timestamp')[:limit]
+    ).order_by('-timestamp')[:limit]
+
+    # Reverse them back to chronological order for the charts
+    readings = list(readings)[::-1]
 
     if chart_type == 'power':
         serializer = PowerChartSerializer(readings, many=True)
@@ -456,26 +615,35 @@ def history(request, station_id):
     return api_response(data={
         'station_id': station_id,
         'hours':      hours,
-        'count':      readings.count(),
+        'count':      len(readings),
         'readings':   serializer.data,
     })
 
 
-@api_view(['GET'])
+@api_view(['GET', 'PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])
 def station_detail(request, station_id):
     try:
-        station = Station.objects.select_related('status').get(
-            station_id=station_id
-        )
+        if str(station_id).isdigit():
+            station = Station.objects.select_related('status').get(id=station_id)
+        else:
+            station = Station.objects.select_related('status').get(station_id=station_id)
     except Station.DoesNotExist:
-        return api_response(
-            error=f'Station {station_id} not found',
-            status_code=404
-        )
+        return api_response(error=f'Station {station_id} not found', status_code=404)
+
+    if request.method == 'PUT':
+        serializer = StationSerializer(station, data=request.data, partial=True)
+        if serializer.is_valid():
+            updated = serializer.save()
+            return api_response(data=StationSerializer(updated).data)
+        return api_response(error=serializer.errors, status_code=400)
+
+    if request.method == 'DELETE':
+        station.delete()
+        return api_response(message="Station deleted", status_code=200)
 
     latest_reading = SensorReading.objects.filter(
-        station_code=station_id
+        station_code=station.station_id
     ).order_by('-timestamp').first()
 
     return api_response(data={
@@ -642,3 +810,385 @@ def ingest_current(request):
     reading.save()
 
     return api_response({'status': 'ok', 'id': current.id}, status_code=201)
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def sim_alert_email(request):
+    """Send an email notification for a SIM alert (low data or expiring)."""
+    import json
+    try:
+        body = json.loads(request.body) if isinstance(request.body, bytes) else request.data
+    except (ValueError, AttributeError):
+        body = request.data
+
+    alert_type = body.get('type', 'unknown')
+    station_name = body.get('station_name', 'Unknown Station')
+    message = body.get('message', '')
+    explanation = body.get('explanation', '')
+
+    subject = f'[AWS Monitor] SIM Alert — {station_name}'
+    email_message = (
+        f'Station: {station_name}\n'
+        f'Alert Type: {alert_type}\n'
+        f'Message: {message}\n'
+        f'Details: {explanation}\n\n'
+        f'Please log in to the dashboard at {request.build_absolute_uri("/")}dashboard/sim-management '
+        f'to take action.'
+    )
+
+    try:
+        sent = send_mail(
+            subject=subject,
+            message=email_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[settings.NOTIFICATION_EMAIL],
+            fail_silently=False,
+        )
+        logger.info(f'SIM alert email sent to {settings.NOTIFICATION_EMAIL}: {sent} email(s)')
+        return JsonResponse({'success': True, 'sent': sent, 'to': settings.NOTIFICATION_EMAIL})
+    except Exception as e:
+        logger.error(f'Failed to send SIM alert email: {e}')
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+# ─────────────────────────────────────────────────────────
+# API: Benchmark endpoint — AWS vs UNMA reference data
+# ─────────────────────────────────────────────────────────
+
+def _nearest_pairs(aws_points, benchmark_points, max_delta=datetime.timedelta(minutes=30)):
+    """
+    Matches each AWS (timestamp, value) point to the closest benchmark
+    point within max_delta. Returns a list of (aws_value, benchmark_value)
+    pairs. Benchmark points assumed small enough for a linear scan.
+    """
+    pairs = []
+    for aws_ts, aws_val in aws_points:
+        best = None
+        best_delta = None
+        for bench_ts, bench_val in benchmark_points:
+            delta = abs(aws_ts - bench_ts)
+            if delta <= max_delta and (best_delta is None or delta < best_delta):
+                best = bench_val
+                best_delta = delta
+        if best is not None:
+            pairs.append((aws_val, best))
+    return pairs
+
+
+def _pearson_correlation(xs, ys):
+    """Pearson correlation coefficient for two equal-length lists. None if undefined."""
+    n = len(xs)
+    if n < 2:
+        return None
+
+    mean_x = sum(xs) / n
+    mean_y = sum(ys) / n
+
+    cov = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys))
+    var_x = sum((x - mean_x) ** 2 for x in xs)
+    var_y = sum((y - mean_y) ** 2 for y in ys)
+
+    denom = math.sqrt(var_x * var_y)
+    return (cov / denom) if denom else None
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def benchmark(request):
+    """
+    Compares AWS station readings against benchmark (e.g. UNMA) reference
+    data for a given metric over a time window.
+    """
+    station_id = request.query_params.get('station_id')
+    if not station_id:
+        return api_response(error='station_id is required', status_code=400)
+
+    hours  = int(request.query_params.get('hours', 168))
+    metric = request.query_params.get('metric', 'temperature')
+    source = request.query_params.get('source')
+
+    valid_metrics = {
+        'temperature', 'humidity', 'pressure', 'wind_speed',
+        'wind_direction', 'rain', 'light', 'soil_moisture',
+    }
+    if metric not in valid_metrics:
+        return api_response(error=f'Invalid metric: {metric}', status_code=400)
+
+    since = timezone.now() - datetime.timedelta(hours=hours)
+
+    aws_qs = SensorReading.objects.filter(
+        station_code=station_id,
+        timestamp__gte=since,
+    ).order_by('timestamp').values('timestamp', metric)
+
+    bench_qs = BenchmarkReading.objects.filter(
+        timestamp__gte=since,
+    ).order_by('timestamp')
+    if source:
+        bench_qs = bench_qs.filter(source=source)
+    bench_qs = bench_qs.values('timestamp', 'source', metric)
+
+    aws_readings = [
+        {'timestamp': r['timestamp'], 'value': r[metric]}
+        for r in aws_qs if r[metric] is not None
+    ]
+    benchmark_readings = [
+        {'timestamp': r['timestamp'], 'value': r[metric], 'source': r['source']}
+        for r in bench_qs if r[metric] is not None
+    ]
+
+    aws_values = [r['value'] for r in aws_readings]
+    benchmark_values = [r['value'] for r in benchmark_readings]
+
+    aws_points = [(r['timestamp'], r['value']) for r in aws_readings]
+    bench_points = [(r['timestamp'], r['value']) for r in benchmark_readings]
+    pairs = _nearest_pairs(aws_points, bench_points)
+
+    mae = (
+        sum(abs(a - b) for a, b in pairs) / len(pairs)
+        if pairs else None
+    )
+    correlation = (
+        _pearson_correlation([a for a, _ in pairs], [b for _, b in pairs])
+        if len(pairs) >= 2 else None
+    )
+
+    stats = {
+        'aws_avg':             (sum(aws_values) / len(aws_values)) if aws_values else None,
+        'aws_min':             min(aws_values) if aws_values else None,
+        'aws_max':             max(aws_values) if aws_values else None,
+        'benchmark_avg':       (sum(benchmark_values) / len(benchmark_values)) if benchmark_values else None,
+        'benchmark_min':       min(benchmark_values) if benchmark_values else None,
+        'benchmark_max':       max(benchmark_values) if benchmark_values else None,
+        'mean_absolute_error': mae,
+        'correlation':         correlation,
+    }
+
+    return api_response(data={
+        'station_id':          station_id,
+        'hours':               hours,
+        'metric':              metric,
+        'aws_readings':        aws_readings,
+        'benchmark_readings':  benchmark_readings,
+        'stats':               stats,
+    })
+
+
+# ─────────────────────────────────────────────────────────
+# API: Benchmark CSV import — admin only
+# ─────────────────────────────────────────────────────────
+
+# CSV columns (besides the first "time" column) that map directly
+# onto BenchmarkReading fields. Same as BenchmarkReadingAdmin.import_csv.
+BENCHMARK_CSV_FIELDS = [
+    'temperature', 'humidity', 'pressure', 'wind_speed',
+    'wind_direction', 'rain', 'light', 'soil_moisture',
+]
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def benchmark_import(request):
+    """
+    Imports UNMA (or other) benchmark readings from an uploaded CSV.
+    Admin only. Mirrors the parsing logic in BenchmarkReadingAdmin.import_csv
+    so the Django admin and React upload flow behave identically.
+    """
+    if request.user.role != 'admin':
+        return api_response(error='Admin access required', status_code=403)
+
+    csv_file = request.FILES.get('file')
+    if not csv_file:
+        return api_response(error='file is required', status_code=400)
+
+    source = request.data.get('source') or 'UNMA'
+    location = request.data.get('location', '')
+
+    decoded = io.TextIOWrapper(csv_file.file, encoding='utf-8-sig')
+    reader = csv.reader(decoded)
+
+    try:
+        header = next(reader)
+    except StopIteration:
+        return api_response(error='CSV file is empty', status_code=400)
+
+    # First column is the timestamp; remaining columns are matched by
+    # name against BENCHMARK_CSV_FIELDS. Unknown columns are ignored;
+    # known fields not present are skipped.
+    field_columns = {}
+    for idx, col_name in enumerate(header[1:], start=1):
+        col_name = col_name.strip().lower()
+        if col_name in BENCHMARK_CSV_FIELDS:
+            field_columns[col_name] = idx
+
+    readings = []
+    skipped = 0
+    for row in reader:
+        if not row or not row[0].strip():
+            continue
+
+        timestamp = parse_datetime(row[0].strip())
+        if timestamp is None:
+            skipped += 1
+            continue
+
+        kwargs = {
+            'source': source,
+            'location': location,
+            'timestamp': timestamp,
+        }
+        for field_name, col_idx in field_columns.items():
+            if col_idx >= len(row):
+                continue
+            raw_value = row[col_idx].strip()
+            if not raw_value:
+                continue
+            try:
+                kwargs[field_name] = float(raw_value)
+            except ValueError:
+                pass
+
+        readings.append(BenchmarkReading(**kwargs))
+
+    BenchmarkReading.objects.bulk_create(readings, batch_size=500)
+
+    return api_response(data={
+        'imported': len(readings),
+        'skipped':  skipped,
+    })
+# ── SIM Management APIs ──
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def sim_management_data(request):
+    sims = SimCard.objects.select_related('station').all()
+    
+    total_active = 0
+    expired_count = 0
+    expiring_soon_count = 0
+    total_remaining_mb = 0
+    
+    today = timezone.now().date()
+    soon_threshold = today + datetime.timedelta(days=30)
+    
+    sims_data = []
+    
+    for sim in sims:
+        is_expired = sim.expiry_date and sim.expiry_date < today
+        is_active = not is_expired
+        
+        if is_active:
+            total_active += 1
+        else:
+            expired_count += 1
+            
+        if sim.expiry_date and today <= sim.expiry_date <= soon_threshold:
+            expiring_soon_count += 1
+            
+        usage = sim.data_used_mb or 0
+        bundle = sim.data_limit_mb or 1024.0
+        rem = max(0, bundle - usage)
+        if is_active:
+            total_remaining_mb += rem
+            
+        est_days = None
+        if sim.expiry_date:
+            diff = (sim.expiry_date - today).days
+            est_days = max(0, diff)
+            
+        sims_data.append({
+            'sim': {
+                'id': sim.id,
+                'iccid': sim.iccid or '',
+                'carrier': 'MTN',
+                'phone_number': sim.phone_number,
+                'bundle_size_mb': bundle,
+                'usage_mb': usage,
+                'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
+                'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+                'status': 'active' if is_active else 'inactive'
+            },
+            'station_name': sim.station.name if sim.station else 'Unknown',
+            'station_id': sim.station.id if sim.station else None,
+            'estimated_days_remaining': est_days,
+            'projected_expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+            'forecast_confidence_note': 'Based on linear projection.' if est_days else 'Not enough data for projection.',
+            'daily_usage': [],
+            'top_up_history': []
+        })
+        
+    return Response({
+        'status': 'success',
+        'data': {
+            'sims': sims_data,
+            'summary': {
+                'total_active': total_active,
+                'expired_count': expired_count,
+                'expiring_soon_count': expiring_soon_count,
+                'total_remaining_mb': total_remaining_mb,
+                'expiring_soon_threshold_days': 30
+            }
+        }
+    })
+
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated])
+def update_sim_account(request, sim_id):
+    from django.shortcuts import get_object_or_404
+    sim = get_object_or_404(SimCard, id=sim_id)
+    
+    if 'date_loaded' in request.data:
+        d = request.data['date_loaded']
+        sim.date_loaded = d if d else None
+    if 'expiry_date' in request.data:
+        e = request.data['expiry_date']
+        sim.expiry_date = e if e else None
+        
+    sim.save()
+    
+    is_expired = sim.expiry_date and sim.expiry_date < timezone.now().date()
+    is_active = not is_expired
+    
+    return Response({
+        'status': 'success',
+        'data': {
+            'id': sim.id,
+            'iccid': sim.iccid or '',
+            'carrier': 'MTN',
+            'phone_number': sim.phone_number,
+            'bundle_size_mb': sim.data_limit_mb or 1024.0,
+            'usage_mb': sim.data_used_mb or 0,
+            'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
+            'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+            'status': 'active' if is_active else 'inactive'
+        }
+    })
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def topup_sim_account(request, sim_id):
+    from django.shortcuts import get_object_or_404
+    sim = get_object_or_404(SimCard, id=sim_id)
+    amount_mb = request.data.get('amount_mb', 0)
+    
+    sim.data_limit_mb += float(amount_mb)
+    sim.save()
+    
+    is_expired = sim.expiry_date and sim.expiry_date < timezone.now().date()
+    is_active = not is_expired
+    
+    return Response({
+        'status': 'success',
+        'data': {
+            'id': sim.id,
+            'iccid': sim.iccid or '',
+            'carrier': 'MTN',
+            'phone_number': sim.phone_number,
+            'bundle_size_mb': sim.data_limit_mb or 1024.0,
+            'usage_mb': sim.data_used_mb or 0,
+            'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
+            'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+            'status': 'active' if is_active else 'inactive'
+        }
+    })

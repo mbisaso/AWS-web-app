@@ -1,6 +1,6 @@
 ﻿import { useMemo, useRef, useState } from 'react'
-import type { TaggedSensorReading, SensorMetricKey } from '../../types'
-import { SENSOR_METRIC_CONFIG } from '../../types'
+import type { TaggedSensorReading, AnalysisMetricKey } from '../../types'
+import { ANALYSIS_METRIC_CONFIG } from '../../types'
 
 const PAD = { top: 24, bottom: 44, left: 55, right: 20 }
 const SVG_W = 600
@@ -43,8 +43,8 @@ function correlationLabel(r: number): string {
 
 interface CorrelationViewProps {
   readings: TaggedSensorReading[]
-  metricKeyA: SensorMetricKey
-  metricKeyB: SensorMetricKey
+  metricKeyA: AnalysisMetricKey
+  metricKeyB: AnalysisMetricKey
   isLoading?: boolean
 }
 
@@ -58,8 +58,8 @@ interface TooltipData {
 }
 
 export function CorrelationView({ readings, metricKeyA, metricKeyB, isLoading }: CorrelationViewProps) {
-  const cfgA = SENSOR_METRIC_CONFIG[metricKeyA]
-  const cfgB = SENSOR_METRIC_CONFIG[metricKeyB]
+  const cfgA = ANALYSIS_METRIC_CONFIG[metricKeyA]
+  const cfgB = ANALYSIS_METRIC_CONFIG[metricKeyB]
   const [tooltip, setTooltip] = useState<TooltipData | null>(null)
   const svgRef = useRef<SVGSVGElement>(null)
 

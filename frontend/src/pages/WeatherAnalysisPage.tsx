@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { SensorMetricKey, Station, MetricReading } from '../types'
-import { SENSOR_METRIC_CONFIG } from '../types'
+import { useSearchParams } from 'react-router-dom'
+import type { AnalysisMetricKey, Station, MetricReading } from '../types'
+import { ANALYSIS_METRIC_CONFIG } from '../types'
 import { fetchStations } from '../api/stations'
 import { useAnalysisData } from '../hooks/useAnalysisData'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
+import { PageHeader } from '../components/shared/PageHeader'
 import { AnalysisControls } from '../components/analysis/AnalysisControls'
 import { StatSummaryCard } from '../components/analysis/StatSummaryCard'
 import { TrendChart } from '../components/analysis/TrendChart'
@@ -12,6 +14,7 @@ import { CorrelationView } from '../components/analysis/CorrelationView'
 import { DistributionChart } from '../components/analysis/DistributionChart'
 
 type ViewMode = 'trends' | 'comparison' | 'correlation' | 'distribution'
+const VIEW_MODES: ViewMode[] = ['trends', 'comparison', 'correlation', 'distribution']
 
 function daysAgo(days: number): string {
   const d = new Date()
@@ -24,6 +27,7 @@ function today(): string {
 }
 
 export function WeatherAnalysisPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [stations, setStations] = useState<Station[]>([])
   const [stationsLoading, setStationsLoading] = useState(true)
 
@@ -33,18 +37,48 @@ export function WeatherAnalysisPage() {
       .finally(() => setStationsLoading(false))
   }, [])
 
-  const [stationIds, setStationIds] = useState<string[]>([])
-  const [metricKey, setMetricKey] = useState<SensorMetricKey>('temperature')
-  const [correlationMetricB, setCorrelationMetricB] = useState<SensorMetricKey>('humidity')
-  const [dateFrom, setDateFrom] = useState(() => daysAgo(7))
-  const [dateTo, setDateTo] = useState(() => today())
-  const [viewMode, setViewMode] = useState<ViewMode>('trends')
-  const [showMovingAverage, setShowMovingAverage] = useState(false)
+  const urlStations = searchParams.get('stations')
+  const urlMetric = searchParams.get('metric') as AnalysisMetricKey | null
+  const urlCorrB = searchParams.get('corrB') as AnalysisMetricKey | null
+  const urlDateFrom = searchParams.get('from')
+  const urlDateTo = searchParams.get('to')
+  const urlView = searchParams.get('view') as ViewMode | null
+  const urlMovAvg = searchParams.get('movAvg')
+
+  const [stationIds, setStationIds] = useState<string[]>(
+    urlStations ? urlStations.split(',').filter(Boolean) : [],
+  )
+  const [metricKey, setMetricKey] = useState<AnalysisMetricKey>(
+    urlMetric && urlMetric in ANALYSIS_METRIC_CONFIG ? (urlMetric as AnalysisMetricKey) : 'temperature',
+  )
+  const [correlationMetricB, setCorrelationMetricB] = useState<AnalysisMetricKey>(
+    urlCorrB && urlCorrB in ANALYSIS_METRIC_CONFIG ? (urlCorrB as AnalysisMetricKey) : 'humidity',
+  )
+  const [dateFrom, setDateFrom] = useState(urlDateFrom ?? daysAgo(7))
+  const [dateTo, setDateTo] = useState(urlDateTo ?? today())
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    urlView && VIEW_MODES.includes(urlView) ? urlView : 'trends',
+  )
+  const [showMovingAverage, setShowMovingAverage] = useState(urlMovAvg === '1')
 
   const hours = useMemo(
     () => Math.max(1, Math.ceil((Date.parse(dateTo) - Date.parse(dateFrom)) / 3600000)),
     [dateFrom, dateTo],
   )
+
+  /* ── Sync state to URL ── */
+  useEffect(() => {
+    const next = new URLSearchParams()
+    if (stationIds.length > 0) next.set('stations', stationIds.join(','))
+    if (metricKey !== 'temperature') next.set('metric', metricKey)
+    if (correlationMetricB !== 'humidity') next.set('corrB', correlationMetricB)
+    if (dateFrom !== daysAgo(7)) next.set('from', dateFrom)
+    if (dateTo !== today()) next.set('to', dateTo)
+    if (viewMode !== 'trends') next.set('view', viewMode)
+    if (showMovingAverage) next.set('movAvg', '1')
+    setSearchParams(next, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stationIds.join(','), metricKey, correlationMetricB, dateFrom, dateTo, viewMode, showMovingAverage])
 
   const handleDateChange = useCallback((from: string, to: string) => {
     setDateFrom(from)
@@ -60,8 +94,10 @@ export function WeatherAnalysisPage() {
   const metricReadings = useMemo<MetricReading[]>(() => {
     const out: MetricReading[] = []
     for (const r of readings) {
-      const v = r[metricKey]
-      if (v !== null) {
+      const v = metricKey === 'pv'
+        ? (r.volt_solar != null && r.curr_solar != null ? parseFloat((r.volt_solar * r.curr_solar).toFixed(2)) : null)
+        : r[metricKey as keyof typeof r] as number | null
+      if (v != null) {
         out.push({ station_id: r.stationId, station_name: r.stationName, timestamp: r.timestamp, value: v })
       }
     }
@@ -81,19 +117,18 @@ export function WeatherAnalysisPage() {
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
         {/* ── Header ── */}
-        <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-midnight to-ocean p-6 shadow-md sm:p-8">
-          <div className="flex flex-col gap-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300">Weather Analysis</p>
-            <h1 className="text-2xl font-semibold text-white font-display sm:text-3xl">
-              Patterns &amp; comparisons
-            </h1>
-            <p className="text-sm text-white/50">
-              {stationsLoading
-                ? 'Loading stations...'
-                : `${visibleStations.length} stations · ${SENSOR_METRIC_CONFIG[metricKey].label} · ${readings.length} readings`}
-            </p>
-          </div>
-        </div>
+        <PageHeader
+          label="Weather Analysis"
+          title="Patterns & comparisons"
+          subtitle={stationsLoading ? 'Loading stations...' : `${visibleStations.length} stations · ${ANALYSIS_METRIC_CONFIG[metricKey].label} · ${readings.length} readings`}
+          variant="data"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3v18h18" />
+              <path d="M7 16l4-8 4 4 4-6" />
+            </svg>
+          }
+        />
 
         {/* ── Controls ── */}
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
@@ -212,7 +247,7 @@ export function WeatherAnalysisPage() {
         </section>
 
         <div className="sr-only" role="status" aria-live="polite">
-          Showing {viewMode} view for {SENSOR_METRIC_CONFIG[metricKey].label} across {visibleStations.length} stations
+          Showing {viewMode} view for {ANALYSIS_METRIC_CONFIG[metricKey].label} across {visibleStations.length} stations
         </div>
       </main>
     </div>

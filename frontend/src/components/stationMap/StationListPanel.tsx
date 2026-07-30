@@ -7,6 +7,7 @@ interface StationListPanelProps {
   selectedId: number | null
   alertIds: Set<number>
   onSelect: (station: StationReading) => void
+  onViewDetails?: (station: StationReading) => void
   isOpen: boolean
   onToggle: () => void
   totalCount: number
@@ -23,6 +24,7 @@ export function StationListPanel({
   selectedId,
   alertIds,
   onSelect,
+  onViewDetails,
   isOpen,
   onToggle,
   totalCount,
@@ -113,6 +115,7 @@ export function StationListPanel({
                   key={station.id}
                   type="button"
                   onClick={() => onSelect(station)}
+                  onDoubleClick={() => onViewDetails?.(station)}
                   className={`flex w-full cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-150 ${
                     isSelected
                       ? 'bg-sky-soft ring-1 ring-sky-200'

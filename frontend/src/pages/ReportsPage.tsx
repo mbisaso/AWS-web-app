@@ -1,392 +1,228 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ReportConfig, ReportResult, ReportType, ReportStatus, ScheduledReport } from '../services/api'
-import { generateReport, checkForEmptyData, fetchReportHistory, fetchScheduleList, createSchedule, updateSchedule, deleteSchedule, toggleSchedule } from '../services/api'
+import { useState } from 'react'
 import { useDashboardData } from '../hooks/useDashboardData'
+import { useExportDataPreview, useExportCsvUrl } from '../hooks/useExportData'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
-import { ReportBuilderForm } from '../components/reports/ReportBuilderForm'
-import { ScheduleList } from '../components/reports/ScheduleList'
-import { ScheduleFormModal } from '../components/reports/ScheduleFormModal'
-import { ReportHistoryTable } from '../components/reports/ReportHistoryTable'
-import { ConfirmDialog } from '../components/stationManager/ConfirmDialog'
-import type { StationReading } from '../services/api'
+import { PageHeader } from '../components/shared/PageHeader'
+import type { ExportConfig, StationReading } from '../services/api'
 
 export function ReportsPage() {
-  const { data: dashData, isLoading: dashLoading } = useDashboardData()
+  const { data: dashData } = useDashboardData()
   const stations: StationReading[] = dashData?.stations ?? []
 
-  /* ── Tabs: builder | schedules | history ── */
-  const [tab, setTab] = useState<'builder' | 'schedules' | 'history'>('builder')
+  const [stationId, setStationId] = useState<string>('')
+  const [hours, setHours] = useState<number>(168)
+  const [fields, setFields] = useState<'all' | 'sensor' | 'power'>('all')
 
-  /* ── Builder state ── */
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [genWarning, setGenWarning] = useState<string | null>(null)
-  const [genResult, setGenResult] = useState<ReportResult | null>(null)
-  const announcerRef = useRef<HTMLDivElement>(null)
-
-  const handleGenerate = useCallback(async (config: ReportConfig) => {
-    setIsGenerating(true)
-    setGenWarning(null)
-    setGenResult(null)
-
-    try {
-      /* Check for empty data first */
-      const emptyCheck = await checkForEmptyData(config)
-      if (emptyCheck.empty) {
-        setGenWarning(emptyCheck.message)
-      }
-
-      const result = await generateReport(config)
-      setGenResult(result)
-      announcerRef.current?.focus()
-    } catch {
-      setGenResult({
-        id: 0,
-        name: 'Generation failed',
-        type: config.type,
-        format: config.format,
-        scope_summary: '',
-        date_from: config.date_from,
-        date_to: config.date_to,
-        generated_at: new Date().toISOString(),
-        generated_by: '',
-        status: 'failed',
-        file_size_bytes: null,
-        failure_reason: 'An unexpected error occurred while generating the report.',
-      })
-    } finally {
-      setIsGenerating(false)
-      setHistoryRefresh((n) => n + 1)
-    }
-  }, [])
-
-  /* ── Schedule state ── */
-  const [schedules, setSchedules] = useState<ScheduledReport[]>([])
-  const [loadingSchedules, setLoadingSchedules] = useState(true)
-  const [schedulesError, setSchedulesError] = useState<string | null>(null)
-  const [scheduleFormOpen, setScheduleFormOpen] = useState(false)
-  const [editingSchedule, setEditingSchedule] = useState<ScheduledReport | null>(null)
-  const [scheduleToDelete, setScheduleToDelete] = useState<ScheduledReport | null>(null)
-  const [deletingSchedule, setDeletingSchedule] = useState(false)
-  const [historyRefresh, setHistoryRefresh] = useState(0)
-
-  const loadSchedules = useCallback(() => {
-    setLoadingSchedules(true)
-    setSchedulesError(null)
-    fetchScheduleList()
-      .then(setSchedules)
-      .catch((e) => setSchedulesError(e.message))
-      .finally(() => setLoadingSchedules(false))
-  }, [])
-
-  useEffect(() => {
-    loadSchedules()
-  }, [loadSchedules, historyRefresh])
-
-  const handleSaveSchedule = async (data: Partial<ScheduledReport>) => {
-    if (editingSchedule) {
-      await updateSchedule(editingSchedule.id, data)
-    } else {
-      await createSchedule(data)
-    }
-    loadSchedules()
+  const config: ExportConfig = {
+    station_id: stationId || undefined,
+    hours,
+    fields,
   }
 
-  const handleToggleSchedule = async (s: ScheduledReport) => {
-    try {
-      await toggleSchedule(s.id)
-      loadSchedules()
-    } catch { /* ignore */ }
+  const { data: previewData, isLoading: previewLoading, isFetching } = useExportDataPreview(config)
+  const csvUrl = useExportCsvUrl(config)
+
+  const handleDownloadCsv = () => {
+    window.open(csvUrl, '_blank')
   }
 
-  const handleDeleteSchedule = async () => {
-    if (!scheduleToDelete) return
-    setDeletingSchedule(true)
-    try {
-      await deleteSchedule(scheduleToDelete.id)
-      setScheduleToDelete(null)
-      loadSchedules()
-    } finally {
-      setDeletingSchedule(false)
-    }
-  }
-
-  /* ── History state ── */
-  const [history, setHistory] = useState<ReportResult[]>([])
-  const [historyTotal, setHistoryTotal] = useState(0)
-  const [loadingHistory, setLoadingHistory] = useState(true)
-  const [historyError, setHistoryError] = useState<string | null>(null)
-  const [historyPage, setHistoryPage] = useState(1)
-  const [historyTypeFilter, setHistoryTypeFilter] = useState<ReportType | 'all'>('all')
-  const [historyStatusFilter, setHistoryStatusFilter] = useState<ReportStatus | 'all'>('all')
-  const [historySearch, setHistorySearch] = useState('')
-
-  const PAGE_SIZE = 10
-
-  const loadHistory = useCallback(() => {
-    setLoadingHistory(true)
-    setHistoryError(null)
-    fetchReportHistory({
-      type: historyTypeFilter,
-      status: historyStatusFilter,
-      search: historySearch || undefined,
-      page: historyPage,
-      page_size: PAGE_SIZE,
-    })
-      .then((data) => { setHistory(data.history); setHistoryTotal(data.total) })
-      .catch((e) => setHistoryError(e.message))
-      .finally(() => setLoadingHistory(false))
-  }, [historyTypeFilter, historyStatusFilter, historySearch, historyPage])
-
-  useEffect(() => {
-    loadHistory()
-  }, [loadHistory])
-
-  const handleDownload = useCallback((_report: ReportResult) => {
-    /* In production this would trigger a file download.
-       For mock: treat the report as already-generated and simulate a download. */
-    const ext = _report.format === 'pdf' ? 'pdf' : 'csv'
-    const blob = new Blob([`Mock ${_report.format.toUpperCase()} content for: ${_report.name}`], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${_report.name.replace(/[^a-zA-Z0-9]/g, '_')}.${ext}`
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [])
-
-  const handleRetry = useCallback((_report: ReportResult) => {
-    /* Convert the failed report config into a new generate call */
-    const type = _report.type
-    const config: ReportConfig = {
-      type,
-      station_ids: [],
-      date_from: _report.date_from,
-      date_to: _report.date_to,
-      format: _report.format,
-      metrics: [],
-    }
-    handleGenerate(config)
-  }, [handleGenerate])
-
-  const tabs = [
-    { key: 'builder' as const, label: 'Report builder' },
-    { key: 'schedules' as const, label: 'Scheduled reports' },
-    { key: 'history' as const, label: 'History' },
-  ]
+  const handlePresetHours = (h: number) => setHours(h)
 
   return (
     <div className="flex min-h-screen flex-col bg-mist lg:h-screen lg:flex-row">
       <DashboardSidebar />
 
       <main className="relative flex-1 min-w-0 overflow-y-auto px-5 py-5 sm:px-6 lg:px-8 lg:py-6">
-        {/* ── Header ── */}
-        <div className="relative mb-8 overflow-hidden rounded-2xl bg-gradient-to-br from-midnight via-[#1a2a4a] to-sky-deep/30 p-6 shadow-lg sm:p-8">
-          <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-sky-primary/10 blur-3xl" aria-hidden="true" />
-          <div className="pointer-events-none absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-emerald-400/8 blur-3xl" aria-hidden="true" />
-          <div className="relative z-10 flex flex-col gap-2">
-            <div className="flex items-center gap-2.5">
-              <svg className="h-5 w-5 text-sky-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <path d="M14 2v6h6" />
-                <path d="M16 13H8" />
-                <path d="M16 17H8" />
-                <path d="M10 9H8" />
-              </svg>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300/80">Data export</p>
-            </div>
-            <h1 className="text-2xl font-semibold text-white font-display sm:text-3xl">
-              Reports &amp; Export
-            </h1>
-            <p className="text-sm text-white/50">
-              Generate on-demand reports or schedule recurring exports
-            </p>
-          </div>
-          <div className="absolute bottom-0 left-6 right-6 h-[1px] bg-gradient-to-r from-transparent via-sky-400/20 to-transparent" aria-hidden="true" />
-        </div>
+        <PageHeader
+          label="Reporting"
+          title="Data Export Hub"
+          subtitle="Extract historical sensor and power diagnostics directly from the cloud"
+          variant="admin"
+          icon={
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+          }
+        />
 
-        {/* ── Tabs ── */}
-        <div className="mb-6 border-b border-slate-200" role="tablist" aria-label="Reports sections">
-          <div className="flex gap-1">
-            {tabs.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                role="tab"
-                aria-selected={tab === t.key}
-                onClick={() => setTab(t.key)}
-                className={`cursor-pointer px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-primary ${
-                  tab === t.key
-                    ? 'border-sky-primary text-sky-deep'
-                    : 'border-transparent text-storm/40 hover:text-storm/60 hover:border-slate-300'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <div className="mt-8 grid gap-8 lg:grid-cols-12">
+          {/* Builder Form */}
+          <div className="lg:col-span-4 space-y-6">
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs relative overflow-hidden">
+              <div className="absolute top-0 left-0 h-1 w-full bg-sky-primary" aria-hidden="true" />
+              
+              <h2 className="text-lg font-bold font-display text-midnight mb-6">Export Configuration</h2>
 
-        {/* ═══════════════════════
-            BUILDER TAB
-           ═══════════════════════ */}
-        {tab === 'builder' && (
-          <section aria-label="Report builder" className="space-y-4">
-            {dashLoading ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
-                <div className="h-5 w-40 animate-pulse rounded bg-slate-200" />
-                <div className="mt-4 grid grid-cols-2 gap-4">
-                  <div className="h-32 animate-pulse rounded-xl bg-slate-200" />
-                  <div className="h-32 animate-pulse rounded-xl bg-slate-200" />
+              {/* Station Select */}
+              <div className="space-y-3 mb-8">
+                <label className="text-sm font-semibold text-midnight">Target Station</label>
+                <select
+                  value={stationId}
+                  onChange={(e) => setStationId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-midnight focus:border-sky-primary focus:outline-none focus:ring-1 focus:ring-sky-primary"
+                >
+                  <option value="">All Stations (Fleet-wide)</option>
+                  {stations.map(s => (
+                    <option key={s.station_code} value={s.station_code}>{s.name} ({s.station_code})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Timeframe */}
+              <div className="space-y-3 mb-8">
+                <label className="text-sm font-semibold text-midnight">Timeframe</label>
+                <div className="flex flex-wrap gap-2">
+                  {[24, 168, 720, 2160].map(h => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => handlePresetHours(h)}
+                      className={`rounded-full px-4 py-2 text-xs font-semibold transition-all ${
+                        hours === h 
+                          ? 'bg-sky-primary text-white shadow-sm' 
+                          : 'bg-slate-100 text-storm/70 hover:bg-slate-200'
+                      }`}
+                    >
+                      {h === 24 ? '24h' : h === 168 ? '7 Days' : h === 720 ? '30 Days' : '90 Days'}
+                    </button>
+                  ))}
+                  <div className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5 border border-slate-200">
+                    <input 
+                      type="number"
+                      value={hours}
+                      onChange={e => setHours(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-12 bg-transparent text-xs font-semibold text-midnight focus:outline-none text-center"
+                    />
+                    <span className="text-[10px] uppercase font-bold text-storm/40">HRS</span>
+                  </div>
                 </div>
               </div>
-            ) : (
-              <>
-                {genWarning && (
-                  <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50/50 px-5 py-3.5">
-                    <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                      <path d="M12 9v4" />
-                      <circle cx="12" cy="17" r="0.5" fill="currentColor" />
-                    </svg>
-                    <p className="text-sm text-amber-800">{genWarning}</p>
-                    <button type="button" onClick={() => setGenWarning(null)} className="ml-auto cursor-pointer rounded-lg p-1 text-amber-600 hover:bg-amber-100" aria-label="Dismiss">
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
+
+              {/* Data Domain */}
+              <div className="space-y-3 mb-8">
+                <label className="text-sm font-semibold text-midnight">Data Domain</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[
+                    { id: 'all', label: 'All Data', desc: 'Everything' },
+                    { id: 'sensor', label: 'Sensors', desc: 'Weather only' },
+                    { id: 'power', label: 'Power', desc: 'Diagnostics' },
+                  ].map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setFields(opt.id as any)}
+                      className={`relative flex flex-col items-start rounded-xl border p-3 text-left transition-all ${
+                        fields === opt.id 
+                          ? 'border-sky-primary bg-sky-50/30 ring-1 ring-sky-primary' 
+                          : 'border-slate-200 bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <span className={`text-xs font-bold ${fields === opt.id ? 'text-sky-700' : 'text-midnight'}`}>
+                        {opt.label}
+                      </span>
+                      <span className="mt-1 text-[10px] text-storm/50 leading-tight">{opt.desc}</span>
                     </button>
-                  </div>
-                )}
-
-                {genResult && (
-                  <div className={`flex items-start gap-3 rounded-2xl border px-5 py-3.5 ${
-                    genResult.status === 'completed'
-                      ? 'border-emerald-200 bg-emerald-50'
-                      : 'border-rose-200 bg-rose-50'
-                  }`} role="status" aria-live="polite" tabIndex={-1} ref={announcerRef}>
-                    {genResult.status === 'completed' ? (
-                      <>
-                        <svg className="mt-0.5 h-4 w-4 shrink-0 text-emerald" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                          <path d="M22 4 12 14.01l-3-3" />
-                        </svg>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-emerald-700">Report generated successfully</p>
-                          <p className="mt-0.5 text-xs text-emerald-600">
-                            {genResult.name} ({genResult.file_size_bytes ? `${(genResult.file_size_bytes / 1024).toFixed(1)} KB` : ''})
-                          </p>
-                        </div>
-                        <button type="button" onClick={() => handleDownload(genResult)} className="cursor-pointer rounded-lg bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-200">Download</button>
-                        <button type="button" onClick={() => setGenResult(null)} className="cursor-pointer rounded-lg p-1 text-emerald-600 hover:bg-emerald-100" aria-label="Dismiss">
-                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="mt-0.5 h-4 w-4 shrink-0 text-rose" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><circle cx="12" cy="16" r="0.5" fill="currentColor" /></svg>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-rose-700">Generation failed</p>
-                          <p className="mt-0.5 text-xs text-rose-600">{genResult.failure_reason}</p>
-                        </div>
-                        <button type="button" onClick={() => setGenResult(null)} className="cursor-pointer rounded-lg p-1 text-rose-600 hover:bg-rose-100" aria-label="Dismiss">
-                          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                <ReportBuilderForm
-                  stations={stations}
-                  onGenerate={handleGenerate}
-                  isGenerating={isGenerating}
-                />
-              </>
-            )}
-          </section>
-        )}
-
-        {/* ═══════════════════════
-            SCHEDULES TAB
-           ═══════════════════════ */}
-        {tab === 'schedules' && (
-          <section aria-label="Scheduled reports" className="space-y-4">
-            {schedulesError && (
-              <div className="flex items-center gap-4 rounded-2xl border border-rose-200 bg-rose-50/50 p-4">
-                <svg className="h-5 w-5 shrink-0 text-rose" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><circle cx="12" cy="16" r="0.5" fill="currentColor" /></svg>
-                <p className="text-sm font-medium text-rose-700">{schedulesError}</p>
-                <button type="button" onClick={loadSchedules} className="ml-auto shrink-0 cursor-pointer rounded-full bg-rose-100 px-4 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-200">Retry</button>
+                  ))}
+                </div>
               </div>
-            )}
-            <ScheduleList
-              schedules={schedules}
-              isLoading={loadingSchedules}
-              onToggle={handleToggleSchedule}
-              onEdit={(s) => { setEditingSchedule(s); setScheduleFormOpen(true) }}
-              onDelete={(s) => setScheduleToDelete(s)}
-              onCreate={() => { setEditingSchedule(null); setScheduleFormOpen(true) }}
-            />
-          </section>
-        )}
 
-        {/* ═══════════════════════
-            HISTORY TAB
-           ═══════════════════════ */}
-        {tab === 'history' && (
-          <section aria-label="Report history" className="space-y-4">
-            {historyError && (
-              <div className="flex items-center gap-4 rounded-2xl border border-rose-200 bg-rose-50/50 p-4">
-                <svg className="h-5 w-5 shrink-0 text-rose" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10" /><path d="M12 8v4" /><circle cx="12" cy="16" r="0.5" fill="currentColor" /></svg>
-                <p className="text-sm font-medium text-rose-700">{historyError}</p>
-                <button type="button" onClick={loadHistory} className="ml-auto shrink-0 cursor-pointer rounded-full bg-rose-100 px-4 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-200">Retry</button>
+              {/* Download Action */}
+              <div className="pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={handleDownloadCsv}
+                  disabled={previewLoading || !previewData?.count}
+                  className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-midnight px-4 py-3.5 text-sm font-bold text-white transition-all hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <svg className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  Download CSV
+                </button>
+                <p className="mt-3 text-center text-[10px] text-storm/40">
+                  Data will be exported in UTC format
+                </p>
               </div>
-            )}
-            <ReportHistoryTable
-              history={history}
-              total={historyTotal}
-              isLoading={loadingHistory}
-              page={historyPage}
-              pageSize={PAGE_SIZE}
-              typeFilter={historyTypeFilter}
-              statusFilter={historyStatusFilter}
-              search={historySearch}
-              onTypeFilterChange={(t) => { setHistoryTypeFilter(t); setHistoryPage(1) }}
-              onStatusFilterChange={(s) => { setHistoryStatusFilter(s); setHistoryPage(1) }}
-              onSearchChange={(q) => { setHistorySearch(q); setHistoryPage(1) }}
-              onPageChange={setHistoryPage}
-              onDownload={handleDownload}
-              onRetry={handleRetry}
-            />
-          </section>
-        )}
 
-        {/* ── ARIA live region ── */}
-        <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {genResult && `Report ${genResult.status === 'completed' ? 'generated successfully' : 'failed'}`}
+            </div>
+          </div>
+
+          {/* Preview Panel */}
+          <div className="lg:col-span-8">
+            <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+                <h3 className="text-sm font-bold text-midnight font-display">Live Preview</h3>
+                <div className="flex items-center gap-2">
+                  {isFetching && (
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                    </span>
+                  )}
+                  <span className="text-xs font-semibold text-storm/60">
+                    {previewData ? `${previewData.count.toLocaleString()} rows found` : 'Loading...'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto bg-slate-50/30 p-0 relative min-h-[400px]">
+                {previewData?.count === 0 ? (
+                   <div className="absolute inset-0 flex flex-col items-center justify-center p-12 text-center">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-storm/40 mb-4">
+                      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                      </svg>
+                    </div>
+                    <h4 className="text-sm font-bold text-midnight">No data found</h4>
+                    <p className="mt-1 text-xs text-storm/60 max-w-xs">
+                      Try expanding the timeframe or selecting a different station to find records.
+                    </p>
+                   </div>
+                ) : previewData?.data?.length > 0 ? (
+                  <table className="w-full text-left text-xs whitespace-nowrap">
+                    <thead className="sticky top-0 bg-white shadow-sm border-b border-slate-200 z-10">
+                      <tr>
+                        {Object.keys(previewData.data[0]).map(key => (
+                          <th key={key} className="px-4 py-3 font-semibold text-storm/70">{key}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {previewData.data.slice(0, 50).map((row: any, i: number) => (
+                        <tr key={i} className="hover:bg-slate-50 transition-colors">
+                          {Object.values(row).map((val: any, j: number) => (
+                            <td key={j} className="px-4 py-2.5 text-midnight">
+                              {val === null ? <span className="text-storm/30">—</span> : String(val)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                      {previewData.count > 50 && (
+                        <tr>
+                          <td colSpan={Object.keys(previewData.data[0]).length} className="px-4 py-3 text-center text-xs font-semibold text-sky-primary bg-sky-50/50">
+                            + {previewData.count - 50} more rows
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                ) : previewLoading ? (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-sky-primary mb-4" />
+                    <p className="text-xs text-storm/50">Fetching preview...</p>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
         </div>
       </main>
-
-      {/* ── Schedule form modal ── */}
-      <ScheduleFormModal
-        open={scheduleFormOpen}
-        schedule={editingSchedule}
-        stations={stations}
-        onSave={handleSaveSchedule}
-        onClose={() => { setScheduleFormOpen(false); setEditingSchedule(null) }}
-      />
-
-      {/* ── Delete schedule confirm ── */}
-      <ConfirmDialog
-        open={!!scheduleToDelete}
-        title="Delete schedule"
-        description={`Delete "${scheduleToDelete?.name}"? This will stop future reports from being generated automatically.`}
-        confirmLabel="Delete schedule"
-        variant="danger"
-        requireExtraConfirm
-        extraConfirmText="DELETE"
-        onConfirm={handleDeleteSchedule}
-        onCancel={() => setScheduleToDelete(null)}
-        isLoading={deletingSchedule}
-      />
     </div>
   )
 }

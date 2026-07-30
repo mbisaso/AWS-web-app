@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { type Alert, formatRelativeTime } from '../../services/api'
 
 interface AlertPreviewItemProps {
@@ -26,8 +27,13 @@ const SEVERITY_STYLES: Record<string, { dot: string; icon: string; bg: string; b
 }
 
 export function AlertPreviewItem({ alert }: AlertPreviewItemProps) {
+  const navigate = useNavigate()
   const styles = SEVERITY_STYLES[alert.severity]
   const relativeTime = formatRelativeTime(alert.timestamp)
+
+  function handleClick() {
+    navigate('/dashboard/alerts-center')
+  }
 
   return (
     <article
@@ -35,10 +41,9 @@ export function AlertPreviewItem({ alert }: AlertPreviewItemProps) {
       role="listitem"
       aria-label={`${alert.severity} alert: ${alert.message}`}
       tabIndex={0}
+      onClick={handleClick}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          /* navigate to alerts center — placeholder for future routing */
-        }
+        if (e.key === 'Enter' || e.key === ' ') handleClick()
       }}
     >
       <div className="flex items-start gap-3">
