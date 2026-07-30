@@ -26,6 +26,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 logger = logging.getLogger(__name__)
 
 from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading, SimCard
+from .ml_service import predict_station_window
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
@@ -170,53 +171,13 @@ def get_or_none(station_code):
 
 def call_ml_service(reading, station_code):
     """
-    Calls the sensor-fault detection service with a ~6-hour WINDOW of readings for
-    this station. The model's features include a 6-hour rolling variance, so it needs
-    recent history — we send the window and the service stays stateless.
+    Executes in-memory sensor-fault detection via the embedded ML model.
+    Scores a ~6-hour window of recent readings for this station.
 
-    Returns the per-sensor result dict on success, None on any failure. Ingest always
+    Returns the per-sensor result dict on success, None on failure. Ingest always
     succeeds regardless of what this returns.
     """
-    window_start = reading.timestamp - datetime.timedelta(hours=6)
-    recent = list(
-        SensorReading.objects.filter(
-            station_code=station_code,
-            timestamp__gte=window_start,
-            timestamp__lte=reading.timestamp,
-        ).order_by('timestamp').values(
-            'timestamp', 'temperature', 'humidity', 'pressure',
-            'wind_speed', 'wind_direction', 'soil_moisture', 'light', 'rain',
-        )
-    )
-
-    # Need at least two readings for a rate of change; a short window simply yields
-    # fewer scored sensors, never an error.
-    if len(recent) < 2:
-        return None
-
-    readings = [{
-        'timestamp':      r['timestamp'].isoformat(),
-        'temperature':    r['temperature'],
-        'humidity':       r['humidity'],
-        'pressure':       r['pressure'],
-        'wind_speed':     r['wind_speed'],
-        'wind_direction': r['wind_direction'],
-        'soil_moisture':  r['soil_moisture'],
-        'light':          r['light'],
-        'rain':           r['rain'],
-    } for r in recent]
-
-    try:
-        resp = requests.post(
-            os.environ.get('ML_SERVICE_URL', 'http://localhost:8001/predict'),
-            json={'station_id': station_code, 'readings': readings},
-            timeout=3,
-        )
-        if resp.status_code == 200:
-            return resp.json()
-        return None
-    except Exception:
-        return None
+    return predict_station_window(station_code, reading)
 
 
 # ─────────────────────────────────────────────────────────
@@ -692,6 +653,41 @@ def ingest_weather(request):
     for k, v in fields.items():
         setattr(reading, k, v)
     reading.save()
+
+    # Update StationStatus — per-sensor fault detection if available, else fallback.
+    if station:
+        prediction = call_ml_service(reading, station_id)
+
+        if prediction and 'sensors' in prediction:
+            # PARTIAL if any sensor is flagged faulty, otherwise FULL. The specific
+            # faulty sensors and their reasons are kept in details for the dashboard.
+            faulty = prediction.get('faulty_sensors', [])
+            ml_status = (
+                StationStatus.Status.PARTIAL if faulty
+                else StationStatus.Status.FULL
+            )
+            StationStatus.objects.update_or_create(
+                station=station,
+                defaults={
+                    'status':      ml_status,
+                    'computed_by': 'ml_sensor_fault',
+                    'details': {
+                        'last_reading_id': reading.id,
+                        'as_of':           prediction.get('as_of'),
+                        'faulty_sensors':  faulty,
+                        'sensors':         prediction.get('sensors', {}),
+                    }
+                }
+            )
+        else:
+            StationStatus.objects.update_or_create(
+                station=station,
+                defaults={
+                    'status':      StationStatus.Status.FULL,
+                    'computed_by': 'rule_based',
+                    'details':     {'last_reading_id': reading.id}
+                }
+            )
 
     return api_response({'status': 'ok', 'id': weather.id}, status_code=201)
 
