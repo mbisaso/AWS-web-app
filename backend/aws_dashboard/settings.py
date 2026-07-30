@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 
 
-def _csv_env(name: str, default: str) -> list[str]:
+def _csv_env(name, default):
     value = os.environ.get(name, '').strip()
     source = value or default
     return [item.strip() for item in source.split(',') if item.strip()]
