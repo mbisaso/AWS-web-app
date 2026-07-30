@@ -96,7 +96,7 @@ export function SummaryCharts({
             const isAboveAvg = tempVal > avgTemp
 
             return (
-              <div key={station.station_id} className="flex items-center gap-3">
+              <div key={station.station_code || station.station_id || station.id} className="flex items-center gap-3">
                 <span className="w-28 truncate text-xs font-medium text-storm/70" title={station.name}>
                   {station.name}
                 </span>

@@ -116,7 +116,7 @@ export function StationMapPage() {
   )
 
   /* ── Alerting not available (no real alerts API) ── */
-  const alertStationIds = useMemo(() => new Set<number>(), [])
+  const alertStationIds = useMemo(() => new Set<number | string>(), [])
 
   /* ── Filtered stations (plottable only) ── */
   const filteredStations = useMemo(() => {
@@ -311,7 +311,7 @@ function MapScreenContent({
 }: {
   stations: StationReading[]
   plottableStations: StationReading[]
-  alertStationIds: Set<number>
+  alertStationIds: Set<number | string>
   selectedStation: StationReading | null
   onSelect: (s: StationReading | null) => void
   onViewDetails: (s: StationReading) => void
@@ -408,7 +408,7 @@ function MapView({
 }: {
   stations: StationReading[]
   plottableStations: StationReading[]
-  alertStationIds: Set<number>
+  alertStationIds: Set<number | string>
   selectedStation: StationReading | null
   onSelect: (s: StationReading | null) => void
   onViewDetails: (s: StationReading) => void
@@ -439,16 +439,21 @@ function MapView({
 
   return (
     <>
-      {stations.map((station) => (
-        <StationMarker
-          key={station.station_id}
-          station={station}
-          hasAlerts={alertStationIds.has(station.station_id)}
-          isSelected={selectedStation?.station_id === station.station_id}
-          useAdvancedMarkers={useAdvancedMarkers}
-          onClick={() => onSelect(station)}
-        />
-      ))}
+      {stations.map((station) => {
+        const scode = station.station_code || String(station.id)
+        const selectedCode = selectedStation ? (selectedStation.station_code || String(selectedStation.id)) : null
+        const hasAlert = alertStationIds.has(scode) || alertStationIds.has(station.id)
+        return (
+          <StationMarker
+            key={scode}
+            station={station}
+            hasAlerts={hasAlert}
+            isSelected={selectedCode === scode}
+            useAdvancedMarkers={useAdvancedMarkers}
+            onClick={() => onSelect(station)}
+          />
+        )
+      })}
 
       {selectedStation && (
         <InfoWindow
@@ -590,7 +595,7 @@ function SearchStationInput({
         <div className="absolute top-full mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
           {results.map((station) => (
             <button
-              key={station.station_id}
+              key={station.station_code || station.station_id || String(station.id)}
               type="button"
               onClick={() => {
                 onSelect(station)

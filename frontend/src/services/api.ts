@@ -28,6 +28,7 @@ export interface StationReading {
   id: number;
   name: string;
   station_code: string;
+  station_id?: string;
   location: string;
   latitude: number;
   longitude: number;
@@ -645,7 +646,7 @@ export async function fetchWeatherData(params: {
       readings.push({
         id: readings.length + 1,
         timestamp: new Date(t).toISOString(),
-        station_id: station.station_id || String(station.id),
+        station_id: station.id,
         station_name: station.name,
         sensor_type: params.sensorType,
         value,
@@ -660,7 +661,7 @@ export async function fetchWeatherData(params: {
 
     const lastReading = readings[readings.length - 1];
     if (lastReading) {
-      latestByStation.set(station.station_id || String(station.id), {
+      latestByStation.set(station.id, {
         value: lastReading.value,
         prevValue:
           readings.length >= 2 ? readings[readings.length - 2].value : null,
@@ -862,7 +863,7 @@ export async function fetchPowerData(params: {
       readings.push({
         id: readings.length + 1,
         timestamp: new Date(t).toISOString(),
-        station_id: station.station_id || String(station.id),
+        station_id: station.id,
         station_name: station.name,
         metric: params.metric,
         value,
@@ -877,7 +878,7 @@ export async function fetchPowerData(params: {
     }
 
     if (latestValue !== null) {
-      latestByStation.set(station.station_id || String(station.id), latestValue);
+      latestByStation.set(station.id, latestValue);
     }
   }
 
@@ -1041,7 +1042,7 @@ export async function fetchAnalysisData(params: {
   for (const sensorType of params.sensorTypes) {
     for (const station of stations) {
       const stationIdx = STATION_DEFS.indexOf(station);
-      const key = `${station.station_id || station.id}:${sensorType}`;
+      const key = `${station.station_code || station.id}:${sensorType}`;
       const vals: number[] = [];
 
       for (let t = fromMs; t <= toMs; t += intervalMs) {
@@ -1052,7 +1053,7 @@ export async function fetchAnalysisData(params: {
         readings.push({
           id: readings.length + 1,
           timestamp: new Date(t).toISOString(),
-          station_id: station.station_id || String(station.id),
+          station_id: station.id,
           station_name: station.name,
           sensor_type: sensorType,
           value,
@@ -1103,6 +1104,7 @@ export interface StationManagementData {
   id: number;
   name: string;
   station_code: string;
+  station_id?: string;
   location: string;
   latitude: number;
   longitude: number;

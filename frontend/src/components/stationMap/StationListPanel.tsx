@@ -4,8 +4,8 @@ import { formatRelativeTime } from '../../services/api'
 
 interface StationListPanelProps {
   stations: StationReading[]
-  selectedId: number | null
-  alertIds: Set<number>
+  selectedId: number | string | null
+  alertIds: Set<number | string>
   onSelect: (station: StationReading) => void
   onViewDetails?: (station: StationReading) => void
   isOpen: boolean
@@ -108,9 +108,10 @@ export function StationListPanel({
           {/* List */}
           <div className="flex-1 space-y-0.5 overflow-y-auto p-2">
             {filtered.map((station) => {
-              const sid = station.station_id || String(station.id)
-              const statusColor = STATUS_COLORS[alertIds.has(sid) ? 'offline' : station.status] || '#94A3B8'
-              const isSelected = selectedId === sid || selectedId === String(station.id)
+              const sid = station.station_code || String(station.id)
+              const hasAlert = alertIds.has(sid) || alertIds.has(station.id)
+              const statusColor = STATUS_COLORS[hasAlert ? 'offline' : station.status] || '#94A3B8'
+              const isSelected = selectedId === sid || selectedId === station.id || selectedId === String(station.id)
               return (
                 <button
                   key={sid}
@@ -128,7 +129,7 @@ export function StationListPanel({
                     className="inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center"
                     aria-hidden="true"
                   >
-                    {alertIds.has(sid) ? (
+                    {hasAlert ? (
                       <span className="flex h-2.5 w-2.5 items-center justify-center">
                         <span className="absolute inline-flex h-3 w-3 animate-ping rounded-full bg-rose-300 opacity-75 motion-reduce:animate-none" />
                         <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
