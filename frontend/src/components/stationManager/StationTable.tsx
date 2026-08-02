@@ -114,7 +114,7 @@ export function StationTable({ stations, isLoading, onView, onEdit, onDelete }: 
             <tbody>
               {filtered.map((station) => (
                 <tr
-                  key={station.id}
+                  key={station.station_code || station.station_id || String(station.id)}
                   onClick={() => onView(station)}
                   className="group cursor-pointer border-b border-slate-100 last:border-0 hover:bg-sky-50/30 transition-colors"
                 >

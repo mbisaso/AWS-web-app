@@ -1,0 +1,84 @@
+AWS-web-app
+├── DEPLOYMENT.md
+├── README.md
+├── backend
+│   ├── accounts
+│   │   ├── __init__.py
+│   │   ├── admin.py
+│   │   ├── apps.py
+│   │   ├── management
+│   │   ├── migrations
+│   │   ├── models.py
+│   │   ├── serializers.py
+│   │   ├── urls.py
+│   │   ├── views.py
+│   │   └── wsgi.py
+│   ├── aws_dashboard
+│   │   ├── __init__.py
+│   │   ├── asgi.py
+│   │   ├── settings.py
+│   │   ├── urls.py
+│   │   └── wsgi.py
+│   ├── manage.py
+│   ├── requirements.txt
+│   └── stations
+│       ├── __init__.py
+│       ├── admin.py
+│       ├── apps.py
+│       ├── management
+│       ├── migrations
+│       ├── models.py
+│       ├── serializers.py
+│       ├── static
+│       ├── templates
+│       ├── tests.py
+│       ├── urls.py
+│       └── views.py
+├── clean_structure.txt
+├── docs
+│   └── API_REFERENCE.md
+├── downloadData.py
+├── frontend
+│   ├── AGENTS.md
+│   ├── README.md
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── public
+│   │   ├── aws.jpeg
+│   │   ├── favicon.svg
+│   │   └── icons.svg
+│   ├── src
+│   │   ├── App.css
+│   │   ├── App.tsx
+│   │   ├── api
+│   │   ├── assets
+│   │   ├── components
+│   │   ├── context
+│   │   ├── data
+│   │   ├── hooks
+│   │   ├── index.css
+│   │   ├── main.tsx
+│   │   ├── pages
+│   │   ├── services
+│   │   ├── types.ts
+│   │   └── utils
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+└── ml
+    ├── MODEL_EXPLAINED.md
+    ├── SERVING.md
+    ├── aws_anomaly.py
+    ├── fastapi_service
+    │   ├── main.py
+    │   └── requirements.txt
+    ├── models
+    │   ├── general_model.joblib
+    │   └── general_validation.csv
+    ├── requirements.txt
+    └── training
+        ├── README.md
+        └── train_general_model.ipynb

@@ -5,7 +5,8 @@ import logging
 import math
 import os
 
-import requests
+from django.db import models
+from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.http import HttpResponse, JsonResponse
@@ -26,6 +27,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 logger = logging.getLogger(__name__)
 
 from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading, SimCard
+from .ml_service import predict_station_window
 from .serializers import (
     SensorReadingSerializer,
     SensorReadingLatestSerializer,
@@ -170,104 +172,13 @@ def get_or_none(station_code):
 
 def call_ml_service(reading, station_code):
     """
-    Calls the FastAPI inference service with features derived from the reading.
-    Returns the prediction dict on success, None on any failure.
-    Ingest always succeeds regardless of what this returns.
+    Executes in-memory sensor-fault detection via the embedded ML model.
+    Scores a ~6-hour window of recent readings for this station.
+
+    Returns the per-sensor result dict on success, None on failure. Ingest always
+    succeeds regardless of what this returns.
     """
-    # Only temperature and humidity are required — model tolerates null for everything else
-    if any(v is None for v in [reading.temperature, reading.humidity]):
-        return None
-
-    # Last 3 readings for this station, reversed to oldest-first for trend computation
-    recent = list(reversed(list(
-        SensorReading.objects.filter(
-            station_code=station_code,
-        ).order_by('-timestamp').values(
-            'temperature', 'wind_speed', 'soil_moisture',
-            'volt_batt', 'volt_solar', 'curr_batt', 'curr_solar',
-        )[:3]
-    )))
-
-    if not recent:
-        return None
-
-    # Rolling helpers — skip None values so a broken sensor doesn't block the call
-    def _mean(vals):
-        valid = [v for v in vals if v is not None]
-        return sum(valid) / len(valid) if valid else None
-
-    def _trend(vals):
-        first = next((v for v in vals           if v is not None), None)
-        last  = next((v for v in reversed(vals) if v is not None), None)
-        return (last - first) if first is not None and last is not None else None
-
-    temp_vals = [r['temperature']   for r in recent]
-    ws_vals   = [r['wind_speed']    for r in recent]
-    sm_vals   = [r['soil_moisture'] for r in recent]
-    vb_vals   = [r['volt_batt']     for r in recent]
-    vs_vals   = [r['volt_solar']    for r in recent]
-    cb_vals   = [r['curr_batt']     for r in recent]
-    cs_vals   = [r['curr_solar']    for r in recent]
-
-    # Time elapsed since the previous reading — 0.0 if this is the first reading
-    prev = SensorReading.objects.filter(
-        station_code=station_code,
-        timestamp__lt=reading.timestamp,
-    ).order_by('-timestamp').first()
-
-    hours_since_last = (
-        (reading.timestamp - prev.timestamp).total_seconds() / 3600
-        if prev else 0.0
-    )
-
-    payload = {
-        # Direct sensor readings from the current ESP32 post
-        'temperature':    reading.temperature,
-        'humidity':       reading.humidity,
-        'pressure':       reading.pressure,
-        'rain':           reading.rain,
-        'wind_speed':     reading.wind_speed,
-        'wind_direction': reading.wind_direction,
-        'light':          reading.light,
-        'soil_moisture':  reading.soil_moisture,
-        'volt_3v3':       reading.volt_3v3,
-        'volt_5v':        reading.volt_5v,
-        'volt_batt':      reading.volt_batt,
-        'volt_solar':     reading.volt_solar,
-        'volt_dc':        reading.volt_dc,
-        'curr_batt':      reading.curr_batt,
-        'curr_solar':     reading.curr_solar,
-        # Rolling features over the last 3 readings
-        'temperature_mean_3':    _mean(temp_vals),
-        'temperature_trend_3':   _trend(temp_vals),
-        'wind_speed_mean_3':     _mean(ws_vals),
-        'wind_speed_trend_3':    _trend(ws_vals),
-        'soil_moisture_mean_3':  _mean(sm_vals),
-        'soil_moisture_trend_3': _trend(sm_vals),
-        'volt_batt_mean_3':      _mean(vb_vals),
-        'volt_batt_trend_3':     _trend(vb_vals),
-        'volt_solar_mean_3':     _mean(vs_vals),
-        'volt_solar_trend_3':    _trend(vs_vals),
-        'curr_batt_mean_3':      _mean(cb_vals),
-        'curr_batt_trend_3':     _trend(cb_vals),
-        'curr_solar_mean_3':     _mean(cs_vals),
-        'curr_solar_trend_3':    _trend(cs_vals),
-        # Time features
-        'hour_of_day':      reading.timestamp.hour,
-        'hours_since_last': hours_since_last,
-    }
-
-    try:
-        resp = requests.post(
-            os.environ.get('ML_SERVICE_URL', 'http://localhost:8001/predict'),
-            json=payload,
-            timeout=2,
-        )
-        if resp.status_code == 200:
-            return resp.json()
-        return None
-    except Exception:
-        return None
+    return predict_station_window(station_code, reading)
 
 
 # ─────────────────────────────────────────────────────────
@@ -368,26 +279,28 @@ def ingest(request):
 
     reading.save()
 
-    # Update StationStatus — ML prediction if available, rule-based fallback
+    # Update StationStatus — per-sensor fault detection if available, else fallback.
     if station:
         prediction = call_ml_service(reading, station_id)
 
-        if prediction:
+        if prediction and 'sensors' in prediction:
+            # PARTIAL if any sensor is flagged faulty, otherwise FULL. The specific
+            # faulty sensors and their reasons are kept in details for the dashboard.
+            faulty = prediction.get('faulty_sensors', [])
             ml_status = (
-                StationStatus.Status.FULL
-                if prediction['prediction'] == 'healthy'
-                else StationStatus.Status.PARTIAL
+                StationStatus.Status.PARTIAL if faulty
+                else StationStatus.Status.FULL
             )
             StationStatus.objects.update_or_create(
                 station=station,
                 defaults={
                     'status':      ml_status,
-                    'computed_by': 'ml_model',
+                    'computed_by': 'ml_sensor_fault',
                     'details': {
                         'last_reading_id': reading.id,
-                        'prediction':      prediction['prediction'],
-                        'at_risk_proba':   prediction['at_risk_proba'],
-                        'threshold_used':  prediction['threshold_used'],
+                        'as_of':           prediction.get('as_of'),
+                        'faulty_sensors':  faulty,
+                        'sensors':         prediction.get('sensors', {}),
                     }
                 }
             )
@@ -570,15 +483,29 @@ def bulk_history(request):
     
     station_ids = [s.strip() for s in station_ids_str.split(',') if s.strip()]
     hours = int(request.query_params.get('hours', 24))
-    
-    # We remove the hardcoded 200 limit to fix the issue. We'll use a larger safety limit for bulk.
     limit = int(request.query_params.get('limit', 5000))
     since = timezone.now() - datetime.timedelta(hours=hours)
 
+    codes = set(station_ids)
+    numeric_ids = []
+    for sid in station_ids:
+        if str(sid).isdigit():
+            numeric_ids.append(int(sid))
+            st = Station.objects.filter(id=sid).first()
+            if st:
+                codes.add(st.station_id)
+
+    query = models.Q(station_code__in=codes)
+    if numeric_ids:
+        query |= models.Q(station__id__in=numeric_ids)
+
     readings = SensorReading.objects.filter(
-        station_code__in=station_ids,
+        query,
         timestamp__gte=since
     ).order_by('-timestamp')[:limit]
+
+    if not readings.exists() and hours > 0:
+        readings = SensorReading.objects.filter(query).order_by('-timestamp')[:limit]
 
     # Reverse to chronological
     readings = list(readings)[::-1]
@@ -599,10 +526,25 @@ def history(request, station_id):
     chart_type = request.query_params.get('type', 'sensor')
     since      = timezone.now() - datetime.timedelta(hours=hours)
 
+    # Resolve station_id if numeric ID (e.g. 1 -> "AWS-001")
+    code = station_id
+    if str(station_id).isdigit():
+        st = Station.objects.filter(id=station_id).first()
+        if st:
+            code = st.station_id
+
+    query = models.Q(station_code=code) | models.Q(station_code=station_id)
+    if str(station_id).isdigit():
+        query |= models.Q(station__id=int(station_id))
+
     readings = SensorReading.objects.filter(
-        station_code=station_id,
+        query,
         timestamp__gte=since
     ).order_by('-timestamp')[:limit]
+
+    # Fallback: if no readings found in timeframe, fetch most recent readings for this station
+    if not readings.exists() and hours > 0:
+        readings = SensorReading.objects.filter(query).order_by('-timestamp')[:limit]
 
     # Reverse them back to chronological order for the charts
     readings = list(readings)[::-1]
@@ -741,6 +683,41 @@ def ingest_weather(request):
     for k, v in fields.items():
         setattr(reading, k, v)
     reading.save()
+
+    # Update StationStatus — per-sensor fault detection if available, else fallback.
+    if station:
+        prediction = call_ml_service(reading, station_id)
+
+        if prediction and 'sensors' in prediction:
+            # PARTIAL if any sensor is flagged faulty, otherwise FULL. The specific
+            # faulty sensors and their reasons are kept in details for the dashboard.
+            faulty = prediction.get('faulty_sensors', [])
+            ml_status = (
+                StationStatus.Status.PARTIAL if faulty
+                else StationStatus.Status.FULL
+            )
+            StationStatus.objects.update_or_create(
+                station=station,
+                defaults={
+                    'status':      ml_status,
+                    'computed_by': 'ml_sensor_fault',
+                    'details': {
+                        'last_reading_id': reading.id,
+                        'as_of':           prediction.get('as_of'),
+                        'faulty_sensors':  faulty,
+                        'sensors':         prediction.get('sensors', {}),
+                    }
+                }
+            )
+        else:
+            StationStatus.objects.update_or_create(
+                station=station,
+                defaults={
+                    'status':      StationStatus.Status.FULL,
+                    'computed_by': 'rule_based',
+                    'details':     {'last_reading_id': reading.id}
+                }
+            )
 
     return api_response({'status': 'ok', 'id': weather.id}, status_code=201)
 

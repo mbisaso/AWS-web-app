@@ -28,6 +28,7 @@ export interface StationReading {
   id: number;
   name: string;
   station_code: string;
+  station_id?: string;
   location: string;
   latitude: number;
   longitude: number;
@@ -1041,7 +1042,7 @@ export async function fetchAnalysisData(params: {
   for (const sensorType of params.sensorTypes) {
     for (const station of stations) {
       const stationIdx = STATION_DEFS.indexOf(station);
-      const key = `${station.id}:${sensorType}`;
+      const key = `${station.station_code || station.id}:${sensorType}`;
       const vals: number[] = [];
 
       for (let t = fromMs; t <= toMs; t += intervalMs) {
@@ -1103,6 +1104,7 @@ export interface StationManagementData {
   id: number;
   name: string;
   station_code: string;
+  station_id?: string;
   location: string;
   latitude: number;
   longitude: number;
