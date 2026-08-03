@@ -34,7 +34,7 @@ const PAGE_CONNECTORS: PageConnectorItem[] = [
     badgeText: 'Station Admin',
     badgeTone: 'sky',
     iconBg: 'bg-blue-50/80 border-blue-100',
-    iconColor: 'text-[#0a6ebd]',
+    iconColor: 'text-[var(--color-sky-deep)]',
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
         <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z" />
@@ -187,10 +187,10 @@ export function PageConnectors() {
     <section className="space-y-4" aria-label="Quick Application Modules Hub">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#0a6ebd]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-sky-deep)]">
             Quick Access Modules
           </p>
-          <h2 className="mt-1 text-xl font-semibold text-[#1a2332] font-display">
+          <h2 className="mt-1 text-xl font-semibold text-[var(--text-primary)] font-display">
             System Feature Hub
           </h2>
         </div>
@@ -233,7 +233,7 @@ export function PageConnectors() {
               </div>
 
               {/* Title & Description */}
-              <h3 className="mt-3 text-base font-semibold text-[#1a2332] font-display transition-colors group-hover:text-[#0a6ebd]">
+              <h3 className="mt-3 text-base font-semibold text-[var(--text-primary)] font-display transition-colors group-hover:text-[var(--color-sky-deep)]">
                 {item.title}
               </h3>
               <p className="mt-1 text-xs leading-relaxed text-slate-500 line-clamp-2">
@@ -242,11 +242,11 @@ export function PageConnectors() {
             </div>
 
             {/* Bottom action link */}
-            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs font-semibold text-[#0a6ebd]">
+            <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs font-semibold text-[var(--color-sky-deep)]">
               <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
                 {item.category}
               </span>
-              <span className="inline-flex items-center gap-1 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[#085694]">
+              <span className="inline-flex items-center gap-1 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[var(--color-sky-night)]">
                 Open Page
                 <ArrowRightIcon className="h-3.5 w-3.5" />
               </span>

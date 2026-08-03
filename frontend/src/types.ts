@@ -156,14 +156,14 @@ export type SensorMetricKey =
   | 'soil_moisture'
 
 export const SENSOR_METRIC_CONFIG: Record<SensorMetricKey, { label: string; unit: string; color: string }> = {
-  temperature:    { label: 'Temperature',    unit: '°C',   color: '#F97316' },
-  humidity:       { label: 'Humidity',       unit: '%',    color: '#0EA5E9' },
-  pressure:       { label: 'Atm. Pressure',  unit: 'hPa',  color: '#8B5CF6' },
-  wind_speed:     { label: 'Wind Speed',     unit: 'm/s',  color: '#22C55E' },
-  wind_direction: { label: 'Wind Direction', unit: '°',    color: '#94A3B8' },
-  rain:           { label: 'Rainfall',       unit: 'mm',   color: '#38BDF8' },
-  light:          { label: 'Light level',    unit: 'lux',  color: '#F59E0B' },
-  soil_moisture:  { label: 'Soil Moisture',  unit: '%',    color: '#84CC16' },
+  temperature:    { label: 'Temperature',    unit: '°C',   color: 'var(--color-sunset)' },
+  humidity:       { label: 'Humidity',       unit: '%',    color: 'var(--color-sky-primary)' },
+  pressure:       { label: 'Atm. Pressure',  unit: 'hPa',  color: 'var(--color-accent-purple)' },
+  wind_speed:     { label: 'Wind Speed',     unit: 'm/s',  color: 'var(--color-emerald)' },
+  wind_direction: { label: 'Wind Direction', unit: '°',    color: 'var(--text-muted)' },
+  rain:           { label: 'Rainfall',       unit: 'mm',   color: 'var(--color-sky-bright)' },
+  light:          { label: 'Light level',    unit: 'lux',  color: 'var(--color-warning)' },
+  soil_moisture:  { label: 'Soil Moisture',  unit: '%',    color: 'var(--color-emerald)' },
 }
 
 export type PowerMetricKey =
@@ -176,13 +176,13 @@ export type PowerMetricKey =
   | 'curr_solar'
 
 export const POWER_METRIC_CONFIG: Record<PowerMetricKey, { label: string; unit: string; color: string }> = {
-  volt_batt:  { label: 'Battery Voltage', unit: 'V', color: '#0EA5E9' },
-  volt_solar: { label: 'Solar Voltage',   unit: 'V', color: '#F59E0B' },
-  volt_3v3:   { label: '3.3V Rail',       unit: 'V', color: '#22C55E' },
-  volt_5v:    { label: '5V Rail',         unit: 'V', color: '#8B5CF6' },
-  volt_dc:    { label: 'DC Voltage',      unit: 'V', color: '#94A3B8' },
-  curr_batt:  { label: 'Battery Current', unit: 'A', color: '#F97316' },
-  curr_solar: { label: 'Solar Current',   unit: 'A', color: '#EAB308' },
+  volt_batt:  { label: 'Battery Voltage', unit: 'V', color: 'var(--color-sky-primary)' },
+  volt_solar: { label: 'Solar Voltage',   unit: 'V', color: 'var(--color-warning)' },
+  volt_3v3:   { label: '3.3V Rail',       unit: 'V', color: 'var(--color-emerald)' },
+  volt_5v:    { label: '5V Rail',         unit: 'V', color: 'var(--color-accent-purple)' },
+  volt_dc:    { label: 'DC Voltage',      unit: 'V', color: 'var(--text-muted)' },
+  curr_batt:  { label: 'Battery Current', unit: 'A', color: 'var(--color-sunset)' },
+  curr_solar: { label: 'Solar Current',   unit: 'A', color: 'var(--color-warning)' },
 }
 
 export type AnalysisMetricKey = SensorMetricKey | PowerMetricKey | 'pv'
@@ -190,9 +190,9 @@ export type AnalysisMetricKey = SensorMetricKey | PowerMetricKey | 'pv'
 export const ANALYSIS_METRIC_CONFIG: Record<AnalysisMetricKey, { label: string; unit: string; color: string }> = {
   ...SENSOR_METRIC_CONFIG,
   ...POWER_METRIC_CONFIG,
-  volt_solar: { label: 'Vpv (Solar Voltage)', unit: 'V', color: '#F59E0B' },
-  curr_solar: { label: 'Iv (Solar Current)',  unit: 'A', color: '#EAB308' },
-  pv:         { label: 'Pv (Solar Power)',    unit: 'W', color: '#EF4444' },
+  volt_solar: { label: 'Vpv (Solar Voltage)', unit: 'V', color: 'var(--color-warning)' },
+  curr_solar: { label: 'Iv (Solar Current)',  unit: 'A', color: 'var(--color-warning)' },
+  pv:         { label: 'Pv (Solar Power)',    unit: 'W', color: 'var(--color-danger)' },
 }
 
 export interface TaggedSensorReading extends SensorReadingChart {

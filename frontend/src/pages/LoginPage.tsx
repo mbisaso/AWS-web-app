@@ -38,27 +38,23 @@ export function LoginPage() {
       <div className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-7xl items-center justify-center">
         <div className="grid w-full max-w-5xl overflow-hidden rounded-[32px] border border-slate-200/80 bg-white/80 shadow-[0_20px_70px_rgba(15,23,42,0.08)] backdrop-blur-sm lg:grid-cols-[0.95fr_1.05fr]">
           {/* Left brand panel */}
-          <aside className="hidden bg-gradient-to-br from-sky-primary via-sky-deep to-sky-primary p-8 text-white lg:flex lg:flex-col lg:justify-between">
+          <div className="hidden bg-gradient-to-br from-sky-primary via-sky-deep to-sky-primary p-8 text-white lg:flex lg:flex-col lg:justify-between">
             <div>
               <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-white/15 text-xl font-black backdrop-blur-sm">A</div>
               <h1 className="mt-8 text-4xl font-semibold tracking-tight font-display">Welcome back.</h1>
               <p className="mt-4 max-w-sm text-base leading-8 text-sky-50/90">
-                Sign in to review station health, weather readings, and the dashboard summary already mapped in the backend.
+                Sign in to manage weather monitoring stations, analyze live sensors, and trigger alerts.
               </p>
             </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              {[
-                ['Secure access', 'Protected dashboard entry point'],
-                ['Station control', 'Monitor live status in one place'],
-              ].map(([title, text]) => (
-                <div key={title} className="rounded-3xl border border-white/15 bg-white/10 p-4 backdrop-blur-sm transition-colors duration-200 hover:bg-white/15">
-                  <p className="font-semibold">{title}</p>
-                  <p className="mt-2 text-sm leading-6 text-sky-50/85">{text}</p>
+            <div className="space-y-4 font-mono text-xs text-white/70">
+              {['AWS System Operational', 'Live Telemetry Active', 'API Nodes Healthy'].map((item) => (
+                <div key={item} className="flex items-center gap-2.5">
+                  <div className="h-2 w-2 rounded-full bg-emerald shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                  <span>{item}</span>
                 </div>
               ))}
             </div>
-          </aside>
+          </div>
 
           {/* Right form panel */}
           <section className="p-6 sm:p-8 lg:p-10">

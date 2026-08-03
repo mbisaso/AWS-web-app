@@ -48,10 +48,10 @@ export function SummaryCharts({
           <div className="relative flex h-28 w-28 shrink-0 items-center justify-center">
             {hasData ? (
               <svg viewBox="0 0 120 120" className="h-28 w-28 -rotate-90" role="img" aria-label={`${onlineCount} online, ${partialCount} partial, ${offlineCount} offline`}>
-                <circle cx="60" cy="60" r="48" fill="none" stroke="#F1F5F9" strokeWidth="10" />
-                <DonutArc r={48} ratio={onlineCount / total} offset={0} color="#22C55E" />
-                <DonutArc r={48} ratio={partialCount / total} offset={onlineCount / total} color="#F59E0B" />
-                <DonutArc r={48} ratio={offlineCount / total} offset={(onlineCount + partialCount) / total} color="#E11D48" />
+                <circle cx="60" cy="60" r="48" fill="none" stroke="var(--surface-tertiary)" strokeWidth="10" />
+                <DonutArc r={48} ratio={onlineCount / total} offset={0} color="var(--color-emerald)" />
+                <DonutArc r={48} ratio={partialCount / total} offset={onlineCount / total} color="var(--color-warning)" />
+                <DonutArc r={48} ratio={offlineCount / total} offset={(onlineCount + partialCount) / total} color="var(--color-danger)" />
               </svg>
             ) : (
               <div className="flex h-28 w-28 items-center justify-center rounded-full bg-slate-50">
@@ -67,9 +67,9 @@ export function SummaryCharts({
           </div>
 
           <div className="space-y-2.5">
-            <LegendItem color="#22C55E" label="Online" count={onlineCount} percentage={total > 0 ? Math.round(onlineCount / total * 100) : 0} />
-            <LegendItem color="#F59E0B" label="Partial" count={partialCount} percentage={total > 0 ? Math.round(partialCount / total * 100) : 0} />
-            <LegendItem color="#E11D48" label="Offline" count={offlineCount} percentage={total > 0 ? Math.round(offlineCount / total * 100) : 0} />
+            <LegendItem color="var(--color-emerald)" label="Online" count={onlineCount} percentage={total > 0 ? Math.round(onlineCount / total * 100) : 0} />
+            <LegendItem color="var(--color-warning)" label="Partial" count={partialCount} percentage={total > 0 ? Math.round(partialCount / total * 100) : 0} />
+            <LegendItem color="var(--color-danger)" label="Offline" count={offlineCount} percentage={total > 0 ? Math.round(offlineCount / total * 100) : 0} />
           </div>
         </div>
       </section>

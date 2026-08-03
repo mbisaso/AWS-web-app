@@ -209,24 +209,24 @@ export function CorrelationView({ readings, metricKeyA, metricKeyB, isLoading }:
           {xTicks.map((v) => {
             const x = sxVal(v)
             return <g key={`x${v}`}>
-              <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + chartH} stroke="#F1F5F9" strokeWidth="0.5" />
-              <text x={x} y={SVG_H - 8} textAnchor="middle" fontSize="9" fill="#94A3B8">{v}</text>
+              <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + chartH} stroke="var(--surface-tertiary)" strokeWidth="0.5" />
+              <text x={x} y={SVG_H - 8} textAnchor="middle" fontSize="9" fill="var(--text-muted)">{v}</text>
             </g>
           })}
           {yTicks.map((v) => {
             const y = syVal(v)
             return <g key={`y${v}`}>
-              <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="#E2E8F0" strokeWidth="0.5" />
-              <text x={PAD.left - 6} y={y + 3} textAnchor="end" fontSize="9" fill="#94A3B8">{v}</text>
+              <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="var(--border-default)" strokeWidth="0.5" />
+              <text x={PAD.left - 6} y={y + 3} textAnchor="end" fontSize="9" fill="var(--text-muted)">{v}</text>
             </g>
           })}
-          <text x={PAD.left + chartW / 2} y={SVG_H - 6} textAnchor="middle" fontSize="10" fill="#94A3B8">{cfgA.label} ({cfgA.unit})</text>
-          <text x={12} y={PAD.top + chartH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 12, ${PAD.top + chartH / 2})`}>{cfgB.label} ({cfgB.unit})</text>
+          <text x={PAD.left + chartW / 2} y={SVG_H - 6} textAnchor="middle" fontSize="10" fill="var(--text-muted)">{cfgA.label} ({cfgA.unit})</text>
+          <text x={12} y={PAD.top + chartH / 2} textAnchor="middle" fontSize="10" fill="var(--text-muted)" transform={`rotate(-90, 12, ${PAD.top + chartH / 2})`}>{cfgB.label} ({cfgB.unit})</text>
 
-          <path d={regLine} fill="none" stroke="#E11D48" strokeWidth="2" strokeDasharray="5,3" />
+          <path d={regLine} fill="none" stroke="var(--color-danger)" strokeWidth="2" strokeDasharray="5,3" />
 
           {points.map((p, i) => (
-            <circle key={i} cx={p.cx} cy={p.cy} r="3.5" fill="#0EA5E9" opacity="0.55" stroke="#FFFFFF" strokeWidth="0.5" />
+            <circle key={i} cx={p.cx} cy={p.cy} r="3.5" fill="var(--color-sky-primary)" opacity="0.55" stroke="var(--color-surface)" strokeWidth="0.5" />
           ))}
         </svg>
 

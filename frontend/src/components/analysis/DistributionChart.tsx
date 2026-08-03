@@ -108,22 +108,22 @@ export function DistributionChart({ readings, metricKey, isLoading }: Distributi
             const y = PAD.top + chartH - (v / maxCount) * chartH
             return (
               <g key={v}>
-                <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="#E2E8F0" strokeWidth="0.5" />
-                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#94A3B8">{v}</text>
+                <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="var(--border-default)" strokeWidth="0.5" />
+                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="var(--text-muted)">{v}</text>
               </g>
             )
           })}
 
-          <text x={PAD.left + chartW / 2} y={SVG_H - 6} textAnchor="middle" fontSize="10" fill="#94A3B8">{cfg.label} ({cfg.unit})</text>
+          <text x={PAD.left + chartW / 2} y={SVG_H - 6} textAnchor="middle" fontSize="10" fill="var(--text-muted)">{cfg.label} ({cfg.unit})</text>
 
           {expectedRange && expectedMinX !== null && expectedMaxX !== null && (
-            <rect x={expectedMinX} y={PAD.top} width={expectedMaxX - expectedMinX} height={chartH} fill="#22C55E" opacity="0.08" rx="2" aria-label={`Expected range: ${expectedRange.min}–${expectedRange.max}${cfg.unit}`} />
+            <rect x={expectedMinX} y={PAD.top} width={expectedMaxX - expectedMinX} height={chartH} fill="var(--color-emerald)" opacity="0.08" rx="2" aria-label={`Expected range: ${expectedRange.min}–${expectedRange.max}${cfg.unit}`} />
           )}
 
           {expectedRange && (
             <>
-              {expectedMinX !== null && <line x1={expectedMinX} y1={PAD.top} x2={expectedMinX} y2={PAD.top + chartH} stroke="#22C55E" strokeWidth="0.5" strokeDasharray="3,2" />}
-              {expectedMaxX !== null && <line x1={expectedMaxX} y1={PAD.top} x2={expectedMaxX} y2={PAD.top + chartH} stroke="#22C55E" strokeWidth="0.5" strokeDasharray="3,2" />}
+              {expectedMinX !== null && <line x1={expectedMinX} y1={PAD.top} x2={expectedMinX} y2={PAD.top + chartH} stroke="var(--color-emerald)" strokeWidth="0.5" strokeDasharray="3,2" />}
+              {expectedMaxX !== null && <line x1={expectedMaxX} y1={PAD.top} x2={expectedMaxX} y2={PAD.top + chartH} stroke="var(--color-emerald)" strokeWidth="0.5" strokeDasharray="3,2" />}
             </>
           )}
 
@@ -135,7 +135,7 @@ export function DistributionChart({ readings, metricKey, isLoading }: Distributi
             const outsideRange = expectedRange && (bin.x0 + binWidth < expectedRange.min || bin.x0 > expectedRange.max)
             return (
               <g key={i}>
-                <rect x={x} y={y} width={w} height={h} fill={outsideRange ? '#F59E0B' : '#0EA5E9'} opacity="0.7" rx="1" aria-label={`${bin.x0.toFixed(1)}–${(bin.x0 + binWidth).toFixed(1)}: ${bin.count}`} />
+                <rect x={x} y={y} width={w} height={h} fill={outsideRange ? 'var(--color-warning)' : 'var(--color-sky-primary)'} opacity="0.7" rx="1" aria-label={`${bin.x0.toFixed(1)}–${(bin.x0 + binWidth).toFixed(1)}: ${bin.count}`} />
               </g>
             )
           })}
@@ -143,7 +143,7 @@ export function DistributionChart({ readings, metricKey, isLoading }: Distributi
           {bins.filter((_, i) => i % Math.max(1, Math.floor(bins.length / 6)) === 0).map((bin, _, arr) => {
             const x = barX(bin.x0 + binWidth / 2)
             const label = arr.length > 1 ? bin.x0.toFixed(0) : ''
-            return label ? <text key={bin.x0} x={x} y={SVG_H - 22} textAnchor="middle" fontSize="9" fill="#94A3B8">{label}</text> : null
+            return label ? <text key={bin.x0} x={x} y={SVG_H - 22} textAnchor="middle" fontSize="9" fill="var(--text-muted)">{label}</text> : null
           })}
         </svg>
       </div>

@@ -196,13 +196,45 @@
 
 :root {
   font-family: 'Inter', sans-serif;
-  color: #0F172A;
-  background: #FFFFFF;
+  color: var(--color-midnight);
+  background: var(--color-surface);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
+  /* ── Weather Station Sky Theme Tokens ── */
+  --theme-sky-gradient: linear-gradient(135deg, #0C4A6E 0%, #0369A1 50%, #0EA5E9 100%);
+  --theme-sky-accent: #38BDF8;
+  --theme-sky-glow: rgba(56, 189, 248, 0.25);
+  
+  /* ── Centralized Sidebar Design Tokens ── */
+  --sidebar-width: 270px;
+  --sidebar-bg: linear-gradient(180deg, #072B40 0%, #0C4A6E 45%, #1E3A5F 100%);
+  --sidebar-border: rgba(186, 230, 253, 0.15);
+  --sidebar-shadow: 0 10px 30px -5px rgba(12, 74, 110, 0.35);
+  
+  --sidebar-header-border: rgba(186, 230, 253, 0.12);
+  --sidebar-brand-badge-bg: linear-gradient(135deg, #0EA5E9 0%, #0369A1 100%);
+  --sidebar-brand-badge-shadow: 0 4px 14px rgba(14, 165, 233, 0.4);
+  
+  --sidebar-nav-color: rgba(224, 242, 254, 0.70);
+  --sidebar-nav-hover-bg: rgba(255, 255, 255, 0.08);
+  --sidebar-nav-hover-color: #FFFFFF;
+  --sidebar-nav-active-bg: linear-gradient(90deg, rgba(14, 165, 233, 0.32) 0%, rgba(56, 189, 248, 0.12) 100%);
+  --sidebar-nav-active-color: #FFFFFF;
+  --sidebar-nav-active-border: #38BDF8;
+  --sidebar-nav-active-shadow: 0 2px 14px rgba(14, 165, 233, 0.28);
+  
+  --sidebar-badge-bg: #F97316;
+  --sidebar-badge-text: #FFFFFF;
+  --sidebar-badge-shadow: 0 0 12px rgba(249, 115, 22, 0.55);
+  
+  --sidebar-user-bg: rgba(255, 255, 255, 0.05);
+  --sidebar-user-border: rgba(186, 230, 253, 0.15);
+  --sidebar-user-hover-bg: rgba(255, 255, 255, 0.09);
+  --sidebar-user-avatar-bg: linear-gradient(135deg, #38BDF8 0%, #0EA5E9 100%);
+  
   /* ── Semantic surface tokens (light mode) ── */
   --surface-primary: #FFFFFF;
   --surface-secondary: #F8FAFC;
@@ -223,7 +255,8 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  background: #FFFFFF;
+  background: var(--surface-secondary);
+  color: var(--text-primary);
 }
 
 * {
@@ -235,7 +268,7 @@ body {
 }
 
 ::selection {
-  background: rgba(14, 165, 233, 0.2);
+  background: rgba(14, 165, 233, 0.25);
   color: #0C4A6E;
 }
 
@@ -273,6 +306,407 @@ body {
   animation: shimmer 1.5s ease-in-out infinite;
 }
 
+/* ── Centralized Weather Station Sidebar Design Classes ── */
+
+.ws-sidebar {
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
+  box-shadow: var(--sidebar-shadow);
+  color: #FFFFFF;
+}
+
+/* ── Mobile Top Header Bar ── */
+.ws-mobile-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 3.75rem;
+  padding: 0 1rem;
+  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--sidebar-border);
+  box-shadow: 0 4px 20px rgba(7, 43, 64, 0.4);
+  color: #FFFFFF;
+}
+
+.ws-mobile-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(186, 230, 253, 0.2);
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ws-mobile-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: var(--color-sky-bright);
+}
+
+/* ── Desktop Collapse Button ── */
+.ws-sidebar-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(186, 230, 253, 0.15);
+  color: var(--color-sky-soft);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.ws-sidebar-collapse-btn:hover {
+  background: rgba(14, 165, 233, 0.22);
+  color: var(--color-sky-bright);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.ws-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--sidebar-header-border);
+}
+
+.ws-sidebar-brand-icon {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xl);
+  background: var(--sidebar-brand-badge-bg);
+  box-shadow: var(--sidebar-brand-badge-shadow);
+  color: #FFFFFF;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.125rem;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  flex-shrink: 0;
+}
+
+.ws-sidebar-brand-icon:hover {
+  transform: scale(1.06);
+  box-shadow: 0 6px 20px rgba(14, 165, 233, 0.55);
+}
+
+.ws-sidebar-brand-title {
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-sky-soft);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.ws-sidebar-brand-subtitle {
+  font-size: 0.75rem;
+  color: var(--sidebar-nav-color);
+  font-weight: 500;
+  margin: 0.15rem 0 0 0;
+}
+
+.ws-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 1.25rem;
+}
+
+.ws-sidebar-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  border-radius: var(--radius-lg);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--sidebar-nav-color);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.ws-sidebar-link:hover {
+  background: var(--sidebar-nav-hover-bg);
+  color: var(--sidebar-nav-hover-color);
+  border-color: rgba(186, 230, 253, 0.1);
+  transform: translateX(2px);
+}
+
+.ws-sidebar-link-active {
+  background: var(--sidebar-nav-active-bg);
+  color: var(--sidebar-nav-active-color);
+  font-weight: 600;
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: var(--sidebar-nav-active-shadow);
+}
+
+.ws-sidebar-link-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  bottom: 15%;
+  width: 3.5px;
+  border-radius: 0 4px 4px 0;
+  background: var(--sidebar-nav-active-border);
+  box-shadow: 0 0 8px var(--sidebar-nav-active-border);
+}
+
+.ws-sidebar-link-collapsed {
+  justify-content: center;
+  padding: 0.625rem 0;
+  width: 100%;
+}
+
+.ws-sidebar-link-collapsed:hover {
+  transform: scale(1.06);
+}
+
+.ws-sidebar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.ws-sidebar-link:hover .ws-sidebar-icon {
+  color: var(--color-sky-bright);
+}
+
+.ws-sidebar-link-active .ws-sidebar-icon {
+  color: var(--color-sky-bright);
+  transform: scale(1.1);
+}
+
+.ws-sidebar-badge {
+  position: absolute;
+  right: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.375rem;
+  border-radius: var(--radius-full);
+  background: var(--sidebar-badge-bg);
+  color: var(--sidebar-badge-text);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  box-shadow: var(--sidebar-badge-shadow);
+  animation: pulse-soft 2.5s ease-in-out infinite;
+}
+
+.ws-sidebar-badge-dot {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-full);
+  background: var(--sidebar-badge-bg);
+  box-shadow: var(--sidebar-badge-shadow);
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* ── Tooltips for Collapsed View ── */
+.ws-sidebar-tooltip {
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  margin-left: 0.75rem;
+  padding: 0.4rem 0.8rem;
+  border-radius: var(--radius-md);
+  background: #062234;
+  color: #FFFFFF;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(186, 230, 253, 0.25);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s ease, transform 0.18s ease;
+  transform: translateY(-50%) translateX(-6px);
+  z-index: 60;
+}
+
+.ws-sidebar-tooltip::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent #062234 transparent transparent;
+}
+
+.group:hover .ws-sidebar-tooltip,
+.ws-tooltip-trigger:hover .ws-sidebar-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%) translateX(0);
+}
+
+.ws-sidebar-user-card {
+  margin-top: auto;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--sidebar-user-border);
+  background: var(--sidebar-user-bg);
+  padding: 1rem;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s ease;
+}
+
+.ws-sidebar-user-card-collapsed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.375rem;
+}
+
+.ws-sidebar-user-card:hover {
+  background: var(--sidebar-user-hover-bg);
+  border-color: rgba(186, 230, 253, 0.25);
+}
+
+.ws-sidebar-user-avatar {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-lg);
+  background: var(--sidebar-user-avatar-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.3);
+  flex-shrink: 0;
+}
+
+.ws-sidebar-user-email {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-sidebar-user-role {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-sky-bright);
+}
+
+.ws-sidebar-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.75rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: var(--radius-md);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #F87171;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  justify-content: center;
+}
+
+.ws-sidebar-logout-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  color: #FFFFFF;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.ws-sidebar-logout-btn-mini {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  margin-top: 0;
+  padding: 0;
+  border-radius: var(--radius-md);
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #F87171;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ws-sidebar-logout-btn-mini:hover {
+  background: rgba(239, 68, 68, 0.35);
+  color: #FFFFFF;
+  border-color: rgba(239, 68, 68, 0.5);
+  transform: scale(1.05);
+}
+
+.ws-sidebar-mobile-toggle {
+  position: fixed;
+  top: 1rem;
+  left: 1rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-xl);
+  background: var(--sidebar-bg);
+  border: 1px solid var(--sidebar-border);
+  color: #FFFFFF;
+  box-shadow: var(--shadow-elevation-3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ws-sidebar-mobile-toggle:hover {
+  background: #0C4A6E;
+  border-color: var(--color-sky-bright);
+  transform: scale(1.05);
+}
+
+.ws-sidebar-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(7, 43, 64, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: opacity 0.3s ease;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -283,3 +717,5 @@ body {
     scroll-behavior: auto;
   }
 }
+
+

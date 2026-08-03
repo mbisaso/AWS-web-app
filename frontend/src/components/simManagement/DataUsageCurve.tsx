@@ -12,9 +12,9 @@ export function DataUsageCurve({ used, total, dailyUsage }: DataUsageCurveProps)
   const remaining = Math.max(0, total - used)
 
   const curveColor =
-    pct >= 90 ? '#E11D48'
-    : pct >= 70 ? '#F59E0B'
-    : '#22C55E'
+    pct >= 90 ? 'var(--color-danger)'
+    : pct >= 70 ? 'var(--color-warning)'
+    : 'var(--color-success)'
 
 
   const curvePoints = useMemo(() => {
@@ -70,7 +70,7 @@ export function DataUsageCurve({ used, total, dailyUsage }: DataUsageCurveProps)
         {/* ── Big percentage ring ── */}
         <div className="relative flex shrink-0 items-center justify-center">
           <svg width="88" height="88" viewBox="0 0 88 88" className="-rotate-90">
-            <circle cx="44" cy="44" r="38" fill="none" stroke="#F1F5F9" strokeWidth="6" />
+            <circle cx="44" cy="44" r="38" fill="none" stroke="var(--border-subtle)" strokeWidth="6" />
             <circle
               cx="44" cy="44" r="38"
               fill="none"
@@ -170,7 +170,7 @@ export function DataUsageCurve({ used, total, dailyUsage }: DataUsageCurveProps)
               x2={curvePoints.width}
               y1={curvePoints.avgY}
               y2={curvePoints.avgY}
-              stroke="#CBD5E1"
+            stroke="var(--border-default)"
               strokeWidth="1"
               strokeDasharray="3 3"
             />
@@ -180,7 +180,7 @@ export function DataUsageCurve({ used, total, dailyUsage }: DataUsageCurveProps)
               cx={curvePoints.points[curvePoints.points.length - 1].x}
               cy={curvePoints.points[curvePoints.points.length - 1].y}
               r="3"
-              fill="white"
+            fill="var(--color-surface)"
               stroke={curveColor}
               strokeWidth="2"
             />
@@ -192,7 +192,7 @@ export function DataUsageCurve({ used, total, dailyUsage }: DataUsageCurveProps)
               const pt = curvePoints.points[idx]
               return (
                 <g key={marker}>
-                  <circle cx={pt.x} cy={pt.y} r="2" fill="#CBD5E1" />
+                  <circle cx={pt.x} cy={pt.y} r="2" fill="var(--border-default)" />
                 </g>
               )
             })}

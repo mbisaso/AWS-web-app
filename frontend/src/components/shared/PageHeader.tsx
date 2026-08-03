@@ -11,8 +11,8 @@ interface PageHeaderProps {
 
 const VARIANT_STYLES = {
   default: 'from-midnight to-ocean',
-  alerts: 'from-midnight via-[#1a1a3e] to-red-950/40',
-  admin: 'from-midnight via-[#1a2a4a] to-sky-deep/30',
+  alerts: 'from-midnight via-[var(--text-primary)] to-red-950/40',
+  admin: 'from-midnight via-[var(--text-primary)] to-sky-deep/30',
   data: 'from-midnight to-ocean',
 }
 

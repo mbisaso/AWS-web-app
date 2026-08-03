@@ -9,7 +9,7 @@ import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { StationSensorSelector } from '../components/weatherData/StationSensorSelector'
 
 const SENSOR_METRICS = Object.keys(SENSOR_METRIC_CONFIG) as SensorMetricKey[]
-const BENCHMARK_COLOR = '#94A3B8'
+const BENCHMARK_COLOR = 'var(--text-muted)'
 
 function daysAgo(days: number): string {
   const d = new Date()
@@ -240,8 +240,8 @@ function BenchmarkChart({
             const y = syVal(v)
             return (
               <g key={v}>
-                <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="#E2E8F0" strokeWidth="0.5" />
-                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#94A3B8">{v}</text>
+                <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="var(--border-default)" strokeWidth="0.5" />
+                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="var(--text-muted)">{v}</text>
               </g>
             )
           })}
@@ -250,12 +250,12 @@ function BenchmarkChart({
             const label = d.toLocaleString(undefined, { month: 'short', day: 'numeric' })
             return (
               <g key={i}>
-                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + cH} stroke="#F1F5F9" strokeWidth="0.5" />
-                <text x={x} y={SVG_H - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="#94A3B8">{label}</text>
+                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + cH} stroke="var(--surface-tertiary)" strokeWidth="0.5" />
+                <text x={x} y={SVG_H - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="var(--text-muted)">{label}</text>
               </g>
             )
           })}
-          <text x={14} y={PAD.top + cH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 14, ${PAD.top + cH / 2})`}>
+          <text x={14} y={PAD.top + cH / 2} textAnchor="middle" fontSize="10" fill="var(--text-muted)" transform={`rotate(-90, 14, ${PAD.top + cH / 2})`}>
             {cfg.unit}
           </text>
           {benchPath && (
@@ -265,7 +265,7 @@ function BenchmarkChart({
             <path d={awsPath} fill="none" stroke={cfg.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
           )}
           {tooltip && (
-            <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + cH} stroke="#94A3B8" strokeWidth="0.5" strokeDasharray="3,3" />
+            <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + cH} stroke="var(--text-muted)" strokeWidth="0.5" strokeDasharray="3,3" />
           )}
           {tooltip?.awsY !== null && tooltip && (
             <circle cx={tooltip.x} cy={tooltip.awsY as number} r="3.5" fill={cfg.color} />

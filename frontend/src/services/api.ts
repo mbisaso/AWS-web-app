@@ -516,20 +516,20 @@ export const SENSOR_CONFIG: Record<
   SensorType,
   { label: string; unit: string; color: string }
 > = {
-  temperature: { label: "Temperature", unit: "°C", color: "#F97316" },
-  humidity: { label: "Humidity", unit: "%", color: "#0EA5E9" },
-  rainfall: { label: "Rainfall", unit: "mm", color: "#38BDF8" },
-  wind_speed: { label: "Wind Speed", unit: "m/s", color: "#22C55E" },
-  wind_direction: { label: "Wind Direction", unit: "°", color: "#94A3B8" },
+  temperature: { label: "Temperature", unit: "°C", color: "var(--color-sunset)" },
+  humidity: { label: "Humidity", unit: "%", color: "var(--color-sky-primary)" },
+  rainfall: { label: "Rainfall", unit: "mm", color: "var(--color-sky-bright)" },
+  wind_speed: { label: "Wind Speed", unit: "m/s", color: "var(--color-emerald)" },
+  wind_direction: { label: "Wind Direction", unit: "°", color: "var(--text-muted)" },
   atmospheric_pressure: {
     label: "Atm. Pressure",
     unit: "hPa",
-    color: "#8B5CF6",
+    color: "var(--color-accent-purple)",
   },
-  light: { label: "Light level", unit: "lux", color: "#F59E0B" },
-  soil_moisture: { label: "Soil Moisture", unit: "%", color: "#84CC16" },
-  curr_batt: { label: "Battery Current", unit: "A", color: "#EAB308" },
-  curr_solar: { label: "Solar Current", unit: "A", color: "#FDE047" },
+  light: { label: "Light level", unit: "lux", color: "var(--color-warning)" },
+  soil_moisture: { label: "Soil Moisture", unit: "%", color: "var(--color-emerald)" },
+  curr_batt: { label: "Battery Current", unit: "A", color: "var(--color-warning)" },
+  curr_solar: { label: "Solar Current", unit: "A", color: "var(--color-sunset-glow)" },
 };
 
 const SENSOR_LIMITS: Record<SensorType, { min: number; max: number }> = {
@@ -741,10 +741,10 @@ export const POWER_METRIC_CONFIG: Record<
   PowerMetricType,
   { label: string; unit: string; color: string }
 > = {
-  battery_level: { label: "Battery Level", unit: "%", color: "#22C55E" },
-  voltage: { label: "Voltage", unit: "V", color: "#0EA5E9" },
-  current_draw: { label: "Current Draw", unit: "A", color: "#F97316" },
-  solar_input: { label: "Solar Input", unit: "W", color: "#F59E0B" },
+  battery_level: { label: "Battery Level", unit: "%", color: "var(--color-emerald)" },
+  voltage: { label: "Voltage", unit: "V", color: "var(--color-sky-primary)" },
+  current_draw: { label: "Current Draw", unit: "A", color: "var(--color-sunset)" },
+  solar_input: { label: "Solar Input", unit: "W", color: "var(--color-warning)" },
 };
 
 const BATTERY_CAPACITY_AH = 100;

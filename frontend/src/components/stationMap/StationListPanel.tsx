@@ -14,9 +14,9 @@ interface StationListPanelProps {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  online: '#22C55E',
-  partial: '#F59E0B',
-  offline: '#E11D48',
+  online: 'var(--color-emerald)',
+  partial: 'var(--color-warning)',
+  offline: 'var(--color-danger)',
 }
 
 export function StationListPanel({
@@ -62,7 +62,7 @@ export function StationListPanel({
       )}
 
       {/* Panel */}
-      <aside
+      <div
         className={`shrink-0 border-l border-slate-200 bg-white transition-all duration-300 ease-in-out ${
           isOpen
             ? 'w-full md:w-80'
@@ -161,7 +161,7 @@ export function StationListPanel({
             )}
           </div>
         </div>
-      </aside>
+      </div>
     </>
   )
 }

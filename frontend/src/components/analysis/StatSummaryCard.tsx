@@ -83,7 +83,7 @@ export function StatSummaryCard({ stats, metricKey, stationName, isLoading }: St
     )
   }
 
-  const trendColor = stats.trend === 'rising' ? '#22C55E' : stats.trend === 'falling' ? '#E11D48' : '#94A3B8'
+  const trendColor = stats.trend === 'rising' ? 'var(--color-success)' : stats.trend === 'falling' ? 'var(--color-danger)' : 'var(--text-muted)'
   const trendLabel = stats.trend === 'rising' ? 'Rising' : stats.trend === 'falling' ? 'Falling' : 'Stable'
 
   return (
@@ -127,8 +127,8 @@ export function StatSummaryCard({ stats, metricKey, stationName, isLoading }: St
         <span
           className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
           style={{
-            backgroundColor: stats.trend === 'rising' ? '#dcfce7' : stats.trend === 'falling' ? '#ffe4e6' : '#f1f5f9',
-            color: stats.trend === 'rising' ? '#16a34a' : stats.trend === 'falling' ? '#e11d48' : '#64748b',
+            backgroundColor: stats.trend === 'rising' ? 'var(--color-success-light)' : stats.trend === 'falling' ? 'var(--color-danger-light)' : 'var(--surface-tertiary)',
+            color: stats.trend === 'rising' ? 'var(--color-emerald-deep)' : stats.trend === 'falling' ? 'var(--color-danger)' : 'var(--text-tertiary)',
           }}
         >
           <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

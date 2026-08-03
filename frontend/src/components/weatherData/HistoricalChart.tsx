@@ -229,8 +229,8 @@ export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalCh
             const y = syVal(v)
             return (
               <g key={v}>
-                <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="#F1F5F9" strokeWidth="0.5" />
-                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#94A3B8" fontFamily="Inter, sans-serif">{v}</text>
+                <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="var(--border-subtle)" strokeWidth="0.5" />
+                                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="var(--text-muted)" fontFamily="Inter, sans-serif">{v}</text>
               </g>
             )
           })}
@@ -239,12 +239,12 @@ export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalCh
             const label = d.toLocaleString(undefined, { month: 'short', day: 'numeric' })
             return (
               <g key={i}>
-                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + cH} stroke="#F8FAFC" strokeWidth="0.5" />
-                <text x={x} y={SVG_H - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="#94A3B8" fontFamily="Inter, sans-serif">{label}</text>
+                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + cH} stroke="var(--surface-secondary)" strokeWidth="0.5" />
+                <text x={x} y={SVG_H - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="var(--text-muted)" fontFamily="Inter, sans-serif">{label}</text>
               </g>
             )
           })}
-          <text x={14} y={PAD.top + cH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 14, ${PAD.top + cH / 2})`} fontFamily="Inter, sans-serif">
+          <text x={14} y={PAD.top + cH / 2} textAnchor="middle" fontSize="10" fill="var(--text-muted)" transform={`rotate(-90, 14, ${PAD.top + cH / 2})`} fontFamily="Inter, sans-serif">
             {cfg.unit}
           </text>
 
@@ -268,7 +268,7 @@ export function HistoricalChart({ readings, metricKey, isLoading }: HistoricalCh
 
           {tooltip && (
             <>
-              <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + cH} stroke="#CBD5E1" strokeWidth="0.5" strokeDasharray="3,3" />
+              <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + cH} stroke="var(--border-default)" strokeWidth="0.5" strokeDasharray="3,3" />
               <circle cx={tooltip.x} cy={tooltip.y} r="4" fill={cfg.color} stroke="white" strokeWidth="2" />
             </>
           )}

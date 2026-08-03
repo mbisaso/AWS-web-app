@@ -93,15 +93,15 @@ export function DashboardPage() {
         <div className="rounded-3xl border border-slate-200 bg-white shadow-elevation-2">
           <div className="flex flex-col gap-4 border-b border-slate-100 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#0a6ebd]">
+              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--color-sky-deep)]">
                 Dashboard
               </p>
-              <h1 className="mt-2 text-2xl font-semibold text-[#1a2332] font-display">
+              <h1 className="mt-2 text-2xl font-semibold text-[var(--text-primary)] font-display">
                 Station overview
               </h1>
             </div>
             <div className="flex items-center gap-3 text-sm text-slate-500">
-              <span className="rounded-full bg-sky-50 px-3 py-1 font-medium text-[#0a6ebd]">
+              <span className="rounded-full bg-sky-50 px-3 py-1 font-medium text-[var(--color-sky-deep)]">
                 All stations
               </span>
             </div>
@@ -114,7 +114,7 @@ export function DashboardPage() {
                   {[1, 2, 3].map((i) => (
                     <div
                       key={i}
-                      className="overflow-hidden rounded-3xl border border-slate-200 bg-[#f8fafc] p-5"
+                      className="overflow-hidden rounded-3xl border border-slate-200 bg-[var(--surface-secondary)] p-5"
                     >
                       <div className="h-6 w-10 rounded-full bg-slate-200 skeleton-shimmer" />
                       <div className="mt-4 h-5 w-32 rounded bg-slate-200 skeleton-shimmer" />
@@ -153,14 +153,14 @@ export function DashboardPage() {
                     ).map((status) => (
                       <article
                         key={status}
-                        className="group rounded-3xl border border-slate-200 bg-[#f8fafc] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-elevation-2 cursor-default"
+                        className="group rounded-3xl border border-slate-200 bg-[var(--surface-secondary)] p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-elevation-2 cursor-default"
                       >
                         <div
                           className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold transition-transform duration-200 group-hover:scale-105 ${STATUS_LABELS[status].tone}`}
                         >
                           {String(counts[status]).padStart(2, "0")}
                         </div>
-                        <h2 className="mt-4 text-xl font-semibold text-[#1a2332] font-display">
+                        <h2 className="mt-4 text-xl font-semibold text-midnight font-display">
                           {STATUS_LABELS[status].title}
                         </h2>
                         <p className="mt-2 text-sm leading-7 text-slate-600">
@@ -291,12 +291,12 @@ export function DashboardPage() {
                     )}
                   </div>
 
-                  <aside className="rounded-3xl border border-slate-200 bg-[#f8fafc] p-5 transition-shadow duration-300 hover:shadow-xs">
+                  <div className="rounded-3xl border border-slate-200 bg-(--surface-secondary) p-5 transition-shadow duration-300 hover:shadow-xs">
                     <div>
                       <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
                         AI Model Analytics
                       </p>
-                      <h2 className="mt-2 text-xl font-semibold text-[#1a2332]">
+                      <h2 className="mt-2 text-xl font-semibold text-midnight">
                         Insights panel
                       </h2>
                     </div>
@@ -315,7 +315,10 @@ export function DashboardPage() {
                           const faultyPct = analysed.length
                             ? Math.round((withFaults / analysed.length) * 100)
                             : 0;
-                          const stroke = faultyPct > 0 ? "#E11D48" : "#10B981";
+                          const stroke =
+                            faultyPct > 0
+                              ? "var(--color-danger)"
+                              : "var(--color-emerald)";
                           return (
                             <>
                               <div className="flex items-center justify-center">
@@ -331,7 +334,7 @@ export function DashboardPage() {
                                       cy="60"
                                       r="48"
                                       fill="none"
-                                      stroke="#E2E8F0"
+                                      stroke="var(--border-default)"
                                       strokeWidth="10"
                                     />
                                     <circle
@@ -405,7 +408,7 @@ export function DashboardPage() {
                         diagnosis.
                       </p>
                     </div>
-                  </aside>
+                  </div>
                 </section>
 
                 {/* ── Charts row: network health donut + temperature bars ── */}
@@ -438,28 +441,28 @@ export function DashboardPage() {
                             label: "Temperature",
                             value: sensorAvg.temperature,
                             unit: "°C",
-                            color: "#F97316",
+                            color: "var(--color-sunset)",
                             bg: "bg-orange-50",
                           },
                           {
                             label: "Humidity",
                             value: sensorAvg.humidity,
                             unit: "%",
-                            color: "#0EA5E9",
+                            color: "var(--color-sky-primary)",
                             bg: "bg-sky-50",
                           },
                           {
                             label: "Pressure",
                             value: sensorAvg.pressure,
                             unit: "hPa",
-                            color: "#8B5CF6",
+                            color: "var(--color-accent-purple)",
                             bg: "bg-purple-50",
                           },
                           {
                             label: "Wind Speed",
                             value: sensorAvg.windSpeed,
                             unit: "m/s",
-                            color: "#22C55E",
+                            color: "var(--color-emerald)",
                             bg: "bg-emerald-50",
                           },
                         ].map((card) => (

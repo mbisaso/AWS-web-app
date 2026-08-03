@@ -3,8 +3,8 @@ import type { MetricReading, AnalysisMetricKey } from '../../types'
 import { ANALYSIS_METRIC_CONFIG } from '../../types'
 
 const STATION_COLORS = [
-  '#0EA5E9', '#F97316', '#22C55E', '#8B5CF6', '#E11D48',
-  '#F59E0B', '#06B6D4', '#84CC16', '#D946EF', '#14B8A6',
+  'var(--color-sky-primary)', 'var(--color-sunset)', 'var(--color-emerald)', 'var(--color-accent-purple)', 'var(--color-danger)',
+  'var(--color-warning)', 'var(--color-sky-bright)', 'var(--color-emerald)', 'var(--color-accent-purple)', 'var(--color-emerald-deep)',
 ]
 
 const PAD = { top: 24, bottom: 44, left: 55, right: 20 }
@@ -228,8 +228,8 @@ export function TrendChart({ readings, metricKey, showMovingAverage, onToggleMov
             const y = syVal(v)
             return (
               <g key={v}>
-                <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="#E2E8F0" strokeWidth="0.5" />
-                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#94A3B8">{v}</text>
+                <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="var(--border-default)" strokeWidth="0.5" />
+                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="var(--text-muted)">{v}</text>
               </g>
             )
           })}
@@ -238,12 +238,12 @@ export function TrendChart({ readings, metricKey, showMovingAverage, onToggleMov
             const label = d.toLocaleString(undefined, { month: 'short', day: 'numeric' })
             return (
               <g key={i}>
-                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + chartH} stroke="#F1F5F9" strokeWidth="0.5" />
-                <text x={x} y={SVG_H - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="#94A3B8">{label}</text>
+                <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + chartH} stroke="var(--surface-tertiary)" strokeWidth="0.5" />
+                <text x={x} y={SVG_H - 8} textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'} fontSize="10" fill="var(--text-muted)">{label}</text>
               </g>
             )
           })}
-          <text x={14} y={PAD.top + chartH / 2} textAnchor="middle" fontSize="10" fill="#94A3B8" transform={`rotate(-90, 14, ${PAD.top + chartH / 2})`}>{cfg.unit}</text>
+          <text x={14} y={PAD.top + chartH / 2} textAnchor="middle" fontSize="10" fill="var(--text-muted)" transform={`rotate(-90, 14, ${PAD.top + chartH / 2})`}>{cfg.unit}</text>
 
           {showMovingAverage && maLines.map((ml) => (
             <path key={`ma-${ml.stationId}`} d={ml.d} fill="none" stroke={ml.color} strokeWidth="1.5" strokeDasharray="4,3" opacity="0.6" />
@@ -253,7 +253,7 @@ export function TrendChart({ readings, metricKey, showMovingAverage, onToggleMov
             <path key={l.stationId} d={l.d} fill="none" stroke={l.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
           ))}
 
-          {tooltip && <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + chartH} stroke="#94A3B8" strokeWidth="0.5" strokeDasharray="3,3" />}
+          {tooltip && <line x1={tooltip.x} y1={PAD.top} x2={tooltip.x} y2={PAD.top + chartH} stroke="var(--text-muted)" strokeWidth="0.5" strokeDasharray="3,3" />}
         </svg>
 
         {tooltip && (

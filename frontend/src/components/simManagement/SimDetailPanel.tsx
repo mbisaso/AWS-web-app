@@ -383,7 +383,7 @@ function UsageChart({ dailyUsage, remaining }: { dailyUsage: DailyUsage[]; remai
           {/* Grid lines */}
           {yTicks.map((tick, i) => (
             <g key={i}>
-              <line x1={PAD.left} x2={SVG_W - PAD.right} y1={tick.y} y2={tick.y} stroke="#E2E8F0" strokeWidth="1" />
+              <line x1={PAD.left} x2={SVG_W - PAD.right} y1={tick.y} y2={tick.y} stroke="var(--border-default)" strokeWidth="1" />
               <text x={PAD.left - 6} y={tick.y + 3} textAnchor="end" className="text-[10px] fill-storm/30" fontSize="10">{tick.label}</text>
             </g>
           ))}

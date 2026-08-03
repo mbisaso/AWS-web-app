@@ -38,7 +38,7 @@ function VoltageRange({ v }: { v: number }) {
           className="h-full rounded-full transition-all"
           style={{
             width: `${Math.min(100, Math.max(0, ((v - 10) / 5) * 100))}%`,
-            backgroundColor: healthy ? '#22C55E' : v < 11.5 ? '#E11D48' : '#F59E0B',
+            backgroundColor: healthy ? 'var(--color-emerald)' : v < 11.5 ? 'var(--color-danger)' : 'var(--color-warning)',
           }}
           aria-hidden="true"
         />

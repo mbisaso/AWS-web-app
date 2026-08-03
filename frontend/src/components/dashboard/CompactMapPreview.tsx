@@ -114,11 +114,11 @@ export function CompactMapPreview({ stations = [] }: CompactMapPreviewProps) {
         <div>
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#0a6ebd]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--color-sky-deep)]">
               Station Map Preview
             </p>
           </div>
-          <h2 className="mt-0.5 text-lg font-semibold text-[#1a2332] font-display">
+          <h2 className="mt-0.5 text-lg font-semibold text-[var(--text-primary)] font-display">
             Live Station Locations
           </h2>
         </div>
@@ -143,7 +143,7 @@ export function CompactMapPreview({ stations = [] }: CompactMapPreviewProps) {
           <button
             type="button"
             onClick={() => handleOpenFullMap()}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-[#0a6ebd] px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-all duration-200 hover:bg-[#085694] active:scale-95 shrink-0"
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-[var(--color-sky-deep)] px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-all duration-200 hover:bg-[var(--color-sky-night)] active:scale-95 shrink-0"
           >
             <span>Full Map</span>
             <MapPinIcon className="h-3.5 w-3.5" />

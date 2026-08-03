@@ -2,7 +2,7 @@
 import type { MetricReading, AnalysisMetricKey } from '../../types'
 import { ANALYSIS_METRIC_CONFIG } from '../../types'
 
-const BAR_COLORS = ['#0EA5E9', '#22C55E', '#F59E0B']
+const BAR_COLORS = ['var(--color-sky-primary)', 'var(--color-emerald)', 'var(--color-warning)']
 
 type SortBy = 'station' | 'avg' | 'min' | 'max'
 
