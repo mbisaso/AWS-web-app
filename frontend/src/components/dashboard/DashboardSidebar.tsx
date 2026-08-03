@@ -229,16 +229,25 @@ const LogoutIcon = ({ className }: { className?: string }) => (
 
 export function DashboardSidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return localStorage.getItem("aws_sidebar_collapsed") === "true";
+  });
+  const [isMobileViewport, setIsMobileViewport] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return window.matchMedia("(max-width: 1023px)").matches;
+  });
   const [badgeCount, setBadgeCount] = useState(0);
+
   const location = useLocation();
   const { user } = useCurrentUser();
   const { logout, email } = useAuth();
   const navigate = useNavigate();
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
-
-  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
-    return localStorage.getItem("aws_sidebar_collapsed") === "true";
-  });
 
   useEffect(() => {
     localStorage.setItem("aws_sidebar_collapsed", String(isCollapsed));
@@ -262,17 +271,35 @@ export function DashboardSidebar() {
     }
 
     refreshBadge();
-    const id = setInterval(refreshBadge, 10_000);
+    const id = window.setInterval(refreshBadge, 10_000);
 
     return () => {
       isCancelled = true;
-      clearInterval(id);
+      window.clearInterval(id);
     };
   }, []);
 
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1023px)");
+
+    const handleViewportChange = () => {
+      setIsMobileViewport(mediaQuery.matches);
+      if (!mediaQuery.matches) {
+        setIsMobileOpen(false);
+      }
+    };
+
+    handleViewportChange();
+    mediaQuery.addEventListener("change", handleViewportChange);
+
+    return () => {
+      mediaQuery.removeEventListener("change", handleViewportChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isMobileOpen) {
@@ -314,190 +341,83 @@ export function DashboardSidebar() {
 
   return (
     <>
-      {/* Mobile toggle — fixed z-index so the drawer/overlay can never cover it */}
-      <button
-        ref={mobileToggleRef}
-        type="button"
-        onClick={() => setIsMobileOpen((open) => !open)}
-        className="ws-sidebar-mobile-toggle lg:hidden relative z-[60] pointer-events-auto"
-        aria-label={isMobileOpen ? "Close sidebar" : "Open sidebar"}
-        aria-expanded={isMobileOpen}
-        aria-controls="dashboard-mobile-navigation"
-      >
-        {isMobileOpen ? (
-          <CloseIcon className="h-5 w-5" />
-        ) : (
-          <svg
-            className="h-5 w-5"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <rect x="3" y="4" width="8" height="16" rx="2" />
-            <path d="M13 12h8" />
-            <path d="M17 8l4 4-4 4" />
-          </svg>
-        )}
-      </button>
-
-      {/* Mobile drawer — stays mounted so it can animate in/out */}
-      <div
-        className={`lg:hidden fixed inset-0 z-40 transition-opacity duration-300 ${
-          isMobileOpen
-            ? "pointer-events-auto opacity-100"
-            : "pointer-events-none opacity-0"
-        }`}
-        aria-hidden={!isMobileOpen}
-      >
-        <div
-          className="ws-sidebar-mobile-overlay absolute inset-0"
-          onClick={() => setIsMobileOpen(false)}
-        />
-        <aside
-          className={`ws-sidebar fixed inset-y-0 left-0 z-50 flex w-[270px] flex-col px-5 py-6 shadow-2xl transition-transform duration-300 ease-in-out ${
-            isMobileOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
-          id="dashboard-mobile-navigation"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Dashboard navigation"
+      {isMobileViewport && (
+        <button
+          ref={mobileToggleRef}
+          type="button"
+          onClick={() => setIsMobileOpen((open) => !open)}
+          className="ws-sidebar-mobile-toggle"
+          aria-label={isMobileOpen ? "Close sidebar" : "Open sidebar"}
+          aria-expanded={isMobileOpen}
+          aria-controls="dashboard-mobile-navigation"
         >
-          <div className="flex h-full flex-col">
-            <div className="ws-sidebar-brand justify-between">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="ws-sidebar-brand-icon">
-                  <BrandMark />
-                </div>
-                <div className="min-w-0">
-                  <p className="ws-sidebar-brand-title">Navigation</p>
-                  <p className="ws-sidebar-brand-subtitle">System Menu</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsMobileOpen(false)}
-                className="ws-sidebar-collapse-btn"
-                aria-label="Close menu"
-              >
-                <CloseIcon className="h-4 w-4" />
-              </button>
-            </div>
+          {isMobileOpen ? (
+            <CloseIcon className="h-5 w-5" />
+          ) : (
+            <svg
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="8" height="16" rx="2" />
+              <path d="M13 12h8" />
+              <path d="M17 8l4 4-4 4" />
+            </svg>
+          )}
+        </button>
+      )}
 
-            <NavLinks
+      {isMobileViewport && isMobileOpen && (
+        <div className="lg:hidden">
+          <div
+            className="ws-sidebar-mobile-overlay opacity-100"
+            onClick={() => setIsMobileOpen(false)}
+            aria-hidden="true"
+          />
+          <aside
+            className="ws-sidebar fixed inset-y-0 left-0 z-50 flex w-67.5 flex-col px-5 py-6 shadow-2xl"
+            id="dashboard-mobile-navigation"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Dashboard navigation"
+          >
+            <MobileSidebarContent
               items={visibleItems}
-              onNavigate={() => setIsMobileOpen(false)}
               badgeCount={badgeCount}
-            />
-
-            <UserCard
               initial={initial}
               email={email}
               roleDisplay={roleDisplay}
               onLogout={handleLogout}
+              onClose={() => setIsMobileOpen(false)}
             />
-          </div>
-        </aside>
-      </div>
+          </aside>
+        </div>
+      )}
 
-      {/* Desktop sidebar */}
-      <aside
-        className={`ws-sidebar sticky top-0 hidden h-screen shrink-0 flex-col py-5 transition-all duration-300 ease-in-out lg:flex ${
-          isCollapsed ? "w-[76px] px-3" : "w-[270px] px-5"
-        }`}
-        aria-label="Dashboard navigation"
-      >
-        <div className="flex h-full flex-col">
-          <div
-            className={`ws-sidebar-brand ${isCollapsed ? "justify-center border-b pb-4 flex-col gap-3" : "justify-between"}`}
-          >
-            {isCollapsed ? (
-              <div className="flex flex-col items-center gap-3.5 w-full">
-                <div className="relative group ws-tooltip-trigger">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsCollapsed((prev) => !prev);
-                    }}
-                    className="ws-sidebar-collapse-btn relative z-10"
-                    aria-label="Expand sidebar"
-                  >
-                    <ArrowRightIcon className="h-4 w-4" />
-                  </button>
-                  <span className="ws-sidebar-tooltip pointer-events-none">
-                    Expand sidebar
-                  </span>
-                </div>
-                <div className="ws-sidebar-brand-icon" aria-hidden="true">
-                  <BrandMark />
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="ws-sidebar-brand-icon">
-                    <BrandMark />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="ws-sidebar-brand-title">AWS Monitor</p>
-                    <p className="ws-sidebar-brand-subtitle">Weather Station</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsCollapsed((prev) => !prev)}
-                  className="ws-sidebar-collapse-btn"
-                  title="Collapse sidebar"
-                  aria-label="Collapse sidebar"
-                >
-                  <MenuIcon className="h-4 w-4" />
-                </button>
-              </>
-            )}
-          </div>
-
-          <NavLinks
+      {!isMobileViewport && (
+        <aside
+          className={`ws-sidebar sticky top-0 hidden h-screen shrink-0 flex-col py-5 transition-all duration-300 ease-in-out lg:flex ${
+            isCollapsed ? "w-19 px-3" : "w-67.5 px-5"
+          }`}
+          aria-label="Dashboard navigation"
+        >
+          <DesktopSidebarContent
             items={visibleItems}
             isCollapsed={isCollapsed}
             badgeCount={badgeCount}
+            initial={initial}
+            email={email}
+            roleDisplay={roleDisplay}
+            onLogout={handleLogout}
+            onToggleCollapse={() => setIsCollapsed((prev) => !prev)}
           />
-
-          {isCollapsed ? (
-            <div className="ws-sidebar-user-card ws-sidebar-user-card-collapsed">
-              <div className="relative group ws-tooltip-trigger">
-                <div className="ws-sidebar-user-avatar">{initial}</div>
-                <span className="ws-sidebar-tooltip pointer-events-none">
-                  {email || "User"} ({roleDisplay})
-                </span>
-              </div>
-              <div className="relative group ws-tooltip-trigger">
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  className="ws-sidebar-logout-btn-mini relative z-10"
-                  aria-label="Log out"
-                >
-                  <LogoutIcon className="h-4 w-4" />
-                </button>
-                <span className="ws-sidebar-tooltip pointer-events-none">
-                  Log out
-                </span>
-              </div>
-            </div>
-          ) : (
-            <UserCard
-              initial={initial}
-              email={email}
-              roleDisplay={roleDisplay}
-              onLogout={handleLogout}
-            />
-          )}
-        </div>
-      </aside>
+        </aside>
+      )}
     </>
   );
 }
@@ -509,18 +429,14 @@ interface NavLinksProps {
   badgeCount?: number;
 }
 
-function NavLinks({
-  items,
-  isCollapsed,
-  onNavigate,
-  badgeCount,
-}: NavLinksProps) {
+function NavLinks({ items, isCollapsed, onNavigate, badgeCount }: NavLinksProps) {
   return (
     <nav className="ws-sidebar-nav" aria-label="Main navigation">
       {items.map((item) => {
         const isSimMgmt = item.href === "/dashboard/sim-management";
         const showBadge = isSimMgmt && (badgeCount ?? 0) > 0;
         const Icon = item.icon;
+
         return (
           <NavLink
             key={item.href}
@@ -574,14 +490,127 @@ function UserCard({ initial, email, roleDisplay, onLogout }: UserCardProps) {
           <span className="ws-sidebar-user-role">{roleDisplay}</span>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onLogout}
-        className="ws-sidebar-logout-btn"
-      >
+      <button type="button" onClick={onLogout} className="ws-sidebar-logout-btn">
         <LogoutIcon className="h-3.5 w-3.5" />
         Log out
       </button>
+    </div>
+  );
+}
+
+interface DesktopSidebarContentProps {
+  items: NavItem[];
+  isCollapsed: boolean;
+  badgeCount: number;
+  initial: string;
+  email: string | null | undefined;
+  roleDisplay: string;
+  onLogout: () => void;
+  onToggleCollapse: () => void;
+}
+
+function DesktopSidebarContent({
+  items,
+  isCollapsed,
+  badgeCount,
+  initial,
+  email,
+  roleDisplay,
+  onLogout,
+  onToggleCollapse,
+}: DesktopSidebarContentProps) {
+  return (
+    <div className="flex h-full flex-col">
+      <div
+        className={`ws-sidebar-brand ${isCollapsed ? "justify-center border-b pb-4 flex-col gap-3" : "justify-between"}`}
+      >
+        {isCollapsed ? (
+          <div className="flex w-full flex-col items-center gap-3.5">
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="ws-sidebar-collapse-btn"
+              aria-label="Expand sidebar"
+            >
+              <ArrowRightIcon className="h-4 w-4" />
+            </button>
+            <div className="ws-sidebar-brand-icon" aria-hidden="true">
+              <BrandMark />
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="ws-sidebar-brand-icon">
+                <BrandMark />
+              </div>
+              <div className="min-w-0">
+                <p className="ws-sidebar-brand-title">AWS Monitor</p>
+                <p className="ws-sidebar-brand-subtitle">Weather Station</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="ws-sidebar-collapse-btn"
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+            >
+              <MenuIcon className="h-4 w-4" />
+            </button>
+          </>
+        )}
+      </div>
+
+      <NavLinks items={items} isCollapsed={isCollapsed} badgeCount={badgeCount} />
+      <UserCard initial={initial} email={email} roleDisplay={roleDisplay} onLogout={onLogout} />
+    </div>
+  );
+}
+
+interface MobileSidebarContentProps {
+  items: NavItem[];
+  badgeCount: number;
+  initial: string;
+  email: string | null | undefined;
+  roleDisplay: string;
+  onLogout: () => void;
+  onClose: () => void;
+}
+
+function MobileSidebarContent({
+  items,
+  badgeCount,
+  initial,
+  email,
+  roleDisplay,
+  onLogout,
+  onClose,
+}: MobileSidebarContentProps) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="ws-sidebar-brand justify-between">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="ws-sidebar-brand-icon">
+            <BrandMark />
+          </div>
+          <div className="min-w-0">
+            <p className="ws-sidebar-brand-title">Navigation</p>
+            <p className="ws-sidebar-brand-subtitle">System Menu</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="ws-sidebar-collapse-btn"
+          aria-label="Close menu"
+        >
+          <CloseIcon className="h-4 w-4" />
+        </button>
+      </div>
+
+      <NavLinks items={items} onNavigate={onClose} badgeCount={badgeCount} />
+      <UserCard initial={initial} email={email} roleDisplay={roleDisplay} onLogout={onLogout} />
     </div>
   );
 }

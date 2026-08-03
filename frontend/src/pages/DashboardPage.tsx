@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { DashboardSidebar } from "../components/dashboard/DashboardSidebar";
 import { SummaryCharts } from "../components/dashboard/SummaryCharts";
 import { CompactMapPreview } from "../components/dashboard/CompactMapPreview";
 import { RecentAlertsPreview } from "../components/dashboard/RecentAlertsPreview";
@@ -9,6 +8,7 @@ import { useDashboardData } from "../hooks/useDashboardData";
 import { fetchStations } from "../api/stations";
 import type { Station, StationOperationalStatus } from "../types";
 import { deriveHealth, healthBadge } from "../utils/sensorHealth";
+import { DashboardSidebar } from "../components/dashboard/DashboardSidebar";
 
 const STATUS_LABELS: Record<
   StationOperationalStatus,
