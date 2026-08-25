@@ -41,13 +41,11 @@ const STATUS_LABEL: Record<StationOperationalStatus, string> = {
 }
 
 const POWER_SECONDARY: Partial<Record<PowerMetricKey, PowerMetricKey>> = {
-  volt_batt: 'volt_solar',
-  volt_solar: 'curr_solar',
-  curr_batt: 'curr_solar',
-  curr_solar: 'volt_solar',
-  volt_3v3: 'volt_5v',
-  volt_5v: 'volt_3v3',
-  volt_dc: 'volt_batt',
+  volt_batt:    'volt_solar',
+  volt_solar:   'curr_solar',
+  curr_batt:    'curr_solar',
+  curr_solar:   'volt_solar',
+  battery_temp: 'volt_batt',
 }
 
 function daysAgo(days: number): string {
@@ -254,7 +252,7 @@ function OverviewTab({
             <ReadingItem label="Pressure" value={formatValue(latest.pressure, ' hPa')} />
             <ReadingItem label="Wind speed" value={formatValue(latest.wind_speed, ' m/s')} />
             <ReadingItem label="Rainfall" value={formatValue(latest.rain, ' mm')} />
-            <ReadingItem label="Light" value={formatValue(latest.light, ' lux', 0)} />
+            <ReadingItem label="Solar radiation" value={formatValue(latest.solar_radiation, ' W/m²', 1)} />
             <ReadingItem label="Soil moisture" value={formatValue(latest.soil_moisture, '%', 0)} />
             <ReadingItem label="Battery voltage" value={formatValue(latest.volt_batt, ' V')} />
             <ReadingItem label="Solar voltage" value={formatValue(latest.volt_solar, ' V')} />

@@ -1,4 +1,4 @@
-﻿import { useMemo } from 'react'
+import { useMemo } from 'react'
 import type { MetricReading, AnalysisMetricKey } from '../../types'
 import { ANALYSIS_METRIC_CONFIG } from '../../types'
 
@@ -13,7 +13,7 @@ const EXPECTED_RANGES: Partial<Record<AnalysisMetricKey, { min: number; max: num
   wind_speed:     { min: 0,  max: 20 },
   wind_direction: { min: 0,  max: 360 },
   pressure:       { min: 990, max: 1040 },
-  light:          { min: 0,  max: 1000 },
+  solar_radiation: { min: 0, max: 1500 },
 }
 
 interface DistributionChartProps {

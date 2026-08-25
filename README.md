@@ -4,6 +4,8 @@ A full-stack web platform for monitoring a network of Automatic Weather Stations
 
 Physical stations use ESP32 microcontrollers to capture weather parameters and power rail metrics, transmitting data via GSM. This platform receives that data, stores it in PostgreSQL/MySQL, computes real-time sensor anomaly verdicts via an **embedded in-memory Machine Learning model**, and serves a React dashboard for meteorologists, farmers, and administrators.
 
+This replaces a previous ThingSpeak-based pipeline with a fully in-house Django + MySQL/PostgreSQL + React stack.
+
 ---
 
 ## 🚦 Project Status (Updated)
@@ -25,7 +27,7 @@ Physical stations use ESP32 microcontrollers to capture weather parameters and p
 - Django 5.2.3 + Django REST Framework
 - djangorestframework-simplejwt (JWT Authentication)
 - scikit-learn + pandas + joblib + numpy (In-memory ML Inference)
-- PostgreSQL (Dev) / MySQL (cPanel Prod via PyMySQL / dj-database-url)
+- MySQL / MariaDB / PostgreSQL
 
 **Frontend**
 - React 19 + TypeScript

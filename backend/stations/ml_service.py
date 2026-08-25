@@ -90,7 +90,7 @@ def predict_station_window(station_code, reading=None):
             timestamp__lte=ref_time,
         ).order_by('timestamp').values(
             'timestamp', 'temperature', 'humidity', 'pressure',
-            'wind_speed', 'wind_direction', 'soil_moisture', 'light', 'rain',
+            'wind_speed', 'wind_direction', 'soil_moisture', 'solar_radiation', 'rain',
         )
     )
 
@@ -104,15 +104,15 @@ def predict_station_window(station_code, reading=None):
     readings_data = []
     for r in recent:
         readings_data.append({
-            'timestamp':      r['timestamp'].isoformat() if isinstance(r['timestamp'], datetime.datetime) else str(r['timestamp']),
-            'temperature':    r['temperature'],
-            'humidity':       r['humidity'],
-            'pressure':       r['pressure'],
-            'wind_speed':     r['wind_speed'],
-            'wind_direction': r['wind_direction'],
-            'soil_moisture':  r['soil_moisture'],
-            'light':          r['light'],
-            'rain':           r['rain'],
+            'timestamp':       r['timestamp'].isoformat() if isinstance(r['timestamp'], datetime.datetime) else str(r['timestamp']),
+            'temperature':     r['temperature'],
+            'humidity':        r['humidity'],
+            'pressure':        r['pressure'],
+            'wind_speed':      r['wind_speed'],
+            'wind_direction':  r['wind_direction'],
+            'soil_moisture':   r['soil_moisture'],
+            'solar_radiation': r['solar_radiation'],
+            'rain':            r['rain'],
         })
 
     try:

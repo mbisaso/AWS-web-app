@@ -40,7 +40,7 @@ class SensorReadingAdmin(admin.ModelAdmin):
 # any of these missing from the CSV are simply left as None.
 BENCHMARK_CSV_FIELDS = [
     'temperature', 'humidity', 'pressure', 'wind_speed',
-    'wind_direction', 'rain', 'light', 'soil_moisture',
+    'wind_direction', 'rain', 'solar_radiation', 'soil_moisture',
 ]
 
 

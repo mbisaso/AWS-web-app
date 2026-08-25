@@ -6,7 +6,7 @@ import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { PowerHistoricalChart } from '../components/powerData/PowerHistoricalChart'
 import { PowerStatusCard } from '../components/powerData/PowerStatusCard'
 
-const DEMO_METRICS: PowerMetricKey[] = ['volt_batt', 'volt_solar', 'volt_3v3', 'volt_5v', 'volt_dc']
+const DEMO_METRICS: PowerMetricKey[] = ['volt_batt', 'volt_solar', 'battery_temp', 'curr_batt', 'curr_solar']
 
 export function ThingSpeakDemoPage() {
   const [readings, setReadings] = useState<PowerChart[]>([])

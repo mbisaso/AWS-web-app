@@ -78,13 +78,14 @@ CIRCULAR = {"wind_dir"}
 # temperature field, and `light` is the only solar proxy; unmapped sensors are simply
 # not scored for that station.
 APP_FIELD_TO_SENSOR = {
-    "temperature":    "air_temp",
-    "humidity":       "humidity",
-    "pressure":       "pressure",
-    "wind_speed":     "wind_speed",
-    "wind_direction": "wind_dir",
-    "soil_moisture":  "soil_moist",
-    "light":          "solar",
+    "temperature":     "air_temp",
+    "humidity":        "humidity",
+    "pressure":        "pressure",
+    "wind_speed":      "wind_speed",
+    "wind_direction":  "wind_dir",
+    "soil_moisture":   "soil_moist",
+    "solar_radiation": "solar",
+    "light":           "solar",
     # "rain" is handled by the rainfall rule, not the model
 }
 

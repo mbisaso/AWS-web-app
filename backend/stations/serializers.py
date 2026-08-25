@@ -53,24 +53,23 @@ class SensorReadingSerializer(serializers.ModelSerializer):
             'station_code',
             'timestamp',
             'received_at',
-            # Atmospheric
+            # Atmospheric & Environmental
             'pressure',
-            'altitude',
             'temperature',
             'humidity',
-            # Environment
-            'light',
+            'solar_radiation_v',
+            'solar_radiation',
+            'soil_moisture_v',
             'soil_moisture',
             'rain',
             # Wind
             'wind_speed',
+            'wind_direction_v',
             'wind_direction',
             # Power
-            'volt_3v3',
-            'volt_5v',
             'volt_batt',
             'volt_solar',
-            'volt_dc',
+            'battery_temp',
             'curr_batt',
             'curr_solar',
         ]
@@ -93,7 +92,7 @@ class SensorReadingLatestSerializer(serializers.ModelSerializer):
             'wind_speed',
             'wind_direction',
             'rain',
-            'light',
+            'solar_radiation',
             'soil_moisture',
             'volt_batt',
             'volt_solar',
@@ -117,7 +116,7 @@ class SensorReadingChartSerializer(serializers.ModelSerializer):
             'wind_speed',
             'wind_direction',
             'rain',
-            'light',
+            'solar_radiation',
             'soil_moisture',
         ]
 
@@ -131,11 +130,9 @@ class PowerChartSerializer(serializers.ModelSerializer):
         model  = SensorReading
         fields = [
             'timestamp',
-            'volt_3v3',
-            'volt_5v',
             'volt_batt',
             'volt_solar',
-            'volt_dc',
+            'battery_temp',
             'curr_batt',
             'curr_solar',
         ]
@@ -153,17 +150,18 @@ class WeatherReadingSerializer(serializers.ModelSerializer):
             'timestamp',
             'received_at',
             'pressure',
-            'altitude',
             'temperature',
             'humidity',
-            'light',
+            'solar_radiation_v',
+            'solar_radiation',
+            'soil_moisture_v',
             'soil_moisture',
             'rain',
             'wind_speed',
+            'wind_direction_v',
             'wind_direction',
         ]
         read_only_fields = ['id', 'received_at']
-
 
 # ─────────────────────────────────────────────────────────
 # VoltageReading Serializers
@@ -177,11 +175,9 @@ class VoltageReadingSerializer(serializers.ModelSerializer):
             'station_code',
             'timestamp',
             'received_at',
-            'volt_3v3',
-            'volt_5v',
             'volt_batt',
             'volt_solar',
-            'volt_dc',
+            'battery_temp',
         ]
         read_only_fields = ['id', 'received_at']
 
@@ -212,5 +208,5 @@ class BenchmarkReadingSerializer(serializers.ModelSerializer):
     class Meta:
         model = BenchmarkReading
         fields = ['timestamp', 'source', 'location', 'temperature', 'humidity',
-                  'pressure', 'wind_speed', 'wind_direction', 'rain', 'light', 'soil_moisture']
+                  'pressure', 'wind_speed', 'wind_direction', 'rain', 'solar_radiation', 'soil_moisture']
         

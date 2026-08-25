@@ -210,12 +210,16 @@ def ingest(request):
     }
     """
     data       = request.data
-    station_id = data.get('station_id', 'AWS-UG-001')
-    station    = get_or_none(station_id)
+    station_id = data.get('station_id') or data.get('station_code')
 
     # ── Format 1: raw ESP32 string ────────────────────────
     if 'raw' in data:
         parsed = parse_esp32_string(data['raw'])
+        if not station_id:
+            station_id = parsed.get('ID') or parsed.get('Station') or parsed.get('station_id') or parsed.get('station_code')
+
+        station_id = station_id or 'AWS-UG-001'
+        station    = get_or_none(station_id)
 
         timestamp = parse_datetime(parsed.get('Time', ''))
         if timestamp is None:
@@ -225,29 +229,31 @@ def ingest(request):
             )
 
         reading = SensorReading(
-            station        = station,
+            station          = station,
             station_code     = station_id,
-            timestamp      = timestamp,
-            pressure       = safe_float(parsed.get('Press')),
-            altitude       = safe_float(parsed.get('Alt')),
-            temperature    = safe_float(parsed.get('Temp')),
-            humidity       = safe_float(parsed.get('Hum')),
-            light          = safe_float(parsed.get('Light')),
-            soil_moisture  = safe_float(parsed.get('SoilM')),
-            rain           = safe_int(parsed.get('Rain')),
-            wind_speed     = safe_float(parsed.get('WSpd')),
-            wind_direction = safe_int(parsed.get('WDir')),
-            volt_3v3       = safe_float(parsed.get('V33')),
-            volt_5v        = safe_float(parsed.get('V5')),
-            volt_batt      = safe_float(parsed.get('VBatt')),
-            volt_solar     = safe_float(parsed.get('VSol')),
-            volt_dc        = safe_float(parsed.get('VDC')),
-            curr_batt      = safe_float(parsed.get('CBatt')),
-            curr_solar     = safe_float(parsed.get('CSol')),
+            timestamp        = timestamp,
+            pressure         = safe_float(parsed.get('Press')),
+            temperature      = safe_float(parsed.get('Temp')),
+            humidity         = safe_float(parsed.get('Hum')),
+            solar_radiation_v= safe_float(parsed.get('SolRadV') or parsed.get('RadV')),
+            solar_radiation  = safe_float(parsed.get('SolRad') or parsed.get('Light') or parsed.get('Rad')),
+            soil_moisture_v  = safe_float(parsed.get('SoilMV') or parsed.get('SoilM')),
+            soil_moisture    = safe_float(parsed.get('SoilPct') or parsed.get('Soil')),
+            rain             = safe_float(parsed.get('Rain')),
+            wind_speed       = safe_float(parsed.get('WSpd')),
+            wind_direction_v = safe_float(parsed.get('WDirV')),
+            wind_direction   = safe_int(parsed.get('WDir')),
+            volt_batt        = safe_float(parsed.get('VBatt')),
+            volt_solar       = safe_float(parsed.get('VSol')),
+            curr_batt        = safe_float(parsed.get('CBatt')),
+            curr_solar       = safe_float(parsed.get('CSol')),
         )
 
     # ── Format 2: pre-parsed JSON ─────────────────────────
     else:
+        station_id = station_id or 'AWS-UG-001'
+        station    = get_or_none(station_id)
+
         timestamp = parse_datetime(str(data.get('timestamp', '')))
         if timestamp is None:
             return api_response(
@@ -256,25 +262,25 @@ def ingest(request):
             )
 
         reading = SensorReading(
-            station        = station,
+            station          = station,
             station_code     = station_id,
-            timestamp      = timestamp,
-            pressure       = safe_float(data.get('pressure')),
-            altitude       = safe_float(data.get('altitude')),
-            temperature    = safe_float(data.get('temperature')),
-            humidity       = safe_float(data.get('humidity')),
-            light          = safe_float(data.get('light')),
-            soil_moisture  = safe_float(data.get('soil_moisture')),
-            rain           = safe_int(data.get('rain')),
-            wind_speed     = safe_float(data.get('wind_speed')),
-            wind_direction = safe_int(data.get('wind_direction')),
-            volt_3v3       = safe_float(data.get('volt_3v3')),
-            volt_5v        = safe_float(data.get('volt_5v')),
-            volt_batt      = safe_float(data.get('volt_batt')),
-            volt_solar     = safe_float(data.get('volt_solar')),
-            volt_dc        = safe_float(data.get('volt_dc')),
-            curr_batt      = safe_float(data.get('curr_batt')),
-            curr_solar     = safe_float(data.get('curr_solar')),
+            timestamp        = timestamp,
+            pressure         = safe_float(data.get('pressure')),
+            temperature      = safe_float(data.get('temperature')),
+            humidity         = safe_float(data.get('humidity')),
+            solar_radiation_v= safe_float(data.get('solar_radiation_v')),
+            solar_radiation  = safe_float(data.get('solar_radiation') if data.get('solar_radiation') is not None else data.get('light')),
+            soil_moisture_v  = safe_float(data.get('soil_moisture_v')),
+            soil_moisture    = safe_float(data.get('soil_moisture')),
+            rain             = safe_float(data.get('rain')),
+            wind_speed       = safe_float(data.get('wind_speed')),
+            wind_direction_v = safe_float(data.get('wind_direction_v')),
+            wind_direction   = safe_int(data.get('wind_direction')),
+            volt_batt        = safe_float(data.get('volt_batt')),
+            volt_solar       = safe_float(data.get('volt_solar')),
+            battery_temp     = safe_float(data.get('battery_temp')),
+            curr_batt        = safe_float(data.get('curr_batt')),
+            curr_solar       = safe_float(data.get('curr_solar')),
         )
 
     reading.save()
@@ -652,7 +658,7 @@ def ingest_weather(request):
     { "station_id": "AWS-UG-001", "timestamp": "...", "pressure": .., ... }
     """
     data       = request.data
-    station_id = data.get('station_id', 'AWS-UG-001')
+    station_id = data.get('station_id') or data.get('station_code') or 'AWS-UG-001'
     station    = get_or_none(station_id)
 
     timestamp = parse_datetime(str(data.get('timestamp', '')))
@@ -660,15 +666,17 @@ def ingest_weather(request):
         return api_response(error='timestamp is required and must be ISO format', status_code=400)
 
     fields = dict(
-        pressure       = safe_float(data.get('pressure')),
-        altitude       = safe_float(data.get('altitude')),
-        temperature    = safe_float(data.get('temperature')),
-        humidity       = safe_float(data.get('humidity')),
-        light          = safe_float(data.get('light')),
-        soil_moisture  = safe_float(data.get('soil_moisture')),
-        rain           = safe_int(data.get('rain')),
-        wind_speed     = safe_float(data.get('wind_speed')),
-        wind_direction = safe_int(data.get('wind_direction')),
+        pressure          = safe_float(data.get('pressure')),
+        temperature       = safe_float(data.get('temperature')),
+        humidity          = safe_float(data.get('humidity')),
+        solar_radiation_v = safe_float(data.get('solar_radiation_v')),
+        solar_radiation   = safe_float(data.get('solar_radiation') if data.get('solar_radiation') is not None else data.get('light')),
+        soil_moisture_v   = safe_float(data.get('soil_moisture_v')),
+        soil_moisture     = safe_float(data.get('soil_moisture')),
+        rain              = safe_float(data.get('rain')),
+        wind_speed        = safe_float(data.get('wind_speed')),
+        wind_direction_v  = safe_float(data.get('wind_direction_v')),
+        wind_direction    = safe_int(data.get('wind_direction')),
     )
 
     weather = WeatherReading.objects.create(
@@ -727,7 +735,7 @@ def ingest_weather(request):
 def ingest_voltage(request):
     """Channel 2 equivalent."""
     data       = request.data
-    station_id = data.get('station_id', 'AWS-UG-001')
+    station_id = data.get('station_id') or data.get('station_code') or 'AWS-UG-001'
     station    = get_or_none(station_id)
 
     timestamp = parse_datetime(str(data.get('timestamp', '')))
@@ -735,11 +743,9 @@ def ingest_voltage(request):
         return api_response(error='timestamp is required and must be ISO format', status_code=400)
 
     fields = dict(
-        volt_3v3   = safe_float(data.get('volt_3v3')),
-        volt_5v    = safe_float(data.get('volt_5v')),
-        volt_batt  = safe_float(data.get('volt_batt')),
-        volt_solar = safe_float(data.get('volt_solar')),
-        volt_dc    = safe_float(data.get('volt_dc')),
+        volt_batt    = safe_float(data.get('volt_batt')),
+        volt_solar   = safe_float(data.get('volt_solar')),
+        battery_temp = safe_float(data.get('battery_temp')),
     )
 
     voltage = VoltageReading.objects.create(
@@ -762,7 +768,7 @@ def ingest_voltage(request):
 def ingest_current(request):
     """Channel 3 equivalent."""
     data       = request.data
-    station_id = data.get('station_id', 'AWS-UG-001')
+    station_id = data.get('station_id') or data.get('station_code') or 'AWS-UG-001'
     station    = get_or_none(station_id)
 
     timestamp = parse_datetime(str(data.get('timestamp', '')))
@@ -887,7 +893,7 @@ def benchmark(request):
 
     valid_metrics = {
         'temperature', 'humidity', 'pressure', 'wind_speed',
-        'wind_direction', 'rain', 'light', 'soil_moisture',
+        'wind_direction', 'rain', 'solar_radiation', 'soil_moisture',
     }
     if metric not in valid_metrics:
         return api_response(error=f'Invalid metric: {metric}', status_code=400)
@@ -960,7 +966,7 @@ def benchmark(request):
 # onto BenchmarkReading fields. Same as BenchmarkReadingAdmin.import_csv.
 BENCHMARK_CSV_FIELDS = [
     'temperature', 'humidity', 'pressure', 'wind_speed',
-    'wind_direction', 'rain', 'light', 'soil_moisture',
+    'wind_direction', 'rain', 'solar_radiation', 'soil_moisture',
 ]
 
 

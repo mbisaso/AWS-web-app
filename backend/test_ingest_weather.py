@@ -45,12 +45,12 @@ def run_healthy_station_test():
     # Elevation pressure: ~890.5 hPa (Kampala/Kyambogo/Masaka elevation ~1,200m)
     # Solar voltage proxy: ~0.00003 - 0.00008 V
     healthy_series = [
-        {"temp": 22.1, "hum": 80.0, "press": 890.1, "w_spd": 0.45, "w_dir": 190, "light": 0.00003, "soil": 5.8, "rain": 0},
-        {"temp": 22.4, "hum": 79.2, "press": 890.3, "w_spd": 0.48, "w_dir": 192, "light": 0.00004, "soil": 5.75, "rain": 0},
-        {"temp": 22.8, "hum": 78.5, "press": 890.5, "w_spd": 0.52, "w_dir": 195, "light": 0.00005, "soil": 5.70, "rain": 0},
-        {"temp": 23.3, "hum": 77.1, "press": 890.7, "w_spd": 0.55, "w_dir": 198, "light": 0.00006, "soil": 5.65, "rain": 0},
-        {"temp": 23.9, "hum": 76.8, "press": 890.9, "w_spd": 0.58, "w_dir": 202, "light": 0.00007, "soil": 5.60, "rain": 0},
-        {"temp": 24.5, "hum": 75.0, "press": 891.1, "w_spd": 0.62, "w_dir": 205, "light": 0.00008, "soil": 5.55, "rain": 0},
+        {"temp": 22.1, "hum": 80.0, "press": 890.1, "w_spd": 0.45, "w_dir": 190, "solar_v": 1.10, "solar": 450.0, "soil_v": 2.80, "soil": 60.0, "rain": 0},
+        {"temp": 22.4, "hum": 79.2, "press": 890.3, "w_spd": 0.48, "w_dir": 192, "solar_v": 1.15, "solar": 470.0, "soil_v": 2.78, "soil": 59.5, "rain": 0},
+        {"temp": 22.8, "hum": 78.5, "press": 890.5, "w_spd": 0.52, "w_dir": 195, "solar_v": 1.20, "solar": 490.0, "soil_v": 2.75, "soil": 59.0, "rain": 0},
+        {"temp": 23.3, "hum": 77.1, "press": 890.7, "w_spd": 0.55, "w_dir": 198, "solar_v": 1.25, "solar": 510.0, "soil_v": 2.72, "soil": 58.5, "rain": 0},
+        {"temp": 23.9, "hum": 76.8, "press": 890.9, "w_spd": 0.58, "w_dir": 202, "solar_v": 1.30, "solar": 530.0, "soil_v": 2.70, "soil": 58.0, "rain": 0},
+        {"temp": 24.5, "hum": 75.0, "press": 891.1, "w_spd": 0.62, "w_dir": 205, "solar_v": 1.35, "solar": 550.0, "soil_v": 2.68, "soil": 57.5, "rain": 0},
     ]
 
     for s_info in STATIONS_TO_TEST:
@@ -80,8 +80,11 @@ def run_healthy_station_test():
                 "humidity": item["hum"],
                 "pressure": item["press"],
                 "wind_speed": item["w_spd"],
+                "wind_direction_v": round((item["w_dir"] / 360.0) * 3.3, 2),
                 "wind_direction": item["w_dir"],
-                "light": item["light"],
+                "solar_radiation_v": item["solar_v"],
+                "solar_radiation": item["solar"],
+                "soil_moisture_v": item["soil_v"],
                 "soil_moisture": item["soil"],
                 "rain": item["rain"]
             }
