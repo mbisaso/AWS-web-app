@@ -13,13 +13,11 @@ import { PowerReadingsTable } from '../components/powerData/PowerReadingsTable'
 import { PowerSummaryCharts } from '../components/powerData/PowerSummaryCharts'
 
 const SECONDARY_MAP: Partial<Record<PowerMetricKey, PowerMetricKey>> = {
-  volt_batt:  'volt_solar',
-  volt_solar: 'curr_solar',
-  curr_batt:  'curr_solar',
-  curr_solar: 'volt_solar',
-  volt_3v3:   'volt_5v',
-  volt_5v:    'volt_3v3',
-  volt_dc:    'volt_batt',
+  volt_batt:    'volt_solar',
+  volt_solar:   'curr_solar',
+  curr_batt:    'curr_solar',
+  curr_solar:   'volt_solar',
+  battery_temp: 'volt_batt',
 }
 
 function daysAgo(days: number): string {

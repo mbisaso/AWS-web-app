@@ -9,7 +9,7 @@ const SENSOR_OPTIONS = [
   { value: 'wind_speed', label: 'Wind Speed' },
   { value: 'wind_direction', label: 'Wind Direction' },
   { value: 'pressure', label: 'Pressure' },
-  { value: 'light', label: 'Light level' },
+  { value: 'solar_radiation', label: 'Solar Radiation' },
   { value: 'soil_moisture', label: 'Soil Moisture' },
   { value: 'curr_batt', label: 'Battery Current' },
   { value: 'curr_solar', label: 'Solar Current' },

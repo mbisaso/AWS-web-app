@@ -481,7 +481,7 @@ export type SensorType =
   | "wind_speed"
   | "wind_direction"
   | "atmospheric_pressure"
-  | "light"
+  | "solar_radiation"
   | "soil_moisture"
   | "curr_batt"
   | "curr_solar";
@@ -526,7 +526,7 @@ export const SENSOR_CONFIG: Record<
     unit: "hPa",
     color: "#8B5CF6",
   },
-  light: { label: "Light level", unit: "lux", color: "#F59E0B" },
+  solar_radiation: { label: "Solar Radiation", unit: "W/m²", color: "#F59E0B" },
   soil_moisture: { label: "Soil Moisture", unit: "%", color: "#84CC16" },
   curr_batt: { label: "Battery Current", unit: "A", color: "#EAB308" },
   curr_solar: { label: "Solar Current", unit: "A", color: "#FDE047" },
@@ -539,7 +539,7 @@ const SENSOR_LIMITS: Record<SensorType, { min: number; max: number }> = {
   wind_speed: { min: 0, max: 50 },
   wind_direction: { min: 0, max: 360 },
   atmospheric_pressure: { min: 900, max: 1100 },
-  light: { min: 0, max: 100000 },
+  solar_radiation: { min: 0, max: 1500 },
   soil_moisture: { min: 0, max: 100 },
   curr_batt: { min: 0, max: 10 },
   curr_solar: { min: 0, max: 10 },
@@ -579,11 +579,11 @@ function generateSensorValue(
       return parseFloat((r * 360).toFixed(0));
     case "atmospheric_pressure":
       return parseFloat((1013 + (r - 0.5) * 12).toFixed(1));
-    case "light": {
+    case "solar_radiation": {
       if (hour < 6 || hour > 19) return 0;
-      const peak = 40000 + (r - 0.5) * 10000;
+      const peak = 900 + (r - 0.5) * 200;
       return parseFloat(
-        Math.max(0, peak * Math.sin(((hour - 6) * Math.PI) / 13)).toFixed(0),
+        Math.max(0, peak * Math.sin(((hour - 6) * Math.PI) / 13)).toFixed(1),
       );
     }
     case "soil_moisture":
@@ -601,12 +601,11 @@ function getAnomalyReason(type: SensorType, value: number): string {
   if (type === "humidity" && value > 95) return "Near-saturation humidity";
   if (type === "rainfall" && value > 50) return "Extreme precipitation event";
   if (type === "wind_speed" && value > 25) return "High wind speed alert";
-  if (type === "light" && value > 90000)
+  if (type === "solar_radiation" && value > 1200)
     return "Extreme solar irradiance";
   if (type === "atmospheric_pressure" && (value < 980 || value > 1045))
     return "Abnormal pressure";
   if (type === "curr_batt" && value > 5) return "High battery current draw";
-  return "Unexpected sensor reading";
   return "Unexpected sensor reading";
 }
 
@@ -969,7 +968,7 @@ const BASELINE_VALUES: Partial<Record<SensorType, number>> = {
   rainfall: 2.5,
   wind_speed: 3.5,
   atmospheric_pressure: 1013,
-  light: 45000,
+  solar_radiation: 500,
 };
 
 function computeStats(values: number[]): AnalysisStats {
@@ -1455,7 +1454,7 @@ const SENSOR_OPTIONS = [
   "rainfall",
   "wind_speed",
   "pressure",
-  "light",
+  "solar_radiation",
 ];
 
 /* ── In-memory mock database ── */

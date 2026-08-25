@@ -94,19 +94,20 @@ class SensorReading(models.Model):
     ---------       ---------              -------
     Time        →   timestamp          →   when reading was taken (from RTC)
     Press       →   pressure           →   air pressure (hPa)
-    Alt         →   altitude           →   altitude (m)
     Temp        →   temperature        →   air temperature (°C)
     Hum         →   humidity           →   relative humidity (%)
-    Light       →   light              →   light level (lux)
-    SoilM       →   soil_moisture      →   soil moisture voltage (V)
+    SolRadV     →   solar_radiation_v  →   solar radiation sensor voltage (V)
+    SolRad      →   solar_radiation    →   solar radiation (W/m²)
+    SoilM       →   soil_moisture_v    →   soil moisture sensor voltage (V)
+    SoilPct     →   soil_moisture      →   soil moisture (%)
     Rain        →   rain               →   rain gauge tip count
     WSpd        →   wind_speed         →   wind speed (km/h)
+    WDirV       →   wind_direction_v   →   wind direction sensor voltage (V)
     WDir        →   wind_direction     →   wind direction (degrees 0-360)
-    V33         →   volt_3v3           →   3.3V rail voltage
-    V5          →   volt_5v            →   5V rail voltage
-    VBatt       →   volt_batt          →   battery voltage
-    VSol        →   volt_solar         →   solar panel voltage
-    VDC         →   volt_dc            →   DC input voltage
+    
+    VBatt       →   volt_batt          →   battery voltage (V)
+    VSol        →   volt_solar         →   solar panel voltage (V)
+    
     CBatt       →   curr_batt          →   battery current (A)
     CSol        →   curr_solar         →   solar current (A)
     """
@@ -139,16 +140,11 @@ class SensorReading(models.Model):
         help_text="When this server received the reading"
     )
 
-    # ── Atmospheric ───────────────────────────────────────
+    # ── Atmospheric & Environmental ───────────────────────
     # ESP32 key: Press  →  e.g. 1013.25 or nan→NULL
     pressure = models.FloatField(
         null=True, blank=True,
         help_text="Air pressure in hPa. ESP32 key: Press"
-    )
-    # ESP32 key: Alt  →  e.g. 45.20 or nan→NULL
-    altitude = models.FloatField(
-        null=True, blank=True,
-        help_text="Altitude in meters. ESP32 key: Alt"
     )
     # ESP32 key: Temp  →  e.g. 24.50 or nan→NULL
     temperature = models.FloatField(
@@ -160,20 +156,26 @@ class SensorReading(models.Model):
         null=True, blank=True,
         help_text="Relative humidity in percent. ESP32 key: Hum"
     )
-
-    # ── Environment ───────────────────────────────────────
-    # ESP32 key: Light  →  e.g. 0.00
-    light = models.FloatField(
+    # Solar Radiation (Raw Voltage & Converted W/m²)
+    solar_radiation_v = models.FloatField(
         null=True, blank=True,
-        help_text="Light level in lux. ESP32 key: Light"
+        help_text="Solar radiation sensor voltage in Volts."
     )
-    # ESP32 key: SoilM  →  e.g. 3.30
+    solar_radiation = models.FloatField(
+        null=True, blank=True,
+        help_text="Solar radiation in W/m². ESP32 key: Light / SolRad"
+    )
+    # Soil Moisture (Raw Voltage & Converted %)
+    soil_moisture_v = models.FloatField(
+        null=True, blank=True,
+        help_text="Soil moisture sensor voltage in Volts. ESP32 key: SoilM"
+    )
     soil_moisture = models.FloatField(
         null=True, blank=True,
-        help_text="Soil moisture voltage. ESP32 key: SoilM"
+        help_text="Soil moisture in percent (%)."
     )
     # ESP32 key: Rain  →  e.g. 0
-    rain = models.IntegerField(
+    rain = models.FloatField(
         null=True, blank=True,
         help_text="Rain gauge tip count. ESP32 key: Rain"
     )
@@ -184,23 +186,17 @@ class SensorReading(models.Model):
         null=True, blank=True,
         help_text="Wind speed in km/h. ESP32 key: WSpd"
     )
-    # ESP32 key: WDir  →  e.g. 2
+    # Wind Direction (Raw Voltage & Converted Degrees)
+    wind_direction_v = models.FloatField(
+        null=True, blank=True,
+        help_text="Wind direction sensor voltage in Volts."
+    )
     wind_direction = models.IntegerField(
         null=True, blank=True,
-        help_text="Wind direction in degrees. ESP32 key: WDir"
+        help_text="Wind direction in degrees (0-360). ESP32 key: WDir"
     )
 
     # ── Power rails ───────────────────────────────────────
-    # ESP32 key: V33  →  e.g. 3.36
-    volt_3v3 = models.FloatField(
-        null=True, blank=True,
-        help_text="3.3V rail voltage. ESP32 key: V33"
-    )
-    # ESP32 key: V5  →  e.g. 4.82
-    volt_5v = models.FloatField(
-        null=True, blank=True,
-        help_text="5V rail voltage. ESP32 key: V5"
-    )
     # ESP32 key: VBatt  →  e.g. 11.32
     volt_batt = models.FloatField(
         null=True, blank=True,
@@ -211,10 +207,9 @@ class SensorReading(models.Model):
         null=True, blank=True,
         help_text="Solar panel voltage. ESP32 key: VSol"
     )
-    # ESP32 key: VDC  →  e.g. 1.02
-    volt_dc = models.FloatField(
+    battery_temp = models.FloatField(
         null=True, blank=True,
-        help_text="DC input voltage. ESP32 key: VDC"
+        help_text="Battery temperature in Celsius."
     )
 
     # ── Currents ──────────────────────────────────────────
@@ -247,7 +242,7 @@ class WeatherReading(models.Model):
     Stores atmospheric/environmental data from one ESP32 reading.
     Mirrors ThingSpeak Channel 1 (fields 1-8):
     field1:Temp, field2:Hum, field3:Press, field4:Rain,
-    field5:WSpd, field6:WDir, field7:Light, field8:SoilM
+    field5:WSpd, field6:WDir, field7:SolRad, field8:SoilM
     """
     station = models.ForeignKey(
         Station,
@@ -267,15 +262,17 @@ class WeatherReading(models.Model):
     )
     received_at = models.DateTimeField(auto_now_add=True)
 
-    pressure       = models.FloatField(null=True, blank=True, help_text="ESP32 key: Press")
-    altitude       = models.FloatField(null=True, blank=True, help_text="ESP32 key: Alt")
-    temperature    = models.FloatField(null=True, blank=True, help_text="ESP32 key: Temp")
-    humidity       = models.FloatField(null=True, blank=True, help_text="ESP32 key: Hum")
-    light          = models.FloatField(null=True, blank=True, help_text="ESP32 key: Light")
-    soil_moisture  = models.FloatField(null=True, blank=True, help_text="ESP32 key: SoilM")
-    rain           = models.IntegerField(null=True, blank=True, help_text="ESP32 key: Rain")
-    wind_speed     = models.FloatField(null=True, blank=True, help_text="ESP32 key: WSpd")
-    wind_direction = models.IntegerField(null=True, blank=True, help_text="ESP32 key: WDir")
+    pressure          = models.FloatField(null=True, blank=True, help_text="ESP32 key: Press")
+    temperature       = models.FloatField(null=True, blank=True, help_text="ESP32 key: Temp")
+    humidity          = models.FloatField(null=True, blank=True, help_text="ESP32 key: Hum")
+    solar_radiation_v = models.FloatField(null=True, blank=True, help_text="Solar radiation sensor voltage (V)")
+    solar_radiation   = models.FloatField(null=True, blank=True, help_text="Solar radiation (W/m²)")
+    soil_moisture_v   = models.FloatField(null=True, blank=True, help_text="Soil moisture sensor voltage (V). ESP32 key: SoilM")
+    soil_moisture     = models.FloatField(null=True, blank=True, help_text="Soil moisture (%)")
+    rain              = models.FloatField(null=True, blank=True, help_text="ESP32 key: Rain")
+    wind_speed        = models.FloatField(null=True, blank=True, help_text="ESP32 key: WSpd")
+    wind_direction_v  = models.FloatField(null=True, blank=True, help_text="Wind direction sensor voltage (V)")
+    wind_direction    = models.IntegerField(null=True, blank=True, help_text="ESP32 key: WDir")
 
     class Meta:
         ordering = ['-timestamp']
@@ -291,8 +288,8 @@ class WeatherReading(models.Model):
 class VoltageReading(models.Model):
     """
     Stores voltage rail data from one ESP32 reading.
-    Mirrors ThingSpeak Channel 2 (fields 1-5):
-    field1:V33, field2:V5, field3:VBatt, field4:VSol, field5:VDC
+    Mirrors ThingSpeak Channel 2 (fields 1-3):
+    field1:VBatt, field2:VSol, field3:BatteryTemp
     """
     station = models.ForeignKey(
         Station,
@@ -306,12 +303,10 @@ class VoltageReading(models.Model):
     timestamp   = models.DateTimeField(help_text="ESP32 key: Time")
     received_at = models.DateTimeField(auto_now_add=True)
 
-    volt_3v3   = models.FloatField(null=True, blank=True, help_text="ESP32 key: V33")
-    volt_5v    = models.FloatField(null=True, blank=True, help_text="ESP32 key: V5")
-    volt_batt  = models.FloatField(null=True, blank=True, help_text="ESP32 key: VBatt")
-    volt_solar = models.FloatField(null=True, blank=True, help_text="ESP32 key: VSol")
-    volt_dc    = models.FloatField(null=True, blank=True, help_text="ESP32 key: VDC")
-
+    volt_batt    = models.FloatField(null=True, blank=True, help_text="ESP32 key: VBatt")
+    volt_solar   = models.FloatField(null=True, blank=True, help_text="ESP32 key: VSol")
+    battery_temp = models.FloatField(null=True, blank=True, help_text="ESP32 key: Battery temperature (°C)")
+    
     class Meta:
         ordering = ['-timestamp']
         indexes = [
@@ -364,14 +359,14 @@ class BenchmarkReading(models.Model):
     location  = models.CharField(max_length=100, blank=True)
     timestamp = models.DateTimeField(db_index=True)
 
-    temperature    = models.FloatField(null=True, blank=True)
-    humidity       = models.FloatField(null=True, blank=True)
-    pressure       = models.FloatField(null=True, blank=True)
-    wind_speed     = models.FloatField(null=True, blank=True)
-    wind_direction = models.FloatField(null=True, blank=True)
-    rain           = models.FloatField(null=True, blank=True)
-    light          = models.FloatField(null=True, blank=True)
-    soil_moisture  = models.FloatField(null=True, blank=True)
+    temperature     = models.FloatField(null=True, blank=True)
+    humidity        = models.FloatField(null=True, blank=True)
+    pressure        = models.FloatField(null=True, blank=True)
+    solar_radiation = models.FloatField(null=True, blank=True, help_text="Solar radiation in W/m²")
+    soil_moisture   = models.FloatField(null=True, blank=True)
+    rain            = models.FloatField(null=True, blank=True)
+    wind_speed      = models.FloatField(null=True, blank=True)
+    wind_direction  = models.FloatField(null=True, blank=True)
 
     class Meta:
         ordering = ['-timestamp']

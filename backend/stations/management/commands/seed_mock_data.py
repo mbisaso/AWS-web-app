@@ -85,15 +85,17 @@ class Command(BaseCommand):
                 humidity = max(20, min(95, humidity))
                 pressure = 1012 + random.uniform(-2, 2)
 
-                # Light: zero at night, bell-curve peak at midday
+                # Solar Radiation: zero at night, bell-curve peak at midday (W/m²)
                 if 6 <= hour_of_day <= 18:
-                    light = max(0, 900 * math.sin((hour_of_day - 6) / 12 * math.pi))
+                    solar_rad = max(0, 950 * math.sin((hour_of_day - 6) / 12 * math.pi))
                 else:
-                    light = 0
-                light += random.uniform(0, 15)
+                    solar_rad = 0
+                solar_rad = max(0, solar_rad + random.uniform(-10, 15))
+                solar_radiation_v = round((solar_rad / 1000.0) * 2.5, 3)
 
                 wind_speed = max(0, 4 + 3 * math.sin(hour_of_day / 24 * 4 * math.pi) + random.uniform(-1.5, 1.5))
                 wind_direction = random.randint(0, 359)
+                wind_direction_v = round((wind_direction / 360.0) * 3.3, 2)
 
                 # Occasional rain events: ~5% chance per hour, more likely afternoon
                 rain_chance = 0.08 if 13 <= hour_of_day <= 18 else 0.03
@@ -104,36 +106,38 @@ class Command(BaseCommand):
                 if rain > 0:
                     soil_moisture_v += 0.3
                 soil_moisture_v = max(1.5, min(4.0, soil_moisture_v))
+                soil_moisture_pct = round(max(5.0, min(95.0, (soil_moisture_v - 1.0) / 3.0 * 100)), 1)
 
                 # Power: solar charges battery during daylight, drains slowly at night
-                volt_solar = round(max(0, (light / 900) * 1.1 + random.uniform(0, 0.05)), 2)
-                if light > 50:
+                volt_solar = round(max(0, (solar_rad / 900) * 18.0 + random.uniform(0, 0.5)), 2)
+                if solar_rad > 50:
                     battery_voltage += 0.015
                 else:
                     battery_voltage -= 0.01
                 battery_voltage = max(11.0, min(13.2, battery_voltage))
 
-                curr_solar = round(max(0, (light / 900) * 0.65 + random.uniform(0, 0.03)), 2)
-                curr_batt = round(0.15 + random.uniform(-0.02, 0.05), 2)
+                curr_solar = round(max(0, (solar_rad / 900) * 1.5 + random.uniform(0, 0.05)), 2)
+                curr_batt = round(0.35 + random.uniform(-0.02, 0.05), 2)
+                battery_temp = round(temperature + random.uniform(1.0, 4.0), 1)
 
                 readings.append(SensorReading(
                     station=station,
                     station_code=station.station_id,
                     timestamp=ts,
                     pressure=round(pressure, 2),
-                    altitude=round(1140 + random.uniform(-5, 5), 1),
                     temperature=round(temperature, 2),
                     humidity=round(humidity, 2),
-                    light=round(light, 1),
-                    soil_moisture=round(soil_moisture_v, 2),
+                    solar_radiation_v=solar_radiation_v,
+                    solar_radiation=round(solar_rad, 1),
+                    soil_moisture_v=round(soil_moisture_v, 2),
+                    soil_moisture=soil_moisture_pct,
                     rain=rain,
                     wind_speed=round(wind_speed, 2),
+                    wind_direction_v=wind_direction_v,
                     wind_direction=wind_direction,
-                    volt_3v3=round(3.3 + random.uniform(-0.05, 0.05), 2),
-                    volt_5v=round(5.0 + random.uniform(-0.1, 0.1), 2),
                     volt_batt=round(battery_voltage, 2),
                     volt_solar=volt_solar,
-                    volt_dc=round(volt_solar * 0.95, 2),
+                    battery_temp=battery_temp,
                     curr_batt=curr_batt,
                     curr_solar=curr_solar,
                 ))

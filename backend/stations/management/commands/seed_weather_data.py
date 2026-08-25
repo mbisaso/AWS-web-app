@@ -16,8 +16,8 @@ BASE_TEMP = 24.0       # °C
 BASE_HUM = 72.0        # %
 BASE_PRESS = 1013.0    # hPa
 BASE_WSPD = 8.0        # km/h
-BASE_LIGHT = 400.0     # lux (daytime peak)
-BASE_SOIL = 2.8        # V
+BASE_SOLAR = 500.0     # W/m² (daytime peak)
+BASE_SOIL_V = 2.8      # V
 
 
 def _reading_value(base, amp, noise=0.15):
@@ -40,17 +40,18 @@ def generate_reading(station: Station, dt):
     press = _clamp(BASE_PRESS + random.gauss(0, 0.8), 990, 1035)
     wspd = _clamp(BASE_WSPD + random.gauss(0, 1.5), 0, 25)
     wdir = random.randint(0, 360)
+    wdir_v = round((wdir / 360.0) * 3.3, 2)
     rain = 0
-    light = _clamp(BASE_LIGHT * (1 if is_day else 0.02) * random.uniform(0.5, 1.0), 0, 1200) if is_day else 0
-    soil = _clamp(BASE_SOIL + random.gauss(0, 0.15), 1.5, 4.0)
+    solar_rad = _clamp(BASE_SOLAR * (1 if is_day else 0.0) * random.uniform(0.6, 1.2), 0, 1200) if is_day else 0
+    solar_v = round((solar_rad / 1000.0) * 2.5, 3)
+    soil_v = _clamp(BASE_SOIL_V + random.gauss(0, 0.15), 1.5, 4.0)
+    soil_pct = _clamp((soil_v - 1.0) / 3.0 * 100, 5, 95)
 
-    v33 = _clamp(3.36 + random.gauss(0, 0.02), 3.2, 3.5)
-    v5 = _clamp(4.82 + random.gauss(0, 0.03), 4.5, 5.2)
     vbatt = _clamp(11.32 + random.gauss(0, 0.2), 10.5, 12.8)
-    vsol = _clamp(1.02 + random.gauss(0, 0.1), 0, 5.0)
-    vdc = _clamp(1.02 + random.gauss(0, 0.1), 0, 5.0)
+    vsol = _clamp((solar_rad / 900) * 18.0 + random.gauss(0, 0.5), 0, 22.0)
+    battery_temp = _clamp(temp + random.gauss(0, 1.5), 15, 45)
     cbatt = _clamp(0.43 + random.gauss(0, 0.05), 0, 1.0)
-    csol = _clamp(0.62 + random.gauss(0, 0.08), 0, 1.5)
+    csol = _clamp((solar_rad / 900) * 1.5 + random.gauss(0, 0.08), 0, 2.0)
 
     return SensorReading(
         station=station,
@@ -59,17 +60,17 @@ def generate_reading(station: Station, dt):
         temperature=temp,
         humidity=hum,
         pressure=press,
-        wind_speed=wspd,
-        wind_direction=wdir,
+        solar_radiation_v=solar_v,
+        solar_radiation=solar_rad,
+        soil_moisture_v=soil_v,
+        soil_moisture=soil_pct,
         rain=rain,
-        light=light,
-        soil_moisture=soil,
-        altitude=None,
-        volt_3v3=v33,
-        volt_5v=v5,
+        wind_speed=wspd,
+        wind_direction_v=wdir_v,
+        wind_direction=wdir,
         volt_batt=vbatt,
         volt_solar=vsol,
-        volt_dc=vdc,
+        battery_temp=battery_temp,
         curr_batt=cbatt,
         curr_solar=csol,
     )

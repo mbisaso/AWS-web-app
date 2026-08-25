@@ -5,9 +5,9 @@ import { fetchBulkHistory } from '../api/stations'
 
 const METRIC_KEYS: AnalysisMetricKey[] = [
   'temperature', 'humidity', 'pressure', 'wind_speed',
-  'wind_direction', 'rain', 'light', 'soil_moisture',
+  'wind_direction', 'rain', 'solar_radiation', 'soil_moisture',
   'volt_solar', 'curr_solar', 'pv',
-  'volt_3v3', 'volt_5v', 'volt_batt', 'volt_dc', 'curr_batt',
+  'volt_batt', 'curr_batt', 'battery_temp',
 ]
 
 function computeStats(values: number[]): StatsResult {

@@ -58,19 +58,18 @@ Use this if the ESP32 or a proxy already parsed the string into fields.
   "station_id": "AWS-UG-001",
   "timestamp": "2026-06-24T12:47:00",
   "pressure": 1013.2,
-  "altitude": 1137.0,
   "temperature": 24.5,
   "humidity": 78.2,
-  "light": 45230.0,
-  "soil_moisture": 2.85,
+  "solar_radiation_v": 1.35,
+  "solar_radiation": 540.0,
+  "soil_moisture_v": 2.85,
+  "soil_moisture": 61.5,
   "rain": 0,
   "wind_speed": 3.6,
+  "wind_direction_v": 1.65,
   "wind_direction": 180,
-  "volt_3v3": 3.32,
-  "volt_5v": 4.96,
   "volt_batt": 12.4,
   "volt_solar": 18.2,
-  "volt_dc": 5.1,
   "curr_batt": 0.43,
   "curr_solar": 1.24
 }
@@ -84,13 +83,15 @@ All fields except `station_id` and `timestamp` are optional — missing or `null
 | `temperature`                                                   | float           | °C                                                  |
 | `humidity`                                                      | float           | %                                                   |
 | `pressure`                                                      | float           | hPa                                                 |
-| `altitude`                                                      | float           | metres                                              |
-| `light`                                                         | float           | lux                                                 |
-| `soil_moisture`                                                 | float           | voltage (raw ADC)                                   |
-| `rain`                                                          | integer         | tip count                                           |
+| `solar_radiation_v`                                             | float           | volts (raw sensor mapping)                          |
+| `solar_radiation`                                               | float           | W/m²                                                |
+| `soil_moisture_v`                                               | float           | volts (raw sensor mapping)                          |
+| `soil_moisture`                                                 | float           | %                                                   |
+| `rain`                                                          | integer / float | tip count / mm                                      |
 | `wind_speed`                                                    | float           | km/h                                                |
+| `wind_direction_v`                                              | float           | volts (raw sensor mapping)                          |
 | `wind_direction`                                                | integer         | degrees (0–359)                                     |
-| `volt_3v3` / `volt_5v` / `volt_batt` / `volt_solar` / `volt_dc` | float           | volts                                               |
+| `volt_batt` / `volt_solar`                                      | float           | volts                                               |
 | `curr_batt` / `curr_solar`                                      | float           | amps                                                |
 
 ---
@@ -394,21 +395,17 @@ Returns time-series readings for one station for use in charts
     "readings": [
       {
         "timestamp": "2026-06-24T10:17:00Z",
-        "volt_3v3": 3.31,
-        "volt_5v": 4.94,
         "volt_batt": 11.9,
         "volt_solar": 12.4,
-        "volt_dc": 5.08,
+        "battery_temp": 30.5,
         "curr_batt": 0.38,
         "curr_solar": 0.52
       },
       {
         "timestamp": "2026-06-24T12:47:00Z",
-        "volt_3v3": 3.32,
-        "volt_5v": 4.96,
         "volt_batt": 12.4,
         "volt_solar": 18.2,
-        "volt_dc": 5.1,
+        "battery_temp": 32.1,
         "curr_batt": 0.43,
         "curr_solar": 1.24
       }
@@ -434,7 +431,7 @@ Exports historical readings as JSON or a downloadable CSV file. Intended for ML 
 | `?station_id=` | _(none)_ | Filter to one station. Omit to export all stations                                                 |
 | `?hours=`      | `168`    | How many hours back (default is 7 days)                                                            |
 | `?output=`     | `json`   | `json` returns the standard envelope; `csv` triggers a file download                               |
-| `?fields=`     | `all`    | `all` — all 21 fields; `sensor` — timestamp + weather only; `power` — timestamp + power rails only |
+| `?fields=`     | `all`    | `all` — all fields; `sensor` — timestamp + weather only; `power` — timestamp + power rails only     |
 
 **Success response with `?output=json&fields=all`** — HTTP 200:
 
@@ -449,19 +446,19 @@ Exports historical readings as JSON or a downloadable CSV file. Intended for ML 
       "timestamp": "2026-06-24T11:32:00Z",
       "received_at": "2026-06-24T11:32:04.102Z",
       "pressure": 1012.9,
-      "altitude": 1137.0,
       "temperature": 23.2,
       "humidity": 79.0,
-      "light": 38100.0,
-      "soil_moisture": 2.88,
+      "solar_radiation_v": 1.25,
+      "solar_radiation": 500.0,
+      "soil_moisture_v": 2.88,
+      "soil_moisture": 62.0,
       "rain": 0,
       "wind_speed": 2.8,
+      "wind_direction_v": 1.45,
       "wind_direction": 160,
-      "volt_3v3": 3.31,
-      "volt_5v": 4.94,
       "volt_batt": 11.9,
       "volt_solar": 16.8,
-      "volt_dc": 5.09,
+      "battery_temp": 31.0,
       "curr_batt": 0.4,
       "curr_solar": 1.1
     }

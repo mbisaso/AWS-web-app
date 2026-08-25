@@ -31,10 +31,7 @@ params = {
 responses = openmeteo.weather_api(url, params=params)
 response = responses[0]
 
-# 4. Extract location metadata (Altitude)
-altitude = response.Elevation()
-
-# 5. Process hourly data
+# 4. Process hourly data
 hourly = response.Hourly()
 hourly_data = {
     "timestamp": pd.date_range(
@@ -45,18 +42,17 @@ hourly_data = {
     )
 }
 
-# 6. Map Open-Meteo data directly to your requested fields
+# 5. Map Open-Meteo data directly to your requested fields
 hourly_data["pressure"] = hourly.Variables(3).ValuesAsNumpy()      # surface_pressure
-hourly_data["altitude"] = altitude                                # Static altitude for location
 hourly_data["temperature"] = hourly.Variables(0).ValuesAsNumpy()   # temperature_2m
 hourly_data["humidity"] = hourly.Variables(1).ValuesAsNumpy()      # relative_humidity_2m
-hourly_data["light"] = hourly.Variables(6).ValuesAsNumpy()         # shortwave_radiation
+hourly_data["solar_radiation"] = hourly.Variables(6).ValuesAsNumpy() # shortwave_radiation
 hourly_data["soil_moisture"] = hourly.Variables(7).ValuesAsNumpy() # soil_moisture_0_to_7cm
 hourly_data["rain"] = hourly.Variables(2).ValuesAsNumpy()          # rain
 hourly_data["wind_speed"] = hourly.Variables(4).ValuesAsNumpy()    # wind_speed_10m
 hourly_data["wind_direction"] = hourly.Variables(5).ValuesAsNumpy()# wind_direction_10m
 
-# 7. Convert to DataFrame and preview
+# 6. Convert to DataFrame and preview
 df = pd.DataFrame(data = hourly_data)
 
 # Localize timestamp to Uganda time and remove timezone offset string for clean ML formatting

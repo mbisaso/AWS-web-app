@@ -25,11 +25,9 @@ export async function fetchThingSpeakPower(): Promise<PowerChart[]> {
   return json.feeds
     .map((f) => ({
       timestamp: f.created_at,
-      volt_3v3: f.field1 !== null && f.field1 !== '' ? parseFloat(f.field1) : null,
-      volt_5v: f.field2 !== null && f.field2 !== '' ? parseFloat(f.field2) : null,
-      volt_batt: f.field3 !== null && f.field3 !== '' ? parseFloat(f.field3) : null,
-      volt_solar: f.field4 !== null && f.field4 !== '' ? parseFloat(f.field4) : null,
-      volt_dc: f.field5 !== null && f.field5 !== '' ? parseFloat(f.field5) : null,
+      volt_batt: f.field1 !== null && f.field1 !== '' ? parseFloat(f.field1) : (f.field3 !== null && f.field3 !== '' ? parseFloat(f.field3) : null),
+      volt_solar: f.field2 !== null && f.field2 !== '' ? parseFloat(f.field2) : (f.field4 !== null && f.field4 !== '' ? parseFloat(f.field4) : null),
+      battery_temp: f.field3 !== null && f.field3 !== '' ? parseFloat(f.field3) : null,
       curr_batt: null,
       curr_solar: null,
     }))
