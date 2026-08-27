@@ -47,20 +47,43 @@ function VoltageRange({ v }: { v: number }) {
   )
 }
 
+function BatteryTempRange({ t }: { t: number }) {
+  const healthy = t >= 5 && t <= 45
+  const color = healthy ? 'text-emerald' : t > 45 ? 'text-rose' : 'text-amber'
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`text-xs font-medium ${color}`}>
+        {healthy ? 'Normal temp' : t > 45 ? 'High temp' : 'Low temp'}
+      </span>
+      <div className="flex h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
+        <div
+          className="h-full rounded-full transition-all"
+          style={{
+            width: `${Math.min(100, Math.max(0, (t / 60) * 100))}%`,
+            backgroundColor: healthy ? '#22C55E' : t > 45 ? '#EF4444' : '#F59E0B',
+          }}
+          aria-hidden="true"
+        />
+      </div>
+    </div>
+  )
+}
+
 export function PowerStatusCard({ reading, isLoading }: PowerStatusCardProps) {
   if (isLoading) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
       </div>
     )
   }
 
   if (!reading) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <EmptyCard label="Battery Voltage" />
         <EmptyCard label="Solar Voltage" />
+        <EmptyCard label="Battery Temp" />
         <EmptyCard label="Battery Current" />
         <EmptyCard label="Solar Current" />
       </div>
@@ -68,7 +91,7 @@ export function PowerStatusCard({ reading, isLoading }: PowerStatusCardProps) {
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
 
       {/* Battery voltage */}
       <div className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
@@ -100,6 +123,20 @@ export function PowerStatusCard({ reading, isLoading }: PowerStatusCardProps) {
             <span className={`inline-block h-1.5 w-1.5 rounded-full ${reading.volt_solar > 1 ? 'bg-emerald-500' : 'bg-storm/30'}`} aria-hidden="true" />
             {reading.volt_solar > 1 ? 'Active' : 'Inactive'}
           </span>
+        )}
+      </div>
+
+      {/* Battery temperature */}
+      <div className="relative rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+        <span className="absolute top-0 left-0 h-1 w-full rounded-t-2xl bg-rose-500" aria-hidden="true" />
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">Battery Temp</p>
+        <p className="mt-2 text-3xl font-bold tracking-tight text-midnight font-display">
+          {reading.battery_temp !== null
+            ? <>{reading.battery_temp}<span className="ml-0.5 text-sm font-medium text-storm/50">°C</span></>
+            : <span className="text-storm/30 text-xl">—</span>}
+        </p>
+        {reading.battery_temp !== null && (
+          <div className="mt-3"><BatteryTempRange t={reading.battery_temp} /></div>
         )}
       </div>
 

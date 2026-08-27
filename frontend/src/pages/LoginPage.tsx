@@ -20,8 +20,14 @@ export function LoginPage() {
     try {
       await login(email, password)
       navigate('/dashboard')
-    } catch {
-      setError('Invalid email or password.')
+    } catch (err: any) {
+      if (err?.response?.data?.error) {
+        setError(typeof err.response.data.error === 'string' ? err.response.data.error : 'Invalid email or password.')
+      } else if (!err?.response) {
+        setError('Cannot connect to the server. Please ensure the backend is running and reachable.')
+      } else {
+        setError('Invalid email or password.')
+      }
     } finally {
       setIsSubmitting(false)
     }

@@ -1,9 +1,11 @@
 import axios from "axios";
 
-export const API_BASE_URL =
+const rawBaseUrl: string =
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE_URL ||
-  "https://api.wimea-ict.net"; // When deploying replace with https://api.wimea-ict.net
+  "https://api.wimea-ict.net";
+
+export const API_BASE_URL = rawBaseUrl.trim().replace(/\/+$/, "");
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

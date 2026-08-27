@@ -180,8 +180,8 @@ export const ANALYSIS_METRIC_CONFIG: Record<AnalysisMetricKey, { label: string; 
   ...SENSOR_METRIC_CONFIG,
   ...POWER_METRIC_CONFIG,
   volt_solar: { label: 'Vpv (Solar Voltage)', unit: 'V', color: '#F59E0B' },
-  curr_solar: { label: 'Iv (Solar Current)',  unit: 'A', color: '#EAB308' },
-  pv:         { label: 'Pv (Solar Power)',    unit: 'W', color: '#EF4444' },
+  curr_solar: { label: 'Ipv(Solar current)',  unit: 'A', color: '#EAB308' },
+  pv:         { label: 'Ppv(Solar Power)',    unit: 'W', color: '#EF4444' },
 }
 
 export interface TaggedSensorReading extends SensorReadingChart {
