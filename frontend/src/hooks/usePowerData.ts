@@ -9,10 +9,15 @@ export interface UsePowerDataResult {
   retry: () => void
 }
 
-export function usePowerData(params: { stationId: string | null; hours: number }): UsePowerDataResult {
+export function usePowerData(params: {
+  stationId: string | null
+  hours?: number
+  dateFrom?: string
+  dateTo?: string
+}): UsePowerDataResult {
   const query = useQuery({
-    queryKey: ['power', params.stationId, params.hours],
-    queryFn: () => fetchPowerHistory(params.stationId!, params.hours),
+    queryKey: ['power', params.stationId, params.dateFrom, params.dateTo, params.hours],
+    queryFn: () => fetchPowerHistory(params.stationId!, params.hours, 5000, params.dateFrom, params.dateTo),
     enabled: !!params.stationId,
     refetchInterval: 30000,
   })

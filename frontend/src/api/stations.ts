@@ -34,12 +34,19 @@ interface PowerHistoryData {
 
 export async function fetchPowerHistory(
   stationId: string,
-  hours: number,
-  limit = 200,
+  hours?: number,
+  limit = 5000,
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<PowerChart[]> {
+  const params: Record<string, string | number> = { type: 'power', limit }
+  if (dateFrom) params.date_from = dateFrom
+  if (dateTo) params.date_to = dateTo
+  if (hours && !dateFrom) params.hours = hours
+
   const res = await apiClient.get<ApiEnvelope<PowerHistoryData>>(
     `/api/stations/${stationId}/history/`,
-    { params: { type: 'power', hours, limit } },
+    { params },
   )
   return res.data.data.readings
 }
@@ -53,12 +60,19 @@ interface SensorHistoryData {
 
 export async function fetchSensorHistory(
   stationId: string,
-  hours: number,
-  limit = 200,
+  hours?: number,
+  limit = 5000,
+  dateFrom?: string,
+  dateTo?: string,
 ): Promise<SensorReadingChart[]> {
+  const params: Record<string, string | number> = { type: 'sensor', limit }
+  if (dateFrom) params.date_from = dateFrom
+  if (dateTo) params.date_to = dateTo
+  if (hours && !dateFrom) params.hours = hours
+
   const res = await apiClient.get<ApiEnvelope<SensorHistoryData>>(
     `/api/stations/${stationId}/history/`,
-    { params: { type: 'sensor', hours, limit } },
+    { params },
   )
   return res.data.data.readings
 }

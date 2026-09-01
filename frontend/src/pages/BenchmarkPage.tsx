@@ -9,6 +9,7 @@ import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { StationSensorSelector } from '../components/weatherData/StationSensorSelector'
 
 const SENSOR_METRICS = Object.keys(SENSOR_METRIC_CONFIG) as SensorMetricKey[]
+const BENCHMARK_METRICS = SENSOR_METRICS.filter((k) => k !== 'atmospheric')
 const BENCHMARK_COLOR = '#94A3B8'
 
 function daysAgo(days: number): string {
@@ -609,7 +610,7 @@ export function BenchmarkPage() {
   }, [urlStation]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [metricKey, setMetricKey] = useState<SensorMetricKey>(
-    urlMetric && SENSOR_METRICS.includes(urlMetric) ? urlMetric : 'temperature',
+    urlMetric && (BENCHMARK_METRICS as SensorMetricKey[]).includes(urlMetric) ? urlMetric : 'temperature',
   )
   const [dateFrom, setDateFrom] = useState(urlDateFrom ?? daysAgo(7))
   const [dateTo, setDateTo] = useState(urlDateTo ?? today())
@@ -685,6 +686,7 @@ export function BenchmarkPage() {
             dateFrom={dateFrom}
             dateTo={dateTo}
             onDateChange={handleDateChange}
+            metrics={BENCHMARK_METRICS}
           />
         </section>
 

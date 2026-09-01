@@ -2,20 +2,37 @@ import { useMemo, useState } from 'react'
 import type { PowerChart, PowerMetricKey } from '../../types'
 import { POWER_METRIC_CONFIG } from '../../types'
 
-type SortKey = 'timestamp' | 'value'
+type SortKey = 'timestamp' | 'value' | 'volt_batt' | 'curr_batt' | 'battery_temp' | 'volt_solar' | 'curr_solar'
 
 interface PowerReadingsTableProps {
   readings: PowerChart[]
   metricKey: PowerMetricKey
+  stationName?: string
   isLoading?: boolean
 }
 
-export function PowerReadingsTable({ readings, metricKey, isLoading }: PowerReadingsTableProps) {
+function toLocalDate(ts: string): string {
+  const d = new Date(ts)
+  return isNaN(d.getTime())
+    ? ts
+    : d.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+}
+
+export function PowerReadingsTable({ readings, metricKey, stationName, isLoading }: PowerReadingsTableProps) {
   const cfg = POWER_METRIC_CONFIG[metricKey]
   const [sortKey, setSortKey] = useState<SortKey>('timestamp')
   const [sortAsc, setSortAsc] = useState(false)
   const [page, setPage] = useState(0)
   const PER_PAGE = 25
+
+  const isBatteryDynamics = metricKey === 'battery_dynamics'
+  const isSolarDynamics = metricKey === 'solar_dynamics'
 
   const sorted = useMemo(() => {
     const copy = [...readings]
@@ -25,9 +42,29 @@ export function PowerReadingsTable({ readings, metricKey, isLoading }: PowerRead
           ? new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
           : new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       }
+      if (sortKey === 'volt_batt') {
+        const av = a.volt_batt ?? -Infinity, bv = b.volt_batt ?? -Infinity
+        return sortAsc ? av - bv : bv - av
+      }
+      if (sortKey === 'curr_batt') {
+        const av = a.curr_batt ?? -Infinity, bv = b.curr_batt ?? -Infinity
+        return sortAsc ? av - bv : bv - av
+      }
+      if (sortKey === 'battery_temp') {
+        const av = a.battery_temp ?? -Infinity, bv = b.battery_temp ?? -Infinity
+        return sortAsc ? av - bv : bv - av
+      }
+      if (sortKey === 'volt_solar') {
+        const av = a.volt_solar ?? -Infinity, bv = b.volt_solar ?? -Infinity
+        return sortAsc ? av - bv : bv - av
+      }
+      if (sortKey === 'curr_solar') {
+        const av = a.curr_solar ?? -Infinity, bv = b.curr_solar ?? -Infinity
+        return sortAsc ? av - bv : bv - av
+      }
       const av = a[metricKey] ?? -Infinity
       const bv = b[metricKey] ?? -Infinity
-      return sortAsc ? av - bv : bv - av
+      return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number)
     })
     return copy
   }, [readings, sortKey, sortAsc, metricKey])
@@ -37,13 +74,24 @@ export function PowerReadingsTable({ readings, metricKey, isLoading }: PowerRead
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortAsc((p) => !p)
-    else { setSortKey(key); setSortAsc(key === 'value') }
+    else { setSortKey(key); setSortAsc(key === 'timestamp' ? false : true) }
     setPage(0)
   }
 
   function exportCSV() {
-    const header = `Timestamp,${cfg.label} (${cfg.unit})`
-    const rows = sorted.map((r) => `${r.timestamp},${r[metricKey] ?? ''}`)
+    let header = `Timestamp,${cfg.label} (${cfg.unit})`
+    let rows: string[] = []
+
+    if (isBatteryDynamics) {
+      header = 'Timestamp,Battery Voltage (V),Battery Current (A),Battery Temp (°C)'
+      rows = sorted.map((r) => `${r.timestamp},${r.volt_batt ?? ''},${r.curr_batt ?? ''},${r.battery_temp ?? ''}`)
+    } else if (isSolarDynamics) {
+      header = 'Timestamp,Solar Voltage (V),Solar Current (A)'
+      rows = sorted.map((r) => `${r.timestamp},${r.volt_solar ?? ''},${r.curr_solar ?? ''}`)
+    } else {
+      rows = sorted.map((r) => `${r.timestamp},${r[metricKey] ?? ''}`)
+    }
+
     const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -52,6 +100,10 @@ export function PowerReadingsTable({ readings, metricKey, isLoading }: PowerRead
     a.click()
     URL.revokeObjectURL(url)
   }
+
+  const tableTitle = stationName
+    ? `${cfg.label} readings of ${stationName}`
+    : `${cfg.label} — Readings`
 
   if (isLoading) {
     return (
@@ -70,7 +122,7 @@ export function PowerReadingsTable({ readings, metricKey, isLoading }: PowerRead
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-midnight font-display">{cfg.label} — Readings</h3>
+          <h3 className="text-sm font-semibold text-midnight font-display">{tableTitle}</h3>
         </div>
         <div className="flex flex-col items-center py-12">
           <svg className="mb-3 h-10 w-10 text-storm/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -88,9 +140,9 @@ export function PowerReadingsTable({ readings, metricKey, isLoading }: PowerRead
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-midnight font-display">
-          {cfg.label} — Readings
+          {tableTitle}
           <span className="ml-1.5 text-xs font-normal text-storm/40">({readings.length})</span>
         </h3>
         <button
@@ -108,36 +160,130 @@ export function PowerReadingsTable({ readings, metricKey, isLoading }: PowerRead
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs" role="table">
-          <colgroup>
-            <col className="w-[45%]" />
-            <col className="w-[35%]" />
-            <col className="w-[20%]" />
-          </colgroup>
+        <table className="w-full text-left" aria-label={`${cfg.label} readings`}>
           <thead>
-            <tr className="border-b border-slate-100">
-              <ThSortable label="Timestamp" col="timestamp" current={sortKey} asc={sortAsc} onToggle={toggleSort} />
-              <ThSortable label={cfg.label} col="value" current={sortKey} asc={sortAsc} onToggle={toggleSort} />
-              <Th>Unit</Th>
+            <tr className="border-b border-slate-100 text-[10px] font-semibold uppercase tracking-wider text-storm/40">
+              <th scope="col" className="pb-2.5 pl-5 pr-2">
+                <button
+                  type="button"
+                  onClick={() => toggleSort('timestamp')}
+                  className="inline-flex cursor-pointer items-center gap-1 hover:text-storm transition-colors"
+                >
+                  Timestamp
+                  {sortKey === 'timestamp' && <span>{sortAsc ? '▲' : '▼'}</span>}
+                </button>
+              </th>
+
+              {isBatteryDynamics ? (
+                <>
+                  <th scope="col" className="pb-2.5 px-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('volt_batt')}
+                      className="inline-flex cursor-pointer items-center gap-1 hover:text-storm transition-colors"
+                    >
+                      Battery Voltage (V)
+                      {sortKey === 'volt_batt' && <span>{sortAsc ? '▲' : '▼'}</span>}
+                    </button>
+                  </th>
+                  <th scope="col" className="pb-2.5 px-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('curr_batt')}
+                      className="inline-flex cursor-pointer items-center gap-1 hover:text-storm transition-colors"
+                    >
+                      Battery Current (A)
+                      {sortKey === 'curr_batt' && <span>{sortAsc ? '▲' : '▼'}</span>}
+                    </button>
+                  </th>
+                  <th scope="col" className="pb-2.5 pr-5 px-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('battery_temp')}
+                      className="inline-flex cursor-pointer items-center gap-1 hover:text-storm transition-colors ml-auto"
+                    >
+                      Battery Temp (°C)
+                      {sortKey === 'battery_temp' && <span>{sortAsc ? '▲' : '▼'}</span>}
+                    </button>
+                  </th>
+                </>
+              ) : isSolarDynamics ? (
+                <>
+                  <th scope="col" className="pb-2.5 px-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('volt_solar')}
+                      className="inline-flex cursor-pointer items-center gap-1 hover:text-storm transition-colors"
+                    >
+                      Solar Voltage (V)
+                      {sortKey === 'volt_solar' && <span>{sortAsc ? '▲' : '▼'}</span>}
+                    </button>
+                  </th>
+                  <th scope="col" className="pb-2.5 pr-5 px-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('curr_solar')}
+                      className="inline-flex cursor-pointer items-center gap-1 hover:text-storm transition-colors ml-auto"
+                    >
+                      Solar Current (A)
+                      {sortKey === 'curr_solar' && <span>{sortAsc ? '▲' : '▼'}</span>}
+                    </button>
+                  </th>
+                </>
+              ) : (
+                <th scope="col" className="pb-2.5 pr-5 text-right">
+                  <button
+                    type="button"
+                    onClick={() => toggleSort('value')}
+                    className="inline-flex cursor-pointer items-center gap-1 hover:text-storm transition-colors ml-auto"
+                  >
+                    {cfg.label} ({cfg.unit})
+                    {sortKey === 'value' && <span>{sortAsc ? '▲' : '▼'}</span>}
+                  </button>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
             {paged.map((r, idx) => {
+              if (isBatteryDynamics) {
+                return (
+                  <tr key={r.timestamp + idx} className="border-b border-slate-50 text-sm transition-colors hover:bg-slate-50/50">
+                    <td className="py-3 pl-5 pr-2 text-xs text-storm/70">{toLocalDate(r.timestamp)}</td>
+                    <td className="px-2 py-3 text-xs font-semibold tabular-nums text-midnight font-display">
+                      {r.volt_batt != null ? `${r.volt_batt} V` : <span className="text-storm/30">—</span>}
+                    </td>
+                    <td className="px-2 py-3 text-xs font-semibold tabular-nums text-midnight font-display">
+                      {r.curr_batt != null ? `${r.curr_batt} A` : <span className="text-storm/30">—</span>}
+                    </td>
+                    <td className="px-2 py-3 pr-5 text-right text-xs font-semibold tabular-nums text-midnight font-display">
+                      {r.battery_temp != null ? `${r.battery_temp} °C` : <span className="text-storm/30">—</span>}
+                    </td>
+                  </tr>
+                )
+              }
+
+              if (isSolarDynamics) {
+                return (
+                  <tr key={r.timestamp + idx} className="border-b border-slate-50 text-sm transition-colors hover:bg-slate-50/50">
+                    <td className="py-3 pl-5 pr-2 text-xs text-storm/70">{toLocalDate(r.timestamp)}</td>
+                    <td className="px-2 py-3 text-xs font-semibold tabular-nums text-midnight font-display">
+                      {r.volt_solar != null ? `${r.volt_solar} V` : <span className="text-storm/30">—</span>}
+                    </td>
+                    <td className="px-2 py-3 pr-5 text-right text-xs font-semibold tabular-nums text-midnight font-display">
+                      {r.curr_solar != null ? `${r.curr_solar} A` : <span className="text-storm/30">—</span>}
+                    </td>
+                  </tr>
+                )
+              }
+
               const val = r[metricKey]
               return (
-                <tr
-                  key={r.timestamp + idx}
-                  className="border-b border-slate-50 transition-colors hover:bg-slate-50/50"
-                >
-                  <td className="py-2.5 pr-3 font-medium text-midnight tabular-nums">
-                    {new Date(r.timestamp).toLocaleString(undefined, {
-                      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-                    })}
+                <tr key={r.timestamp + idx} className="border-b border-slate-50 text-sm transition-colors hover:bg-slate-50/50">
+                  <td className="py-3 pl-5 pr-2 text-xs text-storm/70">{toLocalDate(r.timestamp)}</td>
+                  <td className="py-3 pr-5 text-right text-xs font-semibold tabular-nums text-midnight font-display">
+                    {val != null ? `${val} ${cfg.unit}` : <span className="text-storm/30">—</span>}
                   </td>
-                  <td className="py-2.5 pr-3 font-semibold tabular-nums text-midnight">
-                    {val ?? <span className="text-storm/30">—</span>}
-                  </td>
-                  <td className="py-2.5 pr-3 text-storm/40">{cfg.unit}</td>
                 </tr>
               )
             })}
@@ -145,61 +291,29 @@ export function PowerReadingsTable({ readings, metricKey, isLoading }: PowerRead
         </table>
       </div>
 
-      <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-        <p className="text-[10px] text-storm/40">Page {page + 1} of {totalPages}</p>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            disabled={page === 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-storm/60 transition-colors hover:bg-slate-50 hover:text-storm disabled:cursor-not-allowed disabled:opacity-30 focus:outline-none focus:ring-2 focus:ring-sky-soft"
-          >
-            Prev
-          </button>
-          <button
-            type="button"
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-storm/60 transition-colors hover:bg-slate-50 hover:text-storm disabled:cursor-not-allowed disabled:opacity-30 focus:outline-none focus:ring-2 focus:ring-sky-soft"
-          >
-            Next
-          </button>
+      {totalPages > 1 && (
+        <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-storm/50">
+          <span>Page {page + 1} of {totalPages}</span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+              className="cursor-pointer rounded-lg border border-slate-200 px-2.5 py-1 transition-colors hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => p + 1)}
+              className="cursor-pointer rounded-lg border border-slate-200 px-2.5 py-1 transition-colors hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
-  )
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th className="py-2.5 pr-3 text-left text-[10px] font-semibold uppercase tracking-wider text-storm/40">
-      {children}
-    </th>
-  )
-}
-
-function ThSortable({
-  label, col, current, asc, onToggle,
-}: {
-  label: string
-  col: SortKey
-  current: SortKey
-  asc: boolean
-  onToggle: (key: SortKey) => void
-}) {
-  const isActive = current === col
-  return (
-    <th className="py-2.5 pr-3 text-left text-[10px] font-semibold uppercase tracking-wider text-storm/40">
-      <button
-        type="button"
-        onClick={() => onToggle(col)}
-        className={`inline-flex cursor-pointer items-center transition-colors hover:text-midnight focus:outline-none focus:ring-2 focus:ring-sky-soft rounded-sm ${isActive ? 'text-midnight' : ''}`}
-      >
-        {label}
-        <span className="ml-1 text-storm/20" aria-hidden="true">
-          {isActive ? (asc ? '↑' : '↓') : '↕'}
-        </span>
-      </button>
-    </th>
   )
 }

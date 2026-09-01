@@ -5,7 +5,7 @@ import logging
 import math
 import os
 
-from django.db import models
+from django.db import models, transaction
 from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
@@ -26,7 +26,11 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 logger = logging.getLogger(__name__)
 
-from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading, SimCard
+from .models import (
+    Station, StationStatus, SensorReading, WeatherReading,
+    VoltageReading, CurrentReading, BenchmarkReading, SimCard,
+    WeatherMinute
+)
 from .ml_service import predict_station_window
 from .serializers import (
     SensorReadingSerializer,
@@ -481,16 +485,17 @@ def dashboard_overview(request):
 def bulk_history(request):
     """
     Fetch history for multiple stations at once.
-    Expects ?station_ids=AWS-001,AWS-002&hours=24&limit=5000
+    Expects ?station_ids=AWS-001,AWS-002&hours=24&limit=5000 or ?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD
     """
     station_ids_str = request.query_params.get('station_ids', '')
     if not station_ids_str:
         return api_response(error='station_ids is required', status_code=400)
     
     station_ids = [s.strip() for s in station_ids_str.split(',') if s.strip()]
-    hours = int(request.query_params.get('hours', 24))
+    hours = int(request.query_params.get('hours')) if request.query_params.get('hours') else None
     limit = int(request.query_params.get('limit', 5000))
-    since = timezone.now() - datetime.timedelta(hours=hours)
+    start_str = request.query_params.get('start_date') or request.query_params.get('date_from') or request.query_params.get('from')
+    end_str   = request.query_params.get('end_date') or request.query_params.get('date_to') or request.query_params.get('to')
 
     codes = set(station_ids)
     numeric_ids = []
@@ -505,19 +510,27 @@ def bulk_history(request):
     if numeric_ids:
         query |= models.Q(station__id__in=numeric_ids)
 
-    readings = SensorReading.objects.filter(
-        query,
-        timestamp__gte=since
-    ).order_by('-timestamp')[:limit]
+    qs = SensorReading.objects.filter(query)
 
-    if not readings.exists() and hours > 0:
-        readings = SensorReading.objects.filter(query).order_by('-timestamp')[:limit]
+    if start_str and end_str:
+        try:
+            s_d = datetime.date.fromisoformat(start_str[:10])
+            s_dt = timezone.make_aware(datetime.datetime.combine(s_d, datetime.time.min)) if timezone.is_naive(datetime.datetime.combine(s_d, datetime.time.min)) else datetime.datetime.combine(s_d, datetime.time.min)
+            e_d = datetime.date.fromisoformat(end_str[:10])
+            e_dt = timezone.make_aware(datetime.datetime.combine(e_d, datetime.time.max)) if timezone.is_naive(datetime.datetime.combine(e_d, datetime.time.max)) else datetime.datetime.combine(e_d, datetime.time.max)
+            qs = qs.filter(timestamp__gte=s_dt, timestamp__lte=e_dt)
+        except Exception:
+            if hours:
+                since = timezone.now() - datetime.timedelta(hours=hours)
+                qs = qs.filter(timestamp__gte=since)
+    elif hours:
+        since = timezone.now() - datetime.timedelta(hours=hours)
+        qs = qs.filter(timestamp__gte=since)
 
-    # Reverse to chronological
+    readings = qs.order_by('-timestamp')[:limit]
     readings = list(readings)[::-1]
 
     serializer = SensorReadingSerializer(readings, many=True)
-    
     return api_response(data={
         'hours': hours,
         'count': len(readings),
@@ -527,10 +540,11 @@ def bulk_history(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def history(request, station_id):
-    hours      = int(request.query_params.get('hours', 24))
-    limit      = int(request.query_params.get('limit', 200))
+    hours      = int(request.query_params.get('hours')) if request.query_params.get('hours') else None
+    limit      = int(request.query_params.get('limit', 5000))
     chart_type = request.query_params.get('type', 'sensor')
-    since      = timezone.now() - datetime.timedelta(hours=hours)
+    start_str  = request.query_params.get('start_date') or request.query_params.get('date_from') or request.query_params.get('from')
+    end_str    = request.query_params.get('end_date') or request.query_params.get('date_to') or request.query_params.get('to')
 
     # Resolve station_id if numeric ID (e.g. 1 -> "AWS-001")
     code = station_id
@@ -543,14 +557,24 @@ def history(request, station_id):
     if str(station_id).isdigit():
         query |= models.Q(station__id=int(station_id))
 
-    readings = SensorReading.objects.filter(
-        query,
-        timestamp__gte=since
-    ).order_by('-timestamp')[:limit]
+    qs = SensorReading.objects.filter(query)
 
-    # Fallback: if no readings found in timeframe, fetch most recent readings for this station
-    if not readings.exists() and hours > 0:
-        readings = SensorReading.objects.filter(query).order_by('-timestamp')[:limit]
+    if start_str and end_str:
+        try:
+            s_d = datetime.date.fromisoformat(start_str[:10])
+            s_dt = timezone.make_aware(datetime.datetime.combine(s_d, datetime.time.min)) if timezone.is_naive(datetime.datetime.combine(s_d, datetime.time.min)) else datetime.datetime.combine(s_d, datetime.time.min)
+            e_d = datetime.date.fromisoformat(end_str[:10])
+            e_dt = timezone.make_aware(datetime.datetime.combine(e_d, datetime.time.max)) if timezone.is_naive(datetime.datetime.combine(e_d, datetime.time.max)) else datetime.datetime.combine(e_d, datetime.time.max)
+            qs = qs.filter(timestamp__gte=s_dt, timestamp__lte=e_dt)
+        except Exception:
+            if hours:
+                since = timezone.now() - datetime.timedelta(hours=hours)
+                qs = qs.filter(timestamp__gte=since)
+    elif hours:
+        since = timezone.now() - datetime.timedelta(hours=hours)
+        qs = qs.filter(timestamp__gte=since)
+
+    readings = qs.order_by('-timestamp')[:limit]
 
     # Reverse them back to chronological order for the charts
     readings = list(readings)[::-1]
@@ -658,39 +682,67 @@ def ingest_weather(request):
     { "station_id": "AWS-UG-001", "timestamp": "...", "pressure": .., ... }
     """
     data       = request.data
-    station_id = data.get('station_id') or data.get('station_code') or 'AWS-UG-001'
+    station_id = data.get('station_id') or data.get('station_code', 'AWS-UG-001')
     station    = get_or_none(station_id)
 
     timestamp = parse_datetime(str(data.get('timestamp', '')))
     if timestamp is None:
         return api_response(error='timestamp is required and must be ISO format', status_code=400)
 
+    wind_pulses = data.get('wind_pulses', [])
+    rain_tips   = data.get('rain_tips', [])
+    if len(wind_pulses) != len(rain_tips):
+        return api_response(error='wind_pulses and rain_tips arrays must be the same length', status_code=400)
+
+    bucket_s   = data.get('bucket_s', 60)
+    interval_s = data.get('interval_s')
+
     fields = dict(
         pressure          = safe_float(data.get('pressure')),
         temperature       = safe_float(data.get('temperature')),
         humidity          = safe_float(data.get('humidity')),
         solar_radiation_v = safe_float(data.get('solar_radiation_v')),
-        solar_radiation   = safe_float(data.get('solar_radiation') if data.get('solar_radiation') is not None else data.get('light')),
+        solar_radiation   = safe_float(data.get('solar_radiation')),
         soil_moisture_v   = safe_float(data.get('soil_moisture_v')),
         soil_moisture     = safe_float(data.get('soil_moisture')),
         rain              = safe_float(data.get('rain')),
         wind_speed        = safe_float(data.get('wind_speed')),
         wind_direction_v  = safe_float(data.get('wind_direction_v')),
         wind_direction    = safe_int(data.get('wind_direction')),
+        interval_s        = safe_int(interval_s),
+        wind_gust         = safe_float(data.get('wind_gust')),
+        gust_count        = safe_int(data.get('gust_count')),
+        gust_span_ms      = safe_int(data.get('gust_span_ms')),
+        wind_pulses_total = sum(wind_pulses) if wind_pulses else None,
+        rain_tips_total   = sum(rain_tips) if rain_tips else None,
     )
 
-    weather = WeatherReading.objects.create(
-        station=station, station_code=station_id, timestamp=timestamp, **fields
-    )
+    with transaction.atomic():
+        weather = WeatherReading.objects.create(
+            station=station, station_code=station_id, timestamp=timestamp, **fields
+        )
 
-    # Dual-write: keep SensorReading in sync for existing dashboard/history/export
-    reading, _ = SensorReading.objects.get_or_create(
-        station_code=station_id, timestamp=timestamp,
-        defaults={'station': station}
-    )
-    for k, v in fields.items():
-        setattr(reading, k, v)
-    reading.save()
+        # Dual-write: keep SensorReading in sync for existing dashboard/history/export
+        reading, _ = SensorReading.objects.get_or_create(
+            station_code=station_id, timestamp=timestamp,
+            defaults={'station': station}
+        )
+        for k, v in fields.items():
+            setattr(reading, k, v)
+        reading.save()
+
+        if wind_pulses and interval_s:
+            start = timestamp - datetime.timedelta(seconds=safe_int(interval_s) or 0)
+            minute_rows = []
+            for i, (w, t) in enumerate(zip(wind_pulses, rain_tips)):
+                m_start = start + datetime.timedelta(seconds=i * bucket_s)
+                span = bucket_s if i < len(wind_pulses) - 1 else int((timestamp - m_start).total_seconds())
+                minute_rows.append(WeatherMinute(
+                    weather_reading=weather, sensor_reading=reading,
+                    station_code=station_id, minute_start=m_start,
+                    span_s=span, wind_pulses=w, rain_tips=t
+                ))
+            WeatherMinute.objects.bulk_create(minute_rows, ignore_conflicts=True)
 
     # Update StationStatus — per-sensor fault detection if available, else fallback.
     if station:

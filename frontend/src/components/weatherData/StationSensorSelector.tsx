@@ -13,6 +13,7 @@ interface StationSensorSelectorProps {
   dateFrom: string
   dateTo: string
   onDateChange: (from: string, to: string) => void
+  metrics?: SensorMetricKey[]
 }
 
 export function StationSensorSelector({
@@ -24,6 +25,7 @@ export function StationSensorSelector({
   dateFrom,
   dateTo,
   onDateChange,
+  metrics = SENSOR_METRICS,
 }: StationSensorSelectorProps) {
   return (
     <div className="space-y-4">
@@ -54,7 +56,7 @@ export function StationSensorSelector({
       </div>
 
       <div className="flex flex-wrap gap-1" role="tablist" aria-label="Sensor type">
-        {SENSOR_METRICS.map((metric) => {
+        {metrics.map((metric) => {
           const cfg = SENSOR_METRIC_CONFIG[metric]
           const isActive = selectedMetric === metric
           return (

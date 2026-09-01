@@ -9,10 +9,15 @@ export interface UseWeatherDataResult {
   retry: () => void
 }
 
-export function useWeatherData(params: { stationId: string; hours: number }): UseWeatherDataResult {
+export function useWeatherData(params: {
+  stationId: string
+  hours?: number
+  dateFrom?: string
+  dateTo?: string
+}): UseWeatherDataResult {
   const query = useQuery({
-    queryKey: ['weather', params.stationId, params.hours],
-    queryFn: () => fetchSensorHistory(params.stationId, params.hours),
+    queryKey: ['weather', params.stationId, params.dateFrom, params.dateTo, params.hours],
+    queryFn: () => fetchSensorHistory(params.stationId, params.hours, 5000, params.dateFrom, params.dateTo),
     refetchInterval: 30000,
   })
 
