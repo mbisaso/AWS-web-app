@@ -1,4 +1,5 @@
 import type { PowerChart } from '../../types'
+import { formatDecimal } from '../../utils/formatters'
 
 interface PowerStatusCardProps {
   reading: PowerChart | null | undefined
@@ -99,7 +100,7 @@ export function PowerStatusCard({ reading, isLoading }: PowerStatusCardProps) {
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">Battery Voltage</p>
         <p className="mt-2 text-3xl font-bold tracking-tight text-midnight font-display">
           {reading.volt_batt !== null
-            ? <>{reading.volt_batt}<span className="ml-0.5 text-sm font-medium text-storm/50">V</span></>
+            ? <>{formatDecimal(reading.volt_batt)}<span className="ml-0.5 text-sm font-medium text-storm/50">V</span></>
             : <span className="text-storm/30 text-xl">—</span>}
         </p>
         {reading.volt_batt !== null && (
@@ -113,7 +114,7 @@ export function PowerStatusCard({ reading, isLoading }: PowerStatusCardProps) {
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">Solar Voltage</p>
         <p className="mt-2 text-3xl font-bold tracking-tight text-midnight font-display">
           {reading.volt_solar !== null
-            ? <>{reading.volt_solar}<span className="ml-0.5 text-sm font-medium text-storm/50">V</span></>
+            ? <>{formatDecimal(reading.volt_solar)}<span className="ml-0.5 text-sm font-medium text-storm/50">V</span></>
             : <span className="text-storm/30 text-xl">—</span>}
         </p>
         {reading.volt_solar !== null && (
@@ -132,7 +133,7 @@ export function PowerStatusCard({ reading, isLoading }: PowerStatusCardProps) {
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">Battery Temp</p>
         <p className="mt-2 text-3xl font-bold tracking-tight text-midnight font-display">
           {reading.battery_temp !== null
-            ? <>{reading.battery_temp}<span className="ml-0.5 text-sm font-medium text-storm/50">°C</span></>
+            ? <>{formatDecimal(reading.battery_temp)}<span className="ml-0.5 text-sm font-medium text-storm/50">°C</span></>
             : <span className="text-storm/30 text-xl">—</span>}
         </p>
         {reading.battery_temp !== null && (
@@ -146,7 +147,7 @@ export function PowerStatusCard({ reading, isLoading }: PowerStatusCardProps) {
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">Battery Current</p>
         <p className="mt-2 text-3xl font-bold tracking-tight text-midnight font-display">
           {reading.curr_batt !== null
-            ? <>{reading.curr_batt}<span className="ml-0.5 text-sm font-medium text-storm/50">A</span></>
+            ? <>{formatDecimal(reading.curr_batt)}<span className="ml-0.5 text-sm font-medium text-storm/50">A</span></>
             : <span className="text-storm/30 text-xl">—</span>}
         </p>
         {reading.curr_batt !== null && (
@@ -162,7 +163,7 @@ export function PowerStatusCard({ reading, isLoading }: PowerStatusCardProps) {
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">Solar Current</p>
         <p className="mt-2 text-3xl font-bold tracking-tight text-midnight font-display">
           {reading.curr_solar !== null
-            ? <>{reading.curr_solar}<span className="ml-0.5 text-sm font-medium text-storm/50">A</span></>
+            ? <>{formatDecimal(reading.curr_solar)}<span className="ml-0.5 text-sm font-medium text-storm/50">A</span></>
             : <span className="text-storm/30 text-xl">—</span>}
         </p>
         {reading.curr_solar !== null && (

@@ -163,6 +163,16 @@ def safe_int(value):
         return None
 
 
+def parse_aware_datetime(dt_str):
+    """Parse a datetime string and ensure it is timezone-aware in Africa/Kampala (UTC+3)."""
+    if not dt_str:
+        return None
+    dt = parse_datetime(str(dt_str).strip())
+    if dt is not None and timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt
+
+
 def get_or_none(station_code):
     """
     Try to find a registered Station by station_id.
@@ -225,7 +235,7 @@ def ingest(request):
         station_id = station_id or 'AWS-UG-001'
         station    = get_or_none(station_id)
 
-        timestamp = parse_datetime(parsed.get('Time', ''))
+        timestamp = parse_aware_datetime(parsed.get('Time', ''))
         if timestamp is None:
             return Response(
                 {'error': 'Could not parse timestamp from raw string'},
@@ -258,7 +268,7 @@ def ingest(request):
         station_id = station_id or 'AWS-UG-001'
         station    = get_or_none(station_id)
 
-        timestamp = parse_datetime(str(data.get('timestamp', '')))
+        timestamp = parse_aware_datetime(str(data.get('timestamp', '')))
         if timestamp is None:
             return api_response(
                 {'error': 'timestamp is required and must be ISO format'},
@@ -685,7 +695,7 @@ def ingest_weather(request):
     station_id = data.get('station_id') or data.get('station_code', 'AWS-UG-001')
     station    = get_or_none(station_id)
 
-    timestamp = parse_datetime(str(data.get('timestamp', '')))
+    timestamp = parse_aware_datetime(str(data.get('timestamp', '')))
     if timestamp is None:
         return api_response(error='timestamp is required and must be ISO format', status_code=400)
 
@@ -696,6 +706,32 @@ def ingest_weather(request):
 
     bucket_s   = data.get('bucket_s', 60)
     interval_s = data.get('interval_s')
+    
+    # Calculate denormalized totals
+    wind_pulses_total = sum(wind_pulses) if wind_pulses else None
+    rain_tips_total   = sum(rain_tips) if rain_tips else None
+
+    # Server-side conversion formulas from raw counts if payload values are missing
+    # Rain (mm): total tips * 0.2 mm
+    rain_val = safe_float(data.get('rain'))
+    if rain_val is None and rain_tips_total is not None:
+        rain_val = round(rain_tips_total * 0.2, 2)
+
+    # Wind Speed (m/s): (total_pulses / total_seconds) * 0.67 m/s
+    wind_speed_val = safe_float(data.get('wind_speed'))
+    if wind_speed_val is None and wind_pulses_total is not None and interval_s:
+        wind_speed_val = round((wind_pulses_total / interval_s) * 0.67, 2)
+
+    # Gust Guard Rule: If gust_count == 0, no 3-second gust window closed. 
+    # Store None rather than fallback mean values.
+    gust_count   = safe_int(data.get('gust_count'))
+    gust_span_ms = safe_int(data.get('gust_span_ms'))
+    wind_gust    = safe_float(data.get('wind_gust'))
+
+    if gust_count == 0:
+        gust_count   = None
+        gust_span_ms = None
+        wind_gust    = None
 
     fields = dict(
         pressure          = safe_float(data.get('pressure')),
@@ -705,16 +741,16 @@ def ingest_weather(request):
         solar_radiation   = safe_float(data.get('solar_radiation')),
         soil_moisture_v   = safe_float(data.get('soil_moisture_v')),
         soil_moisture     = safe_float(data.get('soil_moisture')),
-        rain              = safe_float(data.get('rain')),
-        wind_speed        = safe_float(data.get('wind_speed')),
+        rain              = rain_val,
+        wind_speed        = wind_speed_val,
         wind_direction_v  = safe_float(data.get('wind_direction_v')),
         wind_direction    = safe_int(data.get('wind_direction')),
-        interval_s        = safe_int(interval_s),
-        wind_gust         = safe_float(data.get('wind_gust')),
-        gust_count        = safe_int(data.get('gust_count')),
-        gust_span_ms      = safe_int(data.get('gust_span_ms')),
-        wind_pulses_total = sum(wind_pulses) if wind_pulses else None,
-        rain_tips_total   = sum(rain_tips) if rain_tips else None,
+        interval_s        = safe_int(data.get('interval_s')),
+        wind_gust         = wind_gust,
+        gust_count        = gust_count,
+        gust_span_ms      = gust_span_ms,
+        wind_pulses_total = wind_pulses_total,
+        rain_tips_total   = rain_tips_total,
     )
 
     with transaction.atomic():
@@ -790,7 +826,7 @@ def ingest_voltage(request):
     station_id = data.get('station_id') or data.get('station_code') or 'AWS-UG-001'
     station    = get_or_none(station_id)
 
-    timestamp = parse_datetime(str(data.get('timestamp', '')))
+    timestamp = parse_aware_datetime(str(data.get('timestamp', '')))
     if timestamp is None:
         return api_response(error='timestamp is required and must be ISO format', status_code=400)
 
@@ -823,7 +859,7 @@ def ingest_current(request):
     station_id = data.get('station_id') or data.get('station_code') or 'AWS-UG-001'
     station    = get_or_none(station_id)
 
-    timestamp = parse_datetime(str(data.get('timestamp', '')))
+    timestamp = parse_aware_datetime(str(data.get('timestamp', '')))
     if timestamp is None:
         return api_response(error='timestamp is required and must be ISO format', status_code=400)
 

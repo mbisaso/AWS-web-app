@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { PowerChart, PowerMetricKey } from '../../types'
 import { POWER_METRIC_CONFIG } from '../../types'
+import { formatDecimal } from '../../utils/formatters'
 
 type SortKey = 'timestamp' | 'value' | 'volt_batt' | 'curr_batt' | 'battery_temp' | 'volt_solar' | 'curr_solar'
 
@@ -16,6 +17,7 @@ function toLocalDate(ts: string): string {
   return isNaN(d.getTime())
     ? ts
     : d.toLocaleString(undefined, {
+        timeZone: 'Africa/Kampala',
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -251,13 +253,13 @@ export function PowerReadingsTable({ readings, metricKey, stationName, isLoading
                   <tr key={r.timestamp + idx} className="border-b border-slate-50 text-sm transition-colors hover:bg-slate-50/50">
                     <td className="py-3 pl-5 pr-2 text-xs text-storm/70">{toLocalDate(r.timestamp)}</td>
                     <td className="px-2 py-3 text-xs font-semibold tabular-nums text-midnight font-display">
-                      {r.volt_batt != null ? `${r.volt_batt} V` : <span className="text-storm/30">—</span>}
+                      {r.volt_batt != null ? `${formatDecimal(r.volt_batt)} V` : <span className="text-storm/30">—</span>}
                     </td>
                     <td className="px-2 py-3 text-xs font-semibold tabular-nums text-midnight font-display">
-                      {r.curr_batt != null ? `${r.curr_batt} A` : <span className="text-storm/30">—</span>}
+                      {r.curr_batt != null ? `${formatDecimal(r.curr_batt)} A` : <span className="text-storm/30">—</span>}
                     </td>
                     <td className="px-2 py-3 pr-5 text-right text-xs font-semibold tabular-nums text-midnight font-display">
-                      {r.battery_temp != null ? `${r.battery_temp} °C` : <span className="text-storm/30">—</span>}
+                      {r.battery_temp != null ? `${formatDecimal(r.battery_temp)} °C` : <span className="text-storm/30">—</span>}
                     </td>
                   </tr>
                 )
@@ -268,10 +270,10 @@ export function PowerReadingsTable({ readings, metricKey, stationName, isLoading
                   <tr key={r.timestamp + idx} className="border-b border-slate-50 text-sm transition-colors hover:bg-slate-50/50">
                     <td className="py-3 pl-5 pr-2 text-xs text-storm/70">{toLocalDate(r.timestamp)}</td>
                     <td className="px-2 py-3 text-xs font-semibold tabular-nums text-midnight font-display">
-                      {r.volt_solar != null ? `${r.volt_solar} V` : <span className="text-storm/30">—</span>}
+                      {r.volt_solar != null ? `${formatDecimal(r.volt_solar)} V` : <span className="text-storm/30">—</span>}
                     </td>
                     <td className="px-2 py-3 pr-5 text-right text-xs font-semibold tabular-nums text-midnight font-display">
-                      {r.curr_solar != null ? `${r.curr_solar} A` : <span className="text-storm/30">—</span>}
+                      {r.curr_solar != null ? `${formatDecimal(r.curr_solar)} A` : <span className="text-storm/30">—</span>}
                     </td>
                   </tr>
                 )
@@ -282,7 +284,7 @@ export function PowerReadingsTable({ readings, metricKey, stationName, isLoading
                 <tr key={r.timestamp + idx} className="border-b border-slate-50 text-sm transition-colors hover:bg-slate-50/50">
                   <td className="py-3 pl-5 pr-2 text-xs text-storm/70">{toLocalDate(r.timestamp)}</td>
                   <td className="py-3 pr-5 text-right text-xs font-semibold tabular-nums text-midnight font-display">
-                    {val != null ? `${val} ${cfg.unit}` : <span className="text-storm/30">—</span>}
+                    {val != null ? `${formatDecimal(val as number)} ${cfg.unit}` : <span className="text-storm/30">—</span>}
                   </td>
                 </tr>
               )

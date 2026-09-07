@@ -1,5 +1,6 @@
 import type { SensorMetricKey } from '../../types'
 import { SENSOR_METRIC_CONFIG } from '../../types'
+import { formatDecimal } from '../../utils/formatters'
 
 interface ReadingSummaryCardProps {
   metricKey: SensorMetricKey
@@ -39,7 +40,7 @@ export function ReadingSummaryCard({ metricKey, value, isLoading }: ReadingSumma
       />
       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-storm/40">{cfg.label}</p>
       <p className="mt-2 text-3xl font-bold tracking-tight text-midnight font-display">
-        {value}
+        {formatDecimal(value)}
         <span className="ml-0.5 text-sm font-medium text-storm/50">{cfg.unit}</span>
       </p>
     </div>

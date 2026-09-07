@@ -253,6 +253,7 @@ export function HistoricalChart({ readings, metricKey, stationName, isLoading }:
         tempValue: tempV,
         humValue: humV,
         time: new Date(best.timestamp).toLocaleString(undefined, {
+          timeZone: 'Africa/Kampala',
           month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
         }),
       })
@@ -264,6 +265,7 @@ export function HistoricalChart({ readings, metricKey, stationName, isLoading }:
         y: sy(v),
         value: v,
         time: new Date(best.timestamp).toLocaleString(undefined, {
+          timeZone: 'Africa/Kampala',
           month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
         }),
       })
@@ -395,7 +397,7 @@ export function HistoricalChart({ readings, metricKey, stationName, isLoading }:
           {/* X-Axis Ticks */}
           {xTicks.map((d, i) => {
             const x = sx(d.getTime())
-            const label = d.toLocaleString(undefined, { month: 'short', day: 'numeric' })
+            const label = d.toLocaleString(undefined, { timeZone: 'Africa/Kampala', month: 'short', day: 'numeric' })
             return (
               <g key={i}>
                 <line x1={x} y1={pad.top} x2={x} y2={pad.top + cH} stroke="#F8FAFC" strokeWidth="0.5" />

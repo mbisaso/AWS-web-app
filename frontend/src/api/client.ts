@@ -3,7 +3,7 @@ import axios from "axios";
 const rawBaseUrl: string =
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE_URL ||
-  "http://127.0.0.1:8000";
+  "https://api.wimea-ict.net"; // Default to production API if not set in .env
 
 export const API_BASE_URL = rawBaseUrl.trim().replace(/\/+$/, "");
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { SensorMetricKey, SensorReadingChart } from '../../types'
 import { SENSOR_METRIC_CONFIG } from '../../types'
+import { formatDecimal } from '../../utils/formatters'
 
 type SortKey =
   | 'timestamp'
@@ -21,9 +22,17 @@ interface ReadingsTableProps {
 }
 
 function toLocalDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  })
+  const d = new Date(iso)
+  return isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString(undefined, {
+        timeZone: 'Africa/Kampala',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
 }
 
 export function ReadingsTable({ readings, metricKey, stationName, isLoading }: ReadingsTableProps) {
@@ -221,10 +230,10 @@ export function ReadingsTable({ readings, metricKey, stationName, isLoading }: R
                   <tr key={r.timestamp + idx} className="border-b border-slate-50 text-sm transition-colors hover:bg-slate-50/50">
                     <td className="py-3 pl-5 pr-2 text-xs text-storm/70">{toLocalDate(r.timestamp)}</td>
                     <td className="px-2 py-3 text-xs font-semibold tabular-nums text-midnight">
-                      {r.temperature != null ? `${r.temperature} °C` : <span className="text-storm/30">—</span>}
+                      {r.temperature != null ? `${formatDecimal(r.temperature)} °C` : <span className="text-storm/30">—</span>}
                     </td>
                     <td className="px-2 py-3 pr-5 text-xs font-semibold tabular-nums text-midnight">
-                      {r.humidity != null ? `${r.humidity} %` : <span className="text-storm/30">—</span>}
+                      {r.humidity != null ? `${formatDecimal(r.humidity)} %` : <span className="text-storm/30">—</span>}
                     </td>
                   </tr>
                 )
@@ -240,20 +249,20 @@ export function ReadingsTable({ readings, metricKey, stationName, isLoading }: R
                   <td className="py-3 pl-5 pr-2 text-xs text-storm/70">{toLocalDate(r.timestamp)}</td>
                   {isRain && (
                     <td className="px-2 py-3 text-xs font-semibold tabular-nums text-midnight">
-                      {tips != null ? tips : <span className="text-storm/30">—</span>}
+                      {tips != null ? formatDecimal(tips) : <span className="text-storm/30">—</span>}
                     </td>
                   )}
                   {isWind && (
                     <td className="px-2 py-3 text-xs font-semibold tabular-nums text-midnight">
-                      {pulses != null ? pulses : <span className="text-storm/30">—</span>}
+                      {pulses != null ? formatDecimal(pulses) : <span className="text-storm/30">—</span>}
                     </td>
                   )}
                   <td className={`px-2 py-3 text-xs font-semibold tabular-nums text-midnight ${!isWind ? 'pr-5' : ''}`}>
-                    {val ?? <span className="text-storm/30">—</span>}
+                    {val != null ? formatDecimal(val) : <span className="text-storm/30">—</span>}
                   </td>
                   {isWind && (
                     <td className="px-2 py-3 pr-5 text-xs font-semibold tabular-nums text-midnight">
-                      {knots != null ? knots : <span className="text-storm/30">—</span>}
+                      {knots != null ? formatDecimal(knots) : <span className="text-storm/30">—</span>}
                     </td>
                   )}
                 </tr>

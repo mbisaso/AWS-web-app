@@ -257,6 +257,7 @@ export function PowerHistoricalChart({
       y: firstVal !== undefined && firstVal !== null ? syVal(firstVal) : PAD.top + cH / 2,
       items,
       time: new Date(best.timestamp).toLocaleString(undefined, {
+        timeZone: 'Africa/Kampala',
         month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
       }),
     })
@@ -380,7 +381,7 @@ export function PowerHistoricalChart({
           })}
           {xTicks.map((d, i) => {
             const x = sxVal(d.getTime())
-            const label = d.toLocaleString(undefined, { month: 'short', day: 'numeric' })
+            const label = d.toLocaleString(undefined, { timeZone: 'Africa/Kampala', month: 'short', day: 'numeric' })
             return (
               <g key={i}>
                 <line x1={x} y1={PAD.top} x2={x} y2={PAD.top + cH} stroke="#F8FAFC" strokeWidth="0.5" />
