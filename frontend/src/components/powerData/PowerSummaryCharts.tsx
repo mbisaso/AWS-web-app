@@ -10,11 +10,24 @@ interface PowerSummaryChartsProps {
 
 export function PowerSummaryCharts({ readings, metricKey, isLoading }: PowerSummaryChartsProps) {
   const cfg = POWER_METRIC_CONFIG[metricKey]
+  const effectiveCfg =
+    metricKey === 'battery_dynamics'
+      ? { ...POWER_METRIC_CONFIG.volt_batt, label: 'Battery Voltage (Dynamics)' }
+      : metricKey === 'solar_dynamics'
+      ? { ...POWER_METRIC_CONFIG.volt_solar, label: 'Solar Voltage (Dynamics)' }
+      : cfg
+
+  const actualKey: keyof PowerChart =
+    metricKey === 'battery_dynamics'
+      ? 'volt_batt'
+      : metricKey === 'solar_dynamics'
+      ? 'volt_solar'
+      : metricKey
 
   const stats = useMemo(() => {
     const values = readings
-      .map((r) => r[metricKey])
-      .filter((v): v is number => v !== null)
+      .map((r) => r[actualKey])
+      .filter((v): v is number => typeof v === 'number' && !isNaN(v))
     if (!values.length) return null
     const sum = values.reduce((a, b) => a + b, 0)
     const avg = sum / values.length
@@ -26,9 +39,9 @@ export function PowerSummaryCharts({ readings, metricKey, isLoading }: PowerSumm
       max: parseFloat(max.toFixed(2)),
       count: values.length,
     }
-  }, [readings, metricKey])
+  }, [readings, actualKey])
 
-  const color = cfg.color
+  const color = effectiveCfg.color
 
   if (isLoading) {
     return (

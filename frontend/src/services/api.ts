@@ -2187,6 +2187,19 @@ export async function exportDataJson(config: ExportConfig): Promise<any> {
   return data;
 }
 
+export async function exportDataCsv(config: ExportConfig): Promise<Blob> {
+  const response = await apiClient.get('/api/export/', {
+    params: {
+      station_id: config.station_id || undefined,
+      hours: config.hours,
+      fields: config.fields,
+      output: 'csv'
+    },
+    responseType: 'blob'
+  });
+  return response.data;
+}
+
 export function getExportCsvUrl(config: ExportConfig): string {
   const params = new URLSearchParams();
   if (config.station_id) params.append('station_id', config.station_id);
@@ -2196,3 +2209,4 @@ export function getExportCsvUrl(config: ExportConfig): string {
 
   return `${API_BASE_URL}/api/export/?${params.toString()}`;
 }
+

@@ -23,17 +23,25 @@ function today(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+const PHYSICAL_METRICS = SENSOR_METRICS.filter((mk) => mk !== 'atmospheric')
+
 /* ── Sub-component: rendered only when a station is selected ── */
 function WeatherContent({
   stationId,
+  stationName,
   metricKey,
+  dateFrom,
+  dateTo,
   hours,
 }: {
   stationId: string
+  stationName?: string
   metricKey: SensorMetricKey
+  dateFrom: string
+  dateTo: string
   hours: number
 }) {
-  const { data: readings, isLoading, error, retry } = useWeatherData({ stationId, hours })
+  const { data: readings, isLoading, error, retry } = useWeatherData({ stationId, dateFrom, dateTo, hours })
   const lastReading: SensorReadingChart | null = readings.length ? readings[readings.length - 1] : null
   const chartIsLoading = isLoading && !readings.length
 
@@ -61,10 +69,10 @@ function WeatherContent({
         </div>
       )}
 
-      {/* ── Summary cards — one per sensor field ── */}
+      {/* ── Summary cards — one per physical sensor field ── */}
       <section aria-label="Current readings" className="mb-6">
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
-          {SENSOR_METRICS.map((mk) => (
+          {PHYSICAL_METRICS.map((mk) => (
             <ReadingSummaryCard
               key={mk}
               metricKey={mk}
@@ -80,6 +88,7 @@ function WeatherContent({
         <HistoricalChart
           readings={readings}
           metricKey={metricKey}
+          stationName={stationName}
           isLoading={chartIsLoading}
         />
       </section>
@@ -89,6 +98,7 @@ function WeatherContent({
         <ReadingsTable
           readings={readings}
           metricKey={metricKey}
+          stationName={stationName}
           isLoading={chartIsLoading}
         />
       </section>
@@ -204,7 +214,10 @@ export function WeatherDataPage() {
         {stationId ? (
           <WeatherContent
             stationId={stationId}
+            stationName={stations.find((s) => s.station_id === stationId)?.name}
             metricKey={metricKey}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
             hours={hours}
           />
         ) : (

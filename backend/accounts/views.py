@@ -11,11 +11,30 @@ from .serializers import RegisterSerializer
 @permission_classes([AllowAny])
 @authentication_classes([])
 def login_api(request):
-    email = request.data.get('email')
+    raw_identifier = request.data.get('email') or request.data.get('username') or ''
+    identifier = raw_identifier.strip()
     password = request.data.get('password')
 
-    user = authenticate(request, username=email, password=password)
+    if not identifier or not password:
+        return Response(
+            {'success': False, 'error': 'Invalid username or password'},
+            status=401,
+        )
+
+    # Attempt direct authenticate first
+    user = authenticate(request, username=identifier, password=password)
+
+    # If direct username auth failed, try finding user by email or username (case-insensitive)
     if user is None:
+        from .models import User
+        from django.db.models import Q
+        matched_user = User.objects.filter(
+            Q(username__iexact=identifier) | Q(email__iexact=identifier)
+        ).first()
+        if matched_user:
+            user = authenticate(request, username=matched_user.username, password=password)
+
+    if user is None or not user.is_active:
         return Response(
             {'success': False, 'error': 'Invalid username or password'},
             status=401,
@@ -28,7 +47,7 @@ def login_api(request):
         'data': {
             'access':   str(refresh.access_token),
             'refresh':  str(refresh),
-            'email':    user.email,
+            'email':    user.email or user.username,
             'role':     user.role,
         },
     })

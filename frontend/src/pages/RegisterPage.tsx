@@ -56,9 +56,9 @@ export function RegisterPage() {
     setIsLoading(true);
     try {
       await apiClient.post("/api/register/", {
-        email: form.email,
-        first_name: form.first_name || undefined,
-        last_name: form.last_name || undefined,
+        email: form.email.trim(),
+        first_name: form.first_name.trim() || undefined,
+        last_name: form.last_name.trim() || undefined,
         password: form.password,
       });
       navigate("/login", { state: { registered: true } });
@@ -71,6 +71,8 @@ export function RegisterPage() {
         setFieldErrors(errorData as FieldErrors);
       } else if (typeof errorData === "string") {
         setGlobalError(errorData);
+      } else if (!res) {
+        setGlobalError("Cannot connect to the server. Please ensure the backend is running and reachable.");
       } else {
         setGlobalError("Registration failed. Please try again.");
       }

@@ -1,4 +1,4 @@
-﻿import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { TaggedSensorReading, AnalysisMetricKey } from '../../types'
 import { ANALYSIS_METRIC_CONFIG } from '../../types'
 
@@ -66,9 +66,9 @@ export function CorrelationView({ readings, metricKeyA, metricKeyB, isLoading }:
   const { points, xMin, xMax, yMin, yMax, r, regLine, label } = useMemo(() => {
     const pairs: { x: number; y: number; name: string; time: string }[] = []
     for (const r of readings) {
-      const a = r[metricKeyA]
-      const b = r[metricKeyB]
-      if (a !== null && b !== null) {
+      const a = (r as unknown as Record<string, unknown>)[metricKeyA]
+      const b = (r as unknown as Record<string, unknown>)[metricKeyB]
+      if (typeof a === 'number' && typeof b === 'number' && !Number.isNaN(a) && !Number.isNaN(b)) {
         pairs.push({ x: a, y: b, name: r.stationName, time: r.timestamp })
       }
     }

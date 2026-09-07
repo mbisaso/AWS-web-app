@@ -35,12 +35,6 @@ export function PowerDataPage() {
   const [stations, setStations] = useState<Station[]>([])
   const [stationsLoading, setStationsLoading] = useState(true)
 
-  useEffect(() => {
-    fetchStations()
-      .then(setStations)
-      .finally(() => setStationsLoading(false))
-  }, [])
-
   const urlStation = searchParams.get('station')
   const urlMetric = searchParams.get('metric') as PowerMetricKey | null
   const urlDateFrom = searchParams.get('from')
@@ -48,6 +42,24 @@ export function PowerDataPage() {
   const urlSecondary = searchParams.get('secondary')
 
   const [stationId, setStationId] = useState<string | null>(urlStation)
+
+  useEffect(() => {
+    fetchStations()
+      .then((data) => {
+        setStations(data)
+        if (data.length > 0 && !urlStation && !stationId) {
+          setStationId(data[0].station_id)
+        }
+      })
+      .finally(() => setStationsLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (urlStation && urlStation !== stationId) {
+      setStationId(urlStation)
+    }
+  }, [urlStation]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const [metric, setMetric] = useState<PowerMetricKey>(
     urlMetric && urlMetric in POWER_METRIC_CONFIG ? urlMetric : 'volt_batt',
   )
@@ -60,10 +72,17 @@ export function PowerDataPage() {
     [dateFrom, dateTo],
   )
 
-  const { data: readings, isLoading, error, retry } = usePowerData({ stationId, hours })
+  const { data: readings, isLoading, error, retry } = usePowerData({
+    stationId,
+    dateFrom,
+    dateTo,
+    hours,
+  })
 
   const currentReading = readings.length ? readings[readings.length - 1] : null
   const secondaryKey = SECONDARY_MAP[metric] ?? null
+  const selectedStation = stations.find((s) => s.station_id === stationId)
+  const stationName = selectedStation?.name
 
   /* ── Sync state to URL ── */
   useEffect(() => {
@@ -138,43 +157,57 @@ export function PowerDataPage() {
           </div>
         )}
 
-        {/* ── Current status cards ── */}
-        <section aria-label="Current power status" className="mb-6">
-          <PowerStatusCard
-            reading={currentReading}
-            isLoading={isLoading && !currentReading}
-          />
-        </section>
+        {stationId ? (
+          <>
+            {/* ── Current status cards ── */}
+            <section aria-label="Current power status" className="mb-6">
+              <PowerStatusCard
+                reading={currentReading}
+                isLoading={isLoading && !currentReading}
+              />
+            </section>
 
-        {/* ── Historical chart ── */}
-        <section aria-label="Historical chart" className="mb-6">
-          <PowerHistoricalChart
-            readings={readings}
-            primaryKey={metric}
-            secondaryKey={secondaryKey}
-            showSecondary={showSecondary}
-            onToggleSecondary={() => setShowSecondary((s) => !s)}
-            isLoading={chartIsLoading}
-          />
-        </section>
+            {/* ── Historical chart ── */}
+            <section aria-label="Historical chart" className="mb-6">
+              <PowerHistoricalChart
+                readings={readings}
+                primaryKey={metric}
+                secondaryKey={secondaryKey}
+                showSecondary={showSecondary}
+                onToggleSecondary={() => setShowSecondary((s) => !s)}
+                stationName={stationName}
+                isLoading={chartIsLoading}
+              />
+            </section>
 
-        {/* ── Readings table ── */}
-        <section aria-label="Power readings data table">
-          <PowerReadingsTable
-            readings={readings}
-            metricKey={metric}
-            isLoading={chartIsLoading}
-          />
-        </section>
+            {/* ── Readings table ── */}
+            <section aria-label="Power readings data table">
+              <PowerReadingsTable
+                readings={readings}
+                metricKey={metric}
+                stationName={stationName}
+                isLoading={chartIsLoading}
+              />
+            </section>
 
-        {/* ── Summary charts ── */}
-        <section aria-label="Power summary" className="mt-6">
-          <PowerSummaryCharts
-            readings={readings}
-            metricKey={metric}
-            isLoading={chartIsLoading}
-          />
-        </section>
+            {/* ── Summary charts ── */}
+            <section aria-label="Power summary" className="mt-6">
+              <PowerSummaryCharts
+                readings={readings}
+                metricKey={metric}
+                isLoading={chartIsLoading}
+              />
+            </section>
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white py-20">
+            <svg className="mb-4 h-12 w-12 text-storm/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+            <p className="text-sm font-semibold text-storm/50">Select a station to view power data</p>
+            <p className="mt-1 text-xs text-storm/30">Choose a station from the dropdown above to load power telemetry.</p>
+          </div>
+        )}
       </main>
     </div>
   )

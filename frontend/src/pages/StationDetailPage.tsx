@@ -271,7 +271,7 @@ function OverviewTab({
   )
 }
 
-function WeatherTab({ stationId }: { stationId: string }) {
+function WeatherTab({ stationId, stationName }: { stationId: string; stationName?: string }) {
   const [metricKey, setMetricKey] = useState<SensorMetricKey>('temperature')
   const [dateFrom, setDateFrom] = useState(daysAgo(7))
   const [dateTo, setDateTo] = useState(today())
@@ -281,9 +281,10 @@ function WeatherTab({ stationId }: { stationId: string }) {
     [dateFrom, dateTo],
   )
 
-  const { data: readings, isLoading, error, retry } = useWeatherData({ stationId, hours })
+  const { data: readings, isLoading, error, retry } = useWeatherData({ stationId, dateFrom, dateTo, hours })
   const lastReading: SensorReadingChart | null = readings.length ? readings[readings.length - 1] : null
   const chartIsLoading = isLoading && !readings.length
+  const physicalMetrics = SENSOR_METRICS.filter((mk) => mk !== 'atmospheric')
 
   return (
     <div className="space-y-6">
@@ -322,7 +323,7 @@ function WeatherTab({ stationId }: { stationId: string }) {
 
       <section aria-label="Current readings">
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-4 lg:grid-cols-8">
-          {SENSOR_METRICS.map((mk) => (
+          {physicalMetrics.map((mk) => (
             <ReadingSummaryCard
               key={mk}
               metricKey={mk}
@@ -333,13 +334,13 @@ function WeatherTab({ stationId }: { stationId: string }) {
         </div>
       </section>
 
-      <HistoricalChart readings={readings} metricKey={metricKey} isLoading={chartIsLoading} />
-      <ReadingsTable readings={readings} metricKey={metricKey} isLoading={chartIsLoading} />
+      <HistoricalChart readings={readings} metricKey={metricKey} stationName={stationName} isLoading={chartIsLoading} />
+      <ReadingsTable readings={readings} metricKey={metricKey} stationName={stationName} isLoading={chartIsLoading} />
     </div>
   )
 }
 
-function PowerTab({ stationId }: { stationId: string }) {
+function PowerTab({ stationId, stationName }: { stationId: string; stationName?: string }) {
   const [metric, setMetric] = useState<PowerMetricKey>('volt_batt')
   const [dateFrom, setDateFrom] = useState(daysAgo(7))
   const [dateTo, setDateTo] = useState(today())
@@ -350,7 +351,7 @@ function PowerTab({ stationId }: { stationId: string }) {
     [dateFrom, dateTo],
   )
 
-  const { data: readings, isLoading, error, retry } = usePowerData({ stationId, hours })
+  const { data: readings, isLoading, error, retry } = usePowerData({ stationId, dateFrom, dateTo, hours })
   const currentReading = readings.length ? readings[readings.length - 1] : null
   const secondaryKey = POWER_SECONDARY[metric] ?? null
   const chartIsLoading = isLoading && !readings.length
@@ -397,9 +398,10 @@ function PowerTab({ stationId }: { stationId: string }) {
         secondaryKey={secondaryKey}
         showSecondary={showSecondary}
         onToggleSecondary={() => setShowSecondary((s) => !s)}
+        stationName={stationName}
         isLoading={chartIsLoading}
       />
-      <PowerReadingsTable readings={readings} metricKey={metric} isLoading={chartIsLoading} />
+      <PowerReadingsTable readings={readings} metricKey={metric} stationName={stationName} isLoading={chartIsLoading} />
       <PowerSummaryCharts readings={readings} metricKey={metric} isLoading={chartIsLoading} />
     </div>
   )
@@ -507,8 +509,8 @@ export function StationDetailPage() {
                     onNavigateTab={setTab}
                   />
                 )}
-                {activeTab === 'weather' && <WeatherTab stationId={resolvedStationId} />}
-                {activeTab === 'power' && <PowerTab stationId={resolvedStationId} />}
+                {activeTab === 'weather' && <WeatherTab stationId={resolvedStationId} stationName={station?.name} />}
+                {activeTab === 'power' && <PowerTab stationId={resolvedStationId} stationName={station?.name} />}
               </div>
             </div>
           </>

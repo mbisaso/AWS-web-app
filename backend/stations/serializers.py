@@ -1,5 +1,8 @@
 from rest_framework import serializers
-from .models import Station, StationStatus, SensorReading, WeatherReading, VoltageReading, CurrentReading, BenchmarkReading
+from .models import (
+    Station, StationStatus, SensorReading, WeatherReading,
+    VoltageReading, CurrentReading, BenchmarkReading, WeatherMinute
+)
 
 
 # ─────────────────────────────────────────────────────────
@@ -101,11 +104,20 @@ class SensorReadingLatestSerializer(serializers.ModelSerializer):
         ]
 
 
+class WeatherMinuteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WeatherMinute
+        fields = ['minute_start', 'span_s', 'wind_pulses', 'rain_tips']
+
+
 class SensorReadingChartSerializer(serializers.ModelSerializer):
     """
     Chart-optimized reading — timestamp + sensor values only.
     No power rails, no metadata. Used for time-series charts in React.
     """
+    rain_tips = serializers.IntegerField(source='rain_tips_total', read_only=True)
+    wind_speed_knots = serializers.SerializerMethodField()
+
     class Meta:
         model  = SensorReading
         fields = [
@@ -114,11 +126,20 @@ class SensorReadingChartSerializer(serializers.ModelSerializer):
             'humidity',
             'pressure',
             'wind_speed',
+            'wind_speed_knots',
+            'wind_pulses_total',
             'wind_direction',
             'rain',
+            'rain_tips',
+            'rain_tips_total',
             'solar_radiation',
             'soil_moisture',
         ]
+
+    def get_wind_speed_knots(self, obj):
+        if obj.wind_speed is not None:
+            return round(obj.wind_speed * 1.943844, 4)
+        return None
 
 
 class PowerChartSerializer(serializers.ModelSerializer):
@@ -141,6 +162,7 @@ class PowerChartSerializer(serializers.ModelSerializer):
 # WeatherReading Serializers
 # ─────────────────────────────────────────────────────────
 
+
 class WeatherReadingSerializer(serializers.ModelSerializer):
     class Meta:
         model  = WeatherReading
@@ -149,6 +171,7 @@ class WeatherReadingSerializer(serializers.ModelSerializer):
             'station_code',
             'timestamp',
             'received_at',
+            'interval_s',
             'pressure',
             'temperature',
             'humidity',
@@ -158,6 +181,11 @@ class WeatherReadingSerializer(serializers.ModelSerializer):
             'soil_moisture',
             'rain',
             'wind_speed',
+            'wind_gust',
+            'gust_count',
+            'gust_span_ms',
+            'wind_pulses_total',
+            'rain_tips_total',
             'wind_direction_v',
             'wind_direction',
         ]

@@ -182,10 +182,16 @@ class SensorReading(models.Model):
 
     # ── Wind ──────────────────────────────────────────────
     # ESP32 key: WSpd  →  e.g. 0.00
+    interval_s = models.IntegerField(null=True, blank=True, help_text="Reporting interval in seconds")
     wind_speed = models.FloatField(
         null=True, blank=True,
         help_text="Wind speed in km/h. ESP32 key: WSpd"
     )
+    wind_gust = models.FloatField(null=True, blank=True, help_text="Peak wind gust speed")
+    gust_count = models.IntegerField(null=True, blank=True, help_text="Number of gust pulses counted")
+    gust_span_ms = models.IntegerField(null=True, blank=True, help_text="Time span of gust measurement, ms")
+    wind_pulses_total = models.IntegerField(null=True, blank=True, help_text="Sum of wind pulses across minute buckets")
+    rain_tips_total = models.IntegerField(null=True, blank=True, help_text="Sum of rain tips across minute buckets")
     # Wind Direction (Raw Voltage & Converted Degrees)
     wind_direction_v = models.FloatField(
         null=True, blank=True,
@@ -270,7 +276,13 @@ class WeatherReading(models.Model):
     soil_moisture_v   = models.FloatField(null=True, blank=True, help_text="Soil moisture sensor voltage (V). ESP32 key: SoilM")
     soil_moisture     = models.FloatField(null=True, blank=True, help_text="Soil moisture (%)")
     rain              = models.FloatField(null=True, blank=True, help_text="ESP32 key: Rain")
+    interval_s        = models.IntegerField(null=True, blank=True, help_text="Reporting interval in seconds")
     wind_speed        = models.FloatField(null=True, blank=True, help_text="ESP32 key: WSpd")
+    wind_gust         = models.FloatField(null=True, blank=True, help_text="Peak wind gust speed")
+    gust_count        = models.IntegerField(null=True, blank=True, help_text="Number of gust pulses counted")
+    gust_span_ms      = models.IntegerField(null=True, blank=True, help_text="Time span of gust measurement, ms")
+    wind_pulses_total = models.IntegerField(null=True, blank=True, help_text="Sum of wind pulses across minute buckets")
+    rain_tips_total   = models.IntegerField(null=True, blank=True, help_text="Sum of rain tips across minute buckets")
     wind_direction_v  = models.FloatField(null=True, blank=True, help_text="Wind direction sensor voltage (V)")
     wind_direction    = models.IntegerField(null=True, blank=True, help_text="ESP32 key: WDir")
 
@@ -283,6 +295,43 @@ class WeatherReading(models.Model):
 
     def __str__(self):
         return f"Weather {self.station_code} @ {self.timestamp}"
+
+
+class WeatherMinute(models.Model):
+    """
+    One row per minute-bucket of wind pulse / rain tip counts.
+    Linked to both WeatherReading and SensorReading so raw detail
+    is queryable from either table. Replay-safe: re-uploading the
+    same interval is a no-op via the unique constraint.
+    """
+    weather_reading = models.ForeignKey(
+        WeatherReading, related_name='minutes',
+        on_delete=models.CASCADE, null=True, blank=True
+    )
+    sensor_reading = models.ForeignKey(
+        SensorReading, related_name='minutes',
+        on_delete=models.CASCADE, null=True, blank=True
+    )
+    station_code = models.CharField(max_length=50)
+    minute_start = models.DateTimeField()
+    span_s = models.SmallIntegerField(default=60)
+    wind_pulses = models.SmallIntegerField()
+    rain_tips = models.SmallIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['station_code', 'minute_start'],
+                name='uniq_station_minute'
+            )
+        ]
+        indexes = [
+            models.Index(fields=['station_code', 'minute_start'], name='idx_wm_station_minute'),
+        ]
+        ordering = ['minute_start']
+
+    def __str__(self):
+        return f"{self.station_code} @ {self.minute_start}"
 
 
 class VoltageReading(models.Model):

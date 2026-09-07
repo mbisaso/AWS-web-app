@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useDashboardData } from '../hooks/useDashboardData'
-import { useExportDataPreview, useExportCsvUrl } from '../hooks/useExportData'
+import { useExportDataPreview } from '../hooks/useExportData'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { PageHeader } from '../components/shared/PageHeader'
-import type { ExportConfig, StationReading } from '../services/api'
+import { exportDataCsv, type ExportConfig, type StationReading } from '../services/api'
 
 export function ReportsPage() {
   const { data: dashData } = useDashboardData()
@@ -12,6 +12,8 @@ export function ReportsPage() {
   const [stationId, setStationId] = useState<string>('')
   const [hours, setHours] = useState<number>(168)
   const [fields, setFields] = useState<'all' | 'sensor' | 'power'>('all')
+  const [isDownloading, setIsDownloading] = useState<boolean>(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   const config: ExportConfig = {
     station_id: stationId || undefined,
@@ -20,11 +22,28 @@ export function ReportsPage() {
   }
 
   const { data: previewData, isLoading: previewLoading, isFetching } = useExportDataPreview(config)
-  const csvUrl = useExportCsvUrl(config)
 
-  const handleDownloadCsv = () => {
-    window.open(csvUrl, '_blank')
+  const handleDownloadCsv = async () => {
+    try {
+      setIsDownloading(true)
+      setDownloadError(null)
+      const blob = await exportDataCsv(config)
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `aws_export_${stationId || 'fleet'}_${hours}h_${fields}.csv`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to download CSV:', err)
+      setDownloadError('Failed to download CSV. Please check authentication and server status.')
+    } finally {
+      setIsDownloading(false)
+    }
   }
+
 
   const handlePresetHours = (h: number) => setHours(h)
 
@@ -133,16 +152,30 @@ export function ReportsPage() {
                 <button
                   type="button"
                   onClick={handleDownloadCsv}
-                  disabled={previewLoading || !previewData?.count}
+                  disabled={previewLoading || isDownloading || !previewData?.count}
                   className="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-midnight px-4 py-3.5 text-sm font-bold text-white transition-all hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <svg className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  Download CSV
+                  {isDownloading ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white" />
+                      <span>Exporting CSV...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4 transition-transform group-hover:-translate-y-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Download CSV
+                    </>
+                  )}
                 </button>
+                {downloadError && (
+                  <p className="mt-2 text-center text-xs text-rose-600 font-medium">
+                    {downloadError}
+                  </p>
+                )}
                 <p className="mt-3 text-center text-[10px] text-storm/40">
                   Data will be exported in UTC format
                 </p>
