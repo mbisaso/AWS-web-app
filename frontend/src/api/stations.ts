@@ -32,6 +32,20 @@ interface PowerHistoryData {
   readings: PowerChart[]
 }
 
+function computePowerReadings<T extends PowerChart>(readings: T[]): T[] {
+  return readings.map((r) => ({
+    ...r,
+    power_solar:
+      r.curr_solar != null && r.volt_solar != null
+        ? Math.round(r.curr_solar * r.volt_solar * 100) / 100
+        : null,
+    power_batt:
+      r.curr_batt != null && r.volt_batt != null
+        ? Math.round(r.curr_batt * r.volt_batt * 100) / 100
+        : null,
+  }))
+}
+
 export async function fetchPowerHistory(
   stationId: string,
   hours?: number,
@@ -48,7 +62,7 @@ export async function fetchPowerHistory(
     `/api/stations/${stationId}/history/`,
     { params },
   )
-  return res.data.data.readings
+  return computePowerReadings(res.data.data.readings)
 }
 
 interface SensorHistoryData {
@@ -92,7 +106,7 @@ export async function fetchBulkHistory(
     `/api/stations/bulk-history/`,
     { params: { station_ids: stationIds.join(','), hours, limit } },
   )
-  return res.data.data.readings
+  return computePowerReadings(res.data.data.readings)
 }
 
 export async function fetchBenchmark(

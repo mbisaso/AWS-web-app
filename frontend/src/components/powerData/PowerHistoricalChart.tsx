@@ -77,6 +77,7 @@ export function PowerHistoricalChart({
 
   const isBatteryDynamics = primaryKey === 'battery_dynamics'
   const isSolarDynamics = primaryKey === 'solar_dynamics'
+  const isPowerDynamics = primaryKey === 'power_dynamics'
 
   const sorted = useMemo(
     () => [...readings].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()),
@@ -99,6 +100,8 @@ export function PowerHistoricalChart({
       targetKeys = ['volt_batt', 'curr_batt', 'battery_temp']
     } else if (isSolarDynamics) {
       targetKeys = ['volt_solar', 'curr_solar']
+    } else if (isPowerDynamics) {
+      targetKeys = ['power_solar', 'power_batt']
     } else {
       targetKeys = [primaryKey, ...(showSecondary && secondaryKey ? [secondaryKey] : [])]
     }
@@ -116,14 +119,53 @@ export function PowerHistoricalChart({
       }
     }
 
-    if (!isFinite(yLo)) { yLo = 0; yHi = 1 }
-    const yPad = (yHi - yLo) * 0.1 || 1
-    const yLoS = yLo - yPad
-    const yHiS = yHi + yPad
+    let yLoS: number
+    let yHiS: number
+    const yTicksArr: number[] = []
+
+    if (isPowerDynamics) {
+      yLoS = 0
+      const maxVal = Math.max(5, isFinite(yHi) ? Math.ceil(yHi) : 5)
+      if (maxVal <= 5) {
+        yHiS = 5
+        for (let v = 0; v <= 5; v += 1) {
+          yTicksArr.push(v)
+        }
+      } else if (maxVal <= 10) {
+        yHiS = maxVal
+        for (let v = 0; v <= maxVal; v += 1) {
+          yTicksArr.push(v)
+        }
+      } else {
+        const step = maxVal <= 25 ? 5 : Math.ceil(maxVal / 5)
+        yHiS = Math.ceil(maxVal / step) * step
+        for (let v = 0; v <= yHiS; v += step) {
+          yTicksArr.push(v)
+        }
+      }
+    } else {
+      if (!isFinite(yLo)) { yLo = 0; yHi = 1 }
+      const yPad = (yHi - yLo) * 0.1 || 1
+      yLoS = yLo - yPad
+      yHiS = yHi + yPad
+
+      const range = yHiS - yLoS
+      const rough = range / 5
+      const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)))
+      const res = rough / mag
+      let nice = mag
+      if (res > 7.5) nice = 10 * mag
+      else if (res > 3.5) nice = 5 * mag
+      else if (res > 1.5) nice = 2 * mag
+      for (let v = Math.ceil(yLoS / nice) * nice; v <= yHiS; v += nice) {
+        yTicksArr.push(parseFloat(v.toFixed(2)))
+      }
+    }
+
     const xRange = xHi - xLo || 1
 
     const sx = (t: number) => PAD.left + ((t - xLo) / xRange) * cW
-    const sy = (v: number) => PAD.top + cH - ((v - yLoS) / (yHiS - yLoS)) * cH
+    const sy = (v: number) => PAD.top + cH - ((v - yLoS) / (yHiS - yLoS || 1)) * cH
 
     const gapMs = (sorted.length > 1 ? (xHi - xLo) / sorted.length : 3 * 60 * 60 * 1000) * 2.5
 
@@ -155,16 +197,31 @@ export function PowerHistoricalChart({
       paths.push({
         key: 'volt_solar',
         path: buildPath(sorted, 'volt_solar', sx, sy, gapMs),
-        color: '#F59E0B',
+        color: '#EAB308',
         label: 'Solar Voltage',
         unit: 'V',
       })
       paths.push({
         key: 'curr_solar',
         path: buildPath(sorted, 'curr_solar', sx, sy, gapMs),
-        color: '#EAB308',
+        color: '#F97316',
         label: 'Solar Current',
         unit: 'A',
+      })
+    } else if (isPowerDynamics) {
+      paths.push({
+        key: 'power_solar',
+        path: buildPath(sorted, 'power_solar', sx, sy, gapMs),
+        color: '#F97316',
+        label: 'Solar Power',
+        unit: 'W',
+      })
+      paths.push({
+        key: 'power_batt',
+        path: buildPath(sorted, 'power_batt', sx, sy, gapMs),
+        color: '#0EA5E9',
+        label: 'Battery Power',
+        unit: 'W',
       })
     } else {
       paths.push({
@@ -186,19 +243,6 @@ export function PowerHistoricalChart({
       }
     }
 
-    const range = yHiS - yLoS
-    const rough = range / 5
-    const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)))
-    const res = rough / mag
-    let nice = mag
-    if (res > 7.5) nice = 10 * mag
-    else if (res > 3.5) nice = 5 * mag
-    else if (res > 1.5) nice = 2 * mag
-    const yTicksArr: number[] = []
-    for (let v = Math.ceil(yLoS / nice) * nice; v <= yHiS; v += nice) {
-      yTicksArr.push(parseFloat(v.toFixed(2)))
-    }
-
     const xTicksArr = xHi > xLo
       ? Array.from({ length: 7 }, (_, i) => new Date(xLo + (i / 6) * xRange))
       : [new Date(xLo)]
@@ -208,7 +252,7 @@ export function PowerHistoricalChart({
       yMin: yLoS, yMax: yHiS, xMin: xLo, xMax: xHi,
       yTicks: yTicksArr, xTicks: xTicksArr, cW, cH,
     }
-  }, [sorted, primaryKey, secondaryKey, showSecondary, isBatteryDynamics, isSolarDynamics, cfg, secondaryCfg])
+  }, [sorted, primaryKey, secondaryKey, showSecondary, isBatteryDynamics, isSolarDynamics, isPowerDynamics, cfg, secondaryCfg])
 
   const { paths, yMin, yMax, xMin, xMax, yTicks, xTicks, cW, cH } = computed
 
@@ -234,8 +278,11 @@ export function PowerHistoricalChart({
       items.push({ label: 'Battery Current', value: best.curr_batt, unit: 'A', color: '#F97316' })
       items.push({ label: 'Battery Temp', value: best.battery_temp, unit: '°C', color: '#EF4444' })
     } else if (isSolarDynamics) {
-      items.push({ label: 'Solar Voltage', value: best.volt_solar, unit: 'V', color: '#F59E0B' })
-      items.push({ label: 'Solar Current', value: best.curr_solar, unit: 'A', color: '#EAB308' })
+      items.push({ label: 'Solar Voltage', value: best.volt_solar, unit: 'V', color: '#EAB308' })
+      items.push({ label: 'Solar Current', value: best.curr_solar, unit: 'A', color: '#F97316' })
+    } else if (isPowerDynamics) {
+      items.push({ label: 'Solar Power', value: best.power_solar ?? null, unit: 'W', color: '#F97316' })
+      items.push({ label: 'Battery Power', value: best.power_batt ?? null, unit: 'W', color: '#0EA5E9' })
     } else {
       const pv = best[primaryKey]
       if (typeof pv === 'number') {
@@ -271,6 +318,8 @@ export function PowerHistoricalChart({
     ? 'Battery Voltage (V) / Current (A) / Temp (°C)'
     : isSolarDynamics
     ? 'Solar Voltage (V) / Current (A)'
+    : isPowerDynamics
+    ? 'Power (W)'
     : `${cfg.label} (${cfg.unit})`
 
   if (isLoading) {
@@ -319,12 +368,23 @@ export function PowerHistoricalChart({
           ) : isSolarDynamics ? (
             <>
               <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-storm/70">
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#F59E0B' }} aria-hidden="true" />
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#EAB308' }} aria-hidden="true" />
                 Solar Voltage (V)
               </span>
               <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-storm/70">
-                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#EAB308' }} aria-hidden="true" />
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#F97316' }} aria-hidden="true" />
                 Solar Current (A)
+              </span>
+            </>
+          ) : isPowerDynamics ? (
+            <>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-storm/70">
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#F97316' }} aria-hidden="true" />
+                Solar Power (W)
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-storm/70">
+                <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: '#0EA5E9' }} aria-hidden="true" />
+                Battery Power (W)
               </span>
             </>
           ) : (

@@ -15,6 +15,8 @@ export function PowerSummaryCharts({ readings, metricKey, isLoading }: PowerSumm
       ? { ...POWER_METRIC_CONFIG.volt_batt, label: 'Battery Voltage (Dynamics)' }
       : metricKey === 'solar_dynamics'
       ? { ...POWER_METRIC_CONFIG.volt_solar, label: 'Solar Voltage (Dynamics)' }
+      : metricKey === 'power_dynamics'
+      ? { ...POWER_METRIC_CONFIG.power_dynamics, label: 'Solar Power (Dynamics)' }
       : cfg
 
   const actualKey: keyof PowerChart =
@@ -22,6 +24,8 @@ export function PowerSummaryCharts({ readings, metricKey, isLoading }: PowerSumm
       ? 'volt_batt'
       : metricKey === 'solar_dynamics'
       ? 'volt_solar'
+      : metricKey === 'power_dynamics'
+      ? 'power_solar'
       : metricKey
 
   const stats = useMemo(() => {
