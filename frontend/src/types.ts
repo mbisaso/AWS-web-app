@@ -134,6 +134,9 @@ export interface PowerChart {
   curr_solar: number | null
   battery_dynamics?: number | null
   solar_dynamics?: number | null
+  power_dynamics?: number | null
+  power_solar?: number | null
+  power_batt?: number | null
 }
 
 // Every endpoint wraps its payload like this
@@ -178,6 +181,7 @@ export const SENSOR_METRIC_CONFIG: Record<SensorMetricKey, { label: string; unit
 export type PowerMetricKey =
   | 'battery_dynamics'
   | 'solar_dynamics'
+  | 'power_dynamics'
   | 'volt_batt'
   | 'volt_solar'
   | 'battery_temp'
@@ -186,12 +190,13 @@ export type PowerMetricKey =
 
 export const POWER_METRIC_CONFIG: Record<PowerMetricKey, { label: string; unit: string; color: string }> = {
   battery_dynamics: { label: 'Battery Dynamics', unit: 'V / A / °C', color: '#0284C7' },
-  solar_dynamics:   { label: 'Solar Dynamics',   unit: 'V / A',      color: '#F59E0B' },
+  solar_dynamics:   { label: 'Solar Dynamics',   unit: 'V / A',      color: '#EAB308' },
+  power_dynamics:   { label: 'Power Dynamics',   unit: 'W',          color: '#10B981' },
   volt_batt:        { label: 'Battery Voltage',  unit: 'V',          color: '#0EA5E9' },
-  volt_solar:       { label: 'Solar Voltage',    unit: 'V',          color: '#F59E0B' },
+  volt_solar:       { label: 'Solar Voltage',    unit: 'V',          color: '#EAB308' },
   battery_temp:     { label: 'Battery Temp',     unit: '°C',         color: '#EF4444' },
   curr_batt:        { label: 'Battery Current',  unit: 'A',          color: '#F97316' },
-  curr_solar:       { label: 'Solar Current',    unit: 'A',          color: '#EAB308' },
+  curr_solar:       { label: 'Solar Current',    unit: 'A',          color: '#F97316' },
 }
 
 export type AnalysisMetricKey = SensorMetricKey | PowerMetricKey | 'pv'

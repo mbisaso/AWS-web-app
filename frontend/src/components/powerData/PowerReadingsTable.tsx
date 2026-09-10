@@ -3,7 +3,7 @@ import type { PowerChart, PowerMetricKey } from '../../types'
 import { POWER_METRIC_CONFIG } from '../../types'
 import { formatDecimal } from '../../utils/formatters'
 
-type SortKey = 'timestamp' | 'value' | 'volt_batt' | 'curr_batt' | 'battery_temp' | 'volt_solar' | 'curr_solar'
+type SortKey = 'timestamp' | 'value' | 'volt_batt' | 'curr_batt' | 'battery_temp' | 'volt_solar' | 'curr_solar' | 'power_solar' | 'power_batt'
 
 interface PowerReadingsTableProps {
   readings: PowerChart[]
@@ -35,6 +35,7 @@ export function PowerReadingsTable({ readings, metricKey, stationName, isLoading
 
   const isBatteryDynamics = metricKey === 'battery_dynamics'
   const isSolarDynamics = metricKey === 'solar_dynamics'
+  const isPowerDynamics = metricKey === 'power_dynamics'
 
   const sorted = useMemo(() => {
     const copy = [...readings]
@@ -64,6 +65,14 @@ export function PowerReadingsTable({ readings, metricKey, stationName, isLoading
         const av = a.curr_solar ?? -Infinity, bv = b.curr_solar ?? -Infinity
         return sortAsc ? av - bv : bv - av
       }
+      if (sortKey === 'power_solar') {
+        const av = a.power_solar ?? -Infinity, bv = b.power_solar ?? -Infinity
+        return sortAsc ? av - bv : bv - av
+      }
+      if (sortKey === 'power_batt') {
+        const av = a.power_batt ?? -Infinity, bv = b.power_batt ?? -Infinity
+        return sortAsc ? av - bv : bv - av
+      }
       const av = a[metricKey] ?? -Infinity
       const bv = b[metricKey] ?? -Infinity
       return sortAsc ? (av as number) - (bv as number) : (bv as number) - (av as number)
@@ -90,6 +99,9 @@ export function PowerReadingsTable({ readings, metricKey, stationName, isLoading
     } else if (isSolarDynamics) {
       header = 'Timestamp,Solar Voltage (V),Solar Current (A)'
       rows = sorted.map((r) => `${r.timestamp},${r.volt_solar ?? ''},${r.curr_solar ?? ''}`)
+    } else if (isPowerDynamics) {
+      header = 'Timestamp,Solar Power (W),Battery Power (W)'
+      rows = sorted.map((r) => `${r.timestamp},${r.power_solar ?? ''},${r.power_batt ?? ''}`)
     } else {
       rows = sorted.map((r) => `${r.timestamp},${r[metricKey] ?? ''}`)
     }
@@ -232,6 +244,29 @@ export function PowerReadingsTable({ readings, metricKey, stationName, isLoading
                     </button>
                   </th>
                 </>
+              ) : isPowerDynamics ? (
+                <>
+                  <th scope="col" className="pb-2.5 px-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('power_solar')}
+                      className="inline-flex cursor-pointer items-center gap-1 hover:text-storm transition-colors"
+                    >
+                      Solar Power (W)
+                      {sortKey === 'power_solar' && <span>{sortAsc ? '▲' : '▼'}</span>}
+                    </button>
+                  </th>
+                  <th scope="col" className="pb-2.5 pr-5 px-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => toggleSort('power_batt')}
+                      className="inline-flex cursor-pointer items-center gap-1 hover:text-storm transition-colors ml-auto"
+                    >
+                      Battery Power (W)
+                      {sortKey === 'power_batt' && <span>{sortAsc ? '▲' : '▼'}</span>}
+                    </button>
+                  </th>
+                </>
               ) : (
                 <th scope="col" className="pb-2.5 pr-5 text-right">
                   <button
@@ -274,6 +309,20 @@ export function PowerReadingsTable({ readings, metricKey, stationName, isLoading
                     </td>
                     <td className="px-2 py-3 pr-5 text-right text-xs font-semibold tabular-nums text-midnight font-display">
                       {r.curr_solar != null ? `${formatDecimal(r.curr_solar)} A` : <span className="text-storm/30">—</span>}
+                    </td>
+                  </tr>
+                )
+              }
+
+              if (isPowerDynamics) {
+                return (
+                  <tr key={r.timestamp + idx} className="border-b border-slate-50 text-sm transition-colors hover:bg-slate-50/50">
+                    <td className="py-3 pl-5 pr-2 text-xs text-storm/70">{toLocalDate(r.timestamp)}</td>
+                    <td className="px-2 py-3 text-xs font-semibold tabular-nums text-midnight font-display">
+                      {r.power_solar != null ? `${formatDecimal(r.power_solar)} W` : <span className="text-storm/30">—</span>}
+                    </td>
+                    <td className="px-2 py-3 pr-5 text-right text-xs font-semibold tabular-nums text-midnight font-display">
+                      {r.power_batt != null ? `${formatDecimal(r.power_batt)} W` : <span className="text-storm/30">—</span>}
                     </td>
                   </tr>
                 )

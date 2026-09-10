@@ -33,3 +33,6 @@ ml/data/
 # Trained model artifacts are tracked, but not intermediate caches
 ml/**/__pycache__/
 *.joblib.tmp
+
+# Deployment archives
+*.zip
