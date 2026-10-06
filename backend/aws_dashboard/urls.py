@@ -5,6 +5,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+from accounts.views import CustomTokenObtainPairView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -15,7 +16,8 @@ urlpatterns = [
     path('', include('accounts.urls')),      # adds /register/
     path('', include('stations.urls')),      # adds /dashboard/ etc.
 
-    # ── JWT endpoints ─────────────────────────────────
-    path('api/token/',         TokenObtainPairView.as_view(),  name='token_obtain'),
+    # ── JWT endpoints ───────────────────────────
+    path('api/token/',         CustomTokenObtainPairView.as_view(),  name='token_obtain'),
+    path('api/login/',         CustomTokenObtainPairView.as_view(),  name='token_login_backup'),
     path('api/token/refresh/', TokenRefreshView.as_view(),     name='token_refresh'),
 ]

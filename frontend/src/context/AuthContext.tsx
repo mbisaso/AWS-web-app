@@ -112,23 +112,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, [logout]);
 
-  async function login(emailInput: string, password: string) {
-    const response = await apiClient.post<ApiEnvelope<any>>("/api/login/", {
-      email: emailInput,
-      password,
-    });
-    const {
-      access,
-      refresh,
-      role: userRole,
-      email: returnedEmail,
-    } = response.data.data;
-    setAccessToken(access);
-    setEmail(returnedEmail);
-    setRole(userRole);
-    setAuthToken(access);
-    persist(refresh, returnedEmail, userRole);
+ async function login(emailInput: string, password: string) {
+  const res = await apiClient.post("/api/login/", {
+    email: emailInput,
+    password,
+  });
+
+  // Handle case where interceptor extracts res.data vs standard Axios response
+  const data = res.data ?? res;
+  const access = data.access;
+  const refresh = data.refresh;
+
+  if (!access) {
+    throw new Error("Login response did not contain an access token.");
   }
+
+  setAccessToken(access);
+  setEmail(emailInput);
+  setAuthToken(access);
+  persist(refresh, emailInput, null);
+}
 
   return (
     <AuthContext.Provider

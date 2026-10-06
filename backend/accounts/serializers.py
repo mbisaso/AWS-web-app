@@ -1,5 +1,7 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from .models import User
+from django.contrib.auth import get_user_model
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -31,3 +33,33 @@ class RegisterSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', '').strip(),
             role=User.Role.ADMIN,
         )
+
+User = get_user_model()
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        # Dynamically balance alternative input property naming checks
+        if "email" in attrs and not attrs.get(self.username_field):
+            attrs[self.username_field] = attrs["email"]
+
+        username = attrs.get(self.username_field)
+        password = attrs.get("password")
+
+        # 2. Fix the 500 block: Query via User model instead of missing class property
+        try:
+            user = User.objects.get(**{self.username_field: username})
+        except User.DoesNotExist:
+            raise serializers.ValidationError({"detail": "Invalid email or password."})
+
+        # 3. Verify if the raw password string matches the encrypted hash
+        if not user.check_password(password):
+            raise serializers.ValidationError({"detail": "Invalid email or password."})
+
+        # 4. Check if the account is deactivated (pending approval)
+        if not user.is_active:
+            raise serializers.ValidationError({
+                "detail": "Your account is pending administrative approval. You will receive an email once activated."
+            })
+
+        # 5. If credentials match and the account is active, issue standard tokens
+        return super().validate(attrs)

@@ -15,6 +15,8 @@ import {
   StationDetailPage,
   WeatherAnalysisPage,
   WeatherDataPage,
+  ForgotPasswordPage,
+  ResetPasswordPage
 } from './pages'
 import { ThingSpeakDemoPage } from './pages/ThingSpeakDemoPage'
 import { AuthProvider } from './context/AuthContext'
@@ -37,6 +39,8 @@ function AnimatedRoutes() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* Protected dashboard */}
       <Route

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { apiClient } from '../api/client';
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -12,6 +13,19 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const justRegistered = (location.state as { registered?: boolean } | null)?.registered === true
+  const [showApprovalBanner, setShowApprovalBanner] = useState(justRegistered)
+
+  useEffect(() => {
+    if (justRegistered) {
+      const timer = setTimeout(() => {
+        setShowApprovalBanner(false);
+        // Clean up the browser history memory token so it doesn't return on refresh
+        navigate(location.pathname, { replace: true, state: {} });
+      }, 5000); // 5000 milliseconds = 5 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [justRegistered]);
 
   async function handleSubmit(e: { preventDefault(): void }) {
     e.preventDefault()
@@ -21,17 +35,28 @@ export function LoginPage() {
       await login(email, password)
       navigate('/dashboard')
     } catch (err: any) {
-      if (err?.response?.data?.error) {
-        setError(typeof err.response.data.error === 'string' ? err.response.data.error : 'Invalid email or password.')
-      } else if (!err?.response) {
-        setError('Cannot connect to the server. Please ensure the backend is running and reachable.')
+      console.error('Login process failed with error:', err);
+
+      const responseData = err?.response?.data;
+
+      if (responseData) {
+        if (responseData.detail) {
+          setError(responseData.detail);
+        } else if (responseData.error) {
+          setError(typeof responseData.error === 'string' ? responseData.error : 'Invalid email or password.');
+        } else {
+          setError('Invalid email or password.');
+        }
+      } else if (err?.code === 'ERR_NETWORK' || err?.message === 'Network Error') {
+        setError('Cannot connect to the server. Please ensure the backend is running and reachable.');
       } else {
-        setError('Invalid email or password.')
+        setError(err?.message || 'Invalid email or password.');
       }
     } finally {
       setIsSubmitting(false)
     }
   }
+
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-mist via-white to-sky-soft/30 px-4 py-10 text-slate-900">
@@ -84,14 +109,16 @@ export function LoginPage() {
               </p>
 
               <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
-                {justRegistered && (
-                  <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 px-4 py-3">
+                {/* Replace your old '{justRegistered && (...)}' wrapper with this variable: */}
+                {showApprovalBanner && (
+                  <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 animate-fade-in">
                     <svg className="mt-0.5 h-4 w-4 shrink-0 text-emerald" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="M22 4 12 14.01l-3-3" />
                     </svg>
-                    <p className="text-sm text-emerald-700">Account created — log in with your new credentials.</p>
+                    <p className="text-sm text-emerald-700">Account created successfully. Wait for administrative approval.</p>
                   </div>
                 )}
+
                 {error && (
                   <div className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50/60 px-4 py-3">
                     <svg className="mt-0.5 h-4 w-4 shrink-0 text-rose" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
@@ -151,6 +178,12 @@ export function LoginPage() {
                   </div>
                 </div>
 
+                <div className="text-left mt-1">
+                  <Link to="/forgot-password" className="text-xs font-medium text-sky-primary hover:underline">
+                    Forgot Password?
+                  </Link>
+                </div>
+
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -188,3 +221,7 @@ export function LoginPage() {
     </div>
   )
 }
+function elif(error: any) {
+  throw new Error('Function not implemented.')
+}
+
