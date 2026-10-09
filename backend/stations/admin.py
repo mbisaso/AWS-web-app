@@ -7,7 +7,15 @@ from django.shortcuts import render, redirect
 from django.urls import path, reverse
 from django.utils.dateparse import parse_datetime
 
-from .models import Station, StationStatus, SensorReading, BenchmarkReading
+from .models import Station, StationStatus, SensorReading, BenchmarkReading, BenchmarkDataset
+
+
+@admin.register(BenchmarkDataset)
+class BenchmarkDatasetAdmin(admin.ModelAdmin):
+    list_display    = ['name', 'location', 'source', 'start_date', 'end_date', 'row_count', 'uploaded_at']
+    list_filter     = ['source', 'location']
+    search_fields   = ['name', 'location', 'source']
+    readonly_fields = ['uploaded_at', 'start_date', 'end_date', 'row_count']
 
 
 @admin.register(Station)

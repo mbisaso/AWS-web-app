@@ -177,7 +177,7 @@ export function ReportsPage() {
                   </p>
                 )}
                 <p className="mt-3 text-center text-[10px] text-storm/40">
-                  Data will be exported in UTC format
+                  Timestamps exported as YYYY-MM-DD HH:MM:SS
                 </p>
               </div>
 

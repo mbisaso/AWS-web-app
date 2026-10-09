@@ -4,8 +4,12 @@ import { fetchBenchmark } from '../api/stations'
 
 export interface UseBenchmarkDataParams {
   stationId: string | null
-  hours: number
   metric: SensorMetricKey
+  datasetId?: number | string | null
+  location?: string | null
+  dateFrom?: string | null
+  dateTo?: string | null
+  hours?: number
 }
 
 export interface UseBenchmarkDataResult {
@@ -17,8 +21,17 @@ export interface UseBenchmarkDataResult {
 
 export function useBenchmarkData(params: UseBenchmarkDataParams): UseBenchmarkDataResult {
   const query = useQuery({
-    queryKey: ['benchmark', params.stationId, params.hours, params.metric],
-    queryFn: () => fetchBenchmark(params.stationId!, params.hours, params.metric),
+    queryKey: ['benchmark', params.stationId, params.metric, params.datasetId, params.location, params.dateFrom, params.dateTo, params.hours],
+    queryFn: () =>
+      fetchBenchmark({
+        stationId: params.stationId!,
+        metric: params.metric,
+        datasetId: params.datasetId,
+        location: params.location,
+        dateFrom: params.dateFrom,
+        dateTo: params.dateTo,
+        hours: params.hours,
+      }),
     enabled: !!params.stationId,
     refetchInterval: 30000,
   })

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { PowerChart, PowerMetricKey } from '../../types'
 import { POWER_METRIC_CONFIG } from '../../types'
-import { formatDecimal } from '../../utils/formatters'
+import { formatDecimal, formatCsvTimestamp } from '../../utils/formatters'
 
 type SortKey = 'timestamp' | 'value' | 'volt_batt' | 'curr_batt' | 'battery_temp' | 'volt_solar' | 'curr_solar' | 'power_solar' | 'power_batt'
 
@@ -95,15 +95,15 @@ export function PowerReadingsTable({ readings, metricKey, stationName, isLoading
 
     if (isBatteryDynamics) {
       header = 'Timestamp,Battery Voltage (V),Battery Current (A),Battery Temp (°C)'
-      rows = sorted.map((r) => `${r.timestamp},${r.volt_batt ?? ''},${r.curr_batt ?? ''},${r.battery_temp ?? ''}`)
+      rows = sorted.map((r) => `${formatCsvTimestamp(r.timestamp)},${r.volt_batt ?? ''},${r.curr_batt ?? ''},${r.battery_temp ?? ''}`)
     } else if (isSolarDynamics) {
       header = 'Timestamp,Solar Voltage (V),Solar Current (A)'
-      rows = sorted.map((r) => `${r.timestamp},${r.volt_solar ?? ''},${r.curr_solar ?? ''}`)
+      rows = sorted.map((r) => `${formatCsvTimestamp(r.timestamp)},${r.volt_solar ?? ''},${r.curr_solar ?? ''}`)
     } else if (isPowerDynamics) {
       header = 'Timestamp,Solar Power (W),Battery Power (W)'
-      rows = sorted.map((r) => `${r.timestamp},${r.power_solar ?? ''},${r.power_batt ?? ''}`)
+      rows = sorted.map((r) => `${formatCsvTimestamp(r.timestamp)},${r.power_solar ?? ''},${r.power_batt ?? ''}`)
     } else {
-      rows = sorted.map((r) => `${r.timestamp},${r[metricKey] ?? ''}`)
+      rows = sorted.map((r) => `${formatCsvTimestamp(r.timestamp)},${r[metricKey] ?? ''}`)
     }
 
     const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv' })

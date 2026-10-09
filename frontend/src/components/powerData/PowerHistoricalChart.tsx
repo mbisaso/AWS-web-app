@@ -23,42 +23,55 @@ interface TooltipData {
   time: string
 }
 
-function buildSeg(
-  readings: PowerChart[],
-  key: keyof PowerChart,
-  from: number,
-  to: number,
-  sx: (t: number) => number,
-  sy: (v: number) => number,
-): string {
-  const pts: string[] = []
-  for (let i = from; i < to; i++) {
-    const v = readings[i][key]
-    if (typeof v !== 'number' || isNaN(v)) continue
-    pts.push(`${sx(new Date(readings[i].timestamp).getTime())},${sy(v)}`)
-  }
-  return pts.length ? `M ${pts.join(' L ')}` : ''
-}
+const DEFAULT_MAX_GAP_MS = 3 * 60 * 60 * 1000 // 3 hours
 
 function buildPath(
   sorted: PowerChart[],
   key: keyof PowerChart,
   sx: (t: number) => number,
   sy: (v: number) => number,
-  gapMs: number,
+  gapMs: number = DEFAULT_MAX_GAP_MS,
 ): string {
-  if (!sorted.length) return ''
+  // 1. Filter only readings with a valid numeric value for this metric
+  const valid = sorted.filter((r) => {
+    const v = r[key]
+    return typeof v === 'number' && v !== null && !isNaN(v)
+  })
+
+  if (!valid.length) return ''
+
+  // Break lines only if the station was actually offline for an extended duration
+  const maxGap = Math.max(gapMs, DEFAULT_MAX_GAP_MS)
   const segs: string[] = []
-  let start = 0
-  for (let i = 1; i < sorted.length; i++) {
-    const gap = new Date(sorted[i].timestamp).getTime() - new Date(sorted[i - 1].timestamp).getTime()
-    if (gap > gapMs) {
-      segs.push(buildSeg(sorted, key, start, i, sx, sy))
-      start = i
+  let curSeg: string[] = []
+  let lastTime: number | null = null
+
+  for (let i = 0; i < valid.length; i++) {
+    const r = valid[i]
+    const t = new Date(r.timestamp).getTime()
+    const v = r[key] as number
+    const pt = `${sx(t)},${sy(v)}`
+
+    if (lastTime !== null && (t - lastTime) > maxGap) {
+      if (curSeg.length > 1) {
+        segs.push(`M ${curSeg.join(' L ')}`)
+      } else if (curSeg.length === 1) {
+        segs.push(`M ${curSeg[0]} L ${curSeg[0]}`)
+      }
+      curSeg = [pt]
+    } else {
+      curSeg.push(pt)
     }
+    lastTime = t
   }
-  segs.push(buildSeg(sorted, key, start, sorted.length, sx, sy))
-  return segs.filter(Boolean).join(' ')
+
+  if (curSeg.length > 1) {
+    segs.push(`M ${curSeg.join(' L ')}`)
+  } else if (curSeg.length === 1) {
+    segs.push(`M ${curSeg[0]} L ${curSeg[0]}`)
+  }
+
+  return segs.join(' ')
 }
 
 export function PowerHistoricalChart({
@@ -123,43 +136,27 @@ export function PowerHistoricalChart({
     let yHiS: number
     const yTicksArr: number[] = []
 
-    if (isPowerDynamics) {
-      yLoS = 0
-      const maxVal = Math.max(5, isFinite(yHi) ? Math.ceil(yHi) : 5)
-      if (maxVal <= 5) {
-        yHiS = 5
-        for (let v = 0; v <= 5; v += 1) {
-          yTicksArr.push(v)
-        }
-      } else if (maxVal <= 10) {
-        yHiS = maxVal
-        for (let v = 0; v <= maxVal; v += 1) {
-          yTicksArr.push(v)
-        }
-      } else {
-        const step = maxVal <= 25 ? 5 : Math.ceil(maxVal / 5)
-        yHiS = Math.ceil(maxVal / step) * step
-        for (let v = 0; v <= yHiS; v += step) {
-          yTicksArr.push(v)
-        }
-      }
-    } else {
-      if (!isFinite(yLo)) { yLo = 0; yHi = 1 }
-      const yPad = (yHi - yLo) * 0.1 || 1
-      yLoS = yLo - yPad
-      yHiS = yHi + yPad
+    if (!isFinite(yLo)) { yLo = 0; yHi = 1 }
+    const yPad = (yHi - yLo) * 0.1 || 1
+    yLoS = yLo - yPad
+    yHiS = yHi + yPad
 
-      const range = yHiS - yLoS
-      const rough = range / 5
-      const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)))
-      const res = rough / mag
-      let nice = mag
-      if (res > 7.5) nice = 10 * mag
-      else if (res > 3.5) nice = 5 * mag
-      else if (res > 1.5) nice = 2 * mag
-      for (let v = Math.ceil(yLoS / nice) * nice; v <= yHiS; v += nice) {
-        yTicksArr.push(parseFloat(v.toFixed(2)))
-      }
+    if (isPowerDynamics) {
+      // Accommodate zero reference baseline when values cross zero
+      if (yLo < 0 && yHiS < 1) yHiS = 1
+      if (yHi > 0 && yLoS > -1) yLoS = -1
+    }
+
+    const range = yHiS - yLoS
+    const rough = range / 5
+    const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)))
+    const res = rough / mag
+    let nice = mag
+    if (res > 7.5) nice = 10 * mag
+    else if (res > 3.5) nice = 5 * mag
+    else if (res > 1.5) nice = 2 * mag
+    for (let v = Math.ceil(yLoS / nice) * nice; v <= yHiS; v += nice) {
+      yTicksArr.push(parseFloat(v.toFixed(2)))
     }
 
     const xRange = xHi - xLo || 1
@@ -167,7 +164,7 @@ export function PowerHistoricalChart({
     const sx = (t: number) => PAD.left + ((t - xLo) / xRange) * cW
     const sy = (v: number) => PAD.top + cH - ((v - yLoS) / (yHiS - yLoS || 1)) * cH
 
-    const gapMs = (sorted.length > 1 ? (xHi - xLo) / sorted.length : 3 * 60 * 60 * 1000) * 2.5
+    const gapMs = DEFAULT_MAX_GAP_MS
 
     const paths: { key: keyof PowerChart; path: string; color: string; label: string; unit: string; fill?: boolean }[] = []
 
@@ -432,10 +429,29 @@ export function PowerHistoricalChart({
           </defs>
           {yTicks.map((v) => {
             const y = syVal(v)
+            const isZero = v === 0 && isPowerDynamics
             return (
               <g key={v}>
-                <line x1={PAD.left} y1={y} x2={SVG_W - PAD.right} y2={y} stroke="#F1F5F9" strokeWidth="0.5" />
-                <text x={PAD.left - 8} y={y + 3} textAnchor="end" fontSize="10" fill="#94A3B8" fontFamily="Inter, sans-serif">{v}</text>
+                <line
+                  x1={PAD.left}
+                  y1={y}
+                  x2={SVG_W - PAD.right}
+                  y2={y}
+                  stroke={isZero ? '#CBD5E1' : '#F1F5F9'}
+                  strokeWidth={isZero ? '1' : '0.5'}
+                  strokeDasharray={isZero ? '3 3' : undefined}
+                />
+                <text
+                  x={PAD.left - 8}
+                  y={y + 3}
+                  textAnchor="end"
+                  fontSize="10"
+                  fill={isZero ? '#64748B' : '#94A3B8'}
+                  fontFamily="Inter, sans-serif"
+                  fontWeight={isZero ? '600' : 'normal'}
+                >
+                  {v}
+                </text>
               </g>
             )
           })}

@@ -21,42 +21,55 @@ interface TooltipData {
   time: string
 }
 
-function buildSeg(
-  readings: SensorReadingChart[],
-  key: keyof SensorReadingChart,
-  from: number,
-  to: number,
-  sx: (t: number) => number,
-  sy: (v: number) => number,
-): string {
-  const pts: string[] = []
-  for (let i = from; i < to; i++) {
-    const v = readings[i][key]
-    if (typeof v !== 'number' || v === null || Number.isNaN(v)) continue
-    pts.push(`${sx(new Date(readings[i].timestamp).getTime())},${sy(v)}`)
-  }
-  return pts.length ? `M ${pts.join(' L ')}` : ''
-}
+const DEFAULT_MAX_GAP_MS = 3 * 60 * 60 * 1000 // 3 hours
 
 function buildPath(
   sorted: SensorReadingChart[],
   key: keyof SensorReadingChart,
   sx: (t: number) => number,
   sy: (v: number) => number,
-  gapMs: number,
+  gapMs: number = DEFAULT_MAX_GAP_MS,
 ): string {
-  if (!sorted.length) return ''
+  // 1. Filter only readings with a valid numeric value for this metric
+  const valid = sorted.filter((r) => {
+    const v = r[key]
+    return typeof v === 'number' && v !== null && !Number.isNaN(v)
+  })
+
+  if (!valid.length) return ''
+
+  // Break lines only if the station was actually offline for an extended duration
+  const maxGap = Math.max(gapMs, DEFAULT_MAX_GAP_MS)
   const segs: string[] = []
-  let start = 0
-  for (let i = 1; i < sorted.length; i++) {
-    const gap = new Date(sorted[i].timestamp).getTime() - new Date(sorted[i - 1].timestamp).getTime()
-    if (gap > gapMs) {
-      segs.push(buildSeg(sorted, key, start, i, sx, sy))
-      start = i
+  let curSeg: string[] = []
+  let lastTime: number | null = null
+
+  for (let i = 0; i < valid.length; i++) {
+    const r = valid[i]
+    const t = new Date(r.timestamp).getTime()
+    const v = r[key] as number
+    const pt = `${sx(t)},${sy(v)}`
+
+    if (lastTime !== null && (t - lastTime) > maxGap) {
+      if (curSeg.length > 1) {
+        segs.push(`M ${curSeg.join(' L ')}`)
+      } else if (curSeg.length === 1) {
+        segs.push(`M ${curSeg[0]} L ${curSeg[0]}`)
+      }
+      curSeg = [pt]
+    } else {
+      curSeg.push(pt)
     }
+    lastTime = t
   }
-  segs.push(buildSeg(sorted, key, start, sorted.length, sx, sy))
-  return segs.filter(Boolean).join(' ')
+
+  if (curSeg.length > 1) {
+    segs.push(`M ${curSeg.join(' L ')}`)
+  } else if (curSeg.length === 1) {
+    segs.push(`M ${curSeg[0]} L ${curSeg[0]}`)
+  }
+
+  return segs.join(' ')
 }
 
 function computeTicks(yLoS: number, yHiS: number) {
@@ -114,7 +127,7 @@ export function HistoricalChart({ readings, metricKey, stationName, isLoading }:
     }
     const xRange = xHi - xLo || 1
     const sx = (t: number) => pad.left + ((t - xLo) / xRange) * cW
-    const gapMs = (sorted.length > 1 ? (xHi - xLo) / sorted.length : 3 * 60 * 60 * 1000) * 2.5
+    const gapMs = DEFAULT_MAX_GAP_MS
 
     const xTicksArr = xHi > xLo
       ? Array.from({ length: 7 }, (_, i) => new Date(xLo + (i / 6) * xRange))
