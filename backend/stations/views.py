@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 from .models import (
     Station, StationStatus, SensorReading, WeatherReading,
-    VoltageReading, CurrentReading, BenchmarkReading, SimCard,
+    VoltageReading, CurrentReading, BenchmarkReading, BenchmarkDataset, SimCard,
     WeatherMinute
 )
 from .ml_service import predict_station_window
@@ -42,6 +42,7 @@ from .serializers import (
     VoltageReadingSerializer,
     CurrentReadingSerializer,
     BenchmarkReadingSerializer,
+    BenchmarkDatasetSerializer,
 )
 
 
@@ -640,6 +641,37 @@ def station_detail(request, station_id):
 # API: Export endpoint — ML training data download
 # ─────────────────────────────────────────────────────────
 
+def _format_csv_datetime(val):
+    """
+    Format datetime into a clean, simple representation for CSV exports:
+    YYYY-MM-DD HH:MM:SS (e.g. 2026-09-30 08:46:46) in Africa/Kampala local time.
+    """
+    if not val:
+        return ''
+    if isinstance(val, (datetime.datetime, datetime.date)):
+        dt = val
+    else:
+        s_val = str(val).strip()
+        if len(s_val) == 19 and s_val[10] == ' ' and s_val[4] == '-' and s_val[7] == '-' and s_val[13] == ':' and s_val[16] == ':':
+            return s_val
+        dt = parse_datetime(s_val)
+        if dt is None:
+            if 'T' in s_val:
+                parts = s_val.split('T')
+                if len(parts) == 2:
+                    date_part = parts[0]
+                    time_part = parts[1].split('+')[0].split('-')[0].rstrip('Z').split('.')[0]
+                    return f"{date_part} {time_part}"
+            return s_val
+
+    tz = timezone.get_current_timezone()
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, tz)
+    else:
+        dt = dt.astimezone(tz)
+    return dt.strftime('%Y-%m-%d %H:%M:%S')
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def export(request):
@@ -669,7 +701,11 @@ def export(request):
         fieldnames = list(serializer.child.fields.keys())
         writer = csv.DictWriter(response, fieldnames=fieldnames)
         writer.writeheader()
-        for row in serializer.data:
+        for raw_row in serializer.data:
+            row = dict(raw_row)
+            for key in ('timestamp', 'received_at'):
+                if key in row and row[key]:
+                    row[key] = _format_csv_datetime(row[key])
             writer.writerow(row)
         return response
 
@@ -927,23 +963,24 @@ def sim_alert_email(request):
 # API: Benchmark endpoint — AWS vs UNMA reference data
 # ─────────────────────────────────────────────────────────
 
-def _nearest_pairs(aws_points, benchmark_points, max_delta=datetime.timedelta(minutes=30)):
+def _nearest_pairs(aws_points, benchmark_points, max_delta=datetime.timedelta(minutes=35)):
     """
-    Matches each AWS (timestamp, value) point to the closest benchmark
-    point within max_delta. Returns a list of (aws_value, benchmark_value)
-    pairs. Benchmark points assumed small enough for a linear scan.
+    Matches each benchmark reference reading (e.g. UNMA record) to the single
+    closest AWS reading within max_delta. With AWS stations reporting every
+    15-20 minutes, a 35-minute window finds the exact matching AWS cycle.
+    Returns a list of (aws_value, benchmark_value) pairs.
     """
     pairs = []
-    for aws_ts, aws_val in aws_points:
+    for bench_ts, bench_val in benchmark_points:
         best = None
         best_delta = None
-        for bench_ts, bench_val in benchmark_points:
+        for aws_ts, aws_val in aws_points:
             delta = abs(aws_ts - bench_ts)
             if delta <= max_delta and (best_delta is None or delta < best_delta):
-                best = bench_val
+                best = aws_val
                 best_delta = delta
         if best is not None:
-            pairs.append((aws_val, best))
+            pairs.append((best, bench_val))
     return pairs
 
 
@@ -966,18 +1003,54 @@ def _pearson_correlation(xs, ys):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def benchmark_datasets_list(request):
+    """
+    Returns all uploaded benchmark reference datasets with metadata and date ranges.
+    """
+    datasets = BenchmarkDataset.objects.all().order_by('-uploaded_at')
+    return api_response(data=BenchmarkDatasetSerializer(datasets, many=True).data)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def benchmark_dataset_detail(request, dataset_id):
+    """
+    Deletes a BenchmarkDataset, its uploaded CSV file, and all associated readings (CASCADE).
+    Admin only.
+    """
+    if getattr(request.user, 'role', None) != 'admin':
+        return api_response(error='Admin access required', status_code=403)
+
+    try:
+        dataset = BenchmarkDataset.objects.get(id=dataset_id)
+    except BenchmarkDataset.DoesNotExist:
+        return api_response(error='Dataset not found', status_code=404)
+
+    if dataset.csv_file:
+        try:
+            dataset.csv_file.delete(save=False)
+        except Exception:
+            pass
+
+    dataset.delete()
+    return api_response(message='Dataset deleted successfully')
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def benchmark(request):
     """
     Compares AWS station readings against benchmark (e.g. UNMA) reference
-    data for a given metric over a time window.
+    data for a given metric over a selectable benchmarking period.
     """
     station_id = request.query_params.get('station_id')
     if not station_id:
         return api_response(error='station_id is required', status_code=400)
 
-    hours  = int(request.query_params.get('hours', 168))
-    metric = request.query_params.get('metric', 'temperature')
-    source = request.query_params.get('source')
+    dataset_id = request.query_params.get('dataset_id')
+    location   = request.query_params.get('location')
+    source     = request.query_params.get('source')
+    metric     = request.query_params.get('metric', 'temperature')
 
     valid_metrics = {
         'temperature', 'humidity', 'pressure', 'wind_speed',
@@ -986,35 +1059,71 @@ def benchmark(request):
     if metric not in valid_metrics:
         return api_response(error=f'Invalid metric: {metric}', status_code=400)
 
-    since = timezone.now() - datetime.timedelta(hours=hours)
+    date_from_str = request.query_params.get('date_from') or request.query_params.get('start_date') or request.query_params.get('from')
+    date_to_str   = request.query_params.get('date_to') or request.query_params.get('end_date') or request.query_params.get('to')
+    hours_param   = request.query_params.get('hours')
+
+    kampala_tz = timezone.get_current_timezone()
+
+    start_dt = None
+    end_dt   = None
+    if date_from_str and date_to_str:
+        try:
+            s_d = datetime.date.fromisoformat(date_from_str[:10])
+            e_d = datetime.date.fromisoformat(date_to_str[:10])
+            start_dt = timezone.make_aware(datetime.datetime.combine(s_d, datetime.time.min), kampala_tz)
+            end_dt   = timezone.make_aware(datetime.datetime.combine(e_d, datetime.time.max), kampala_tz)
+        except Exception:
+            start_dt = None
+            end_dt   = None
+
+    if start_dt is None or end_dt is None:
+        hours = int(hours_param) if hours_param else 168
+        start_dt = timezone.now() - datetime.timedelta(hours=hours)
+        end_dt   = timezone.now()
+
+    # Resolve station_id if numeric ID (e.g. 1 -> "AWS-001")
+    code = station_id
+    if str(station_id).isdigit():
+        st = Station.objects.filter(id=station_id).first()
+        if st:
+            code = st.station_id
 
     aws_qs = SensorReading.objects.filter(
-        station_code=station_id,
-        timestamp__gte=since,
+        models.Q(station_code=code) | models.Q(station_code=station_id),
+        timestamp__gte=start_dt,
+        timestamp__lte=end_dt,
     ).order_by('timestamp').values('timestamp', metric)
 
     bench_qs = BenchmarkReading.objects.filter(
-        timestamp__gte=since,
+        timestamp__gte=start_dt,
+        timestamp__lte=end_dt,
     ).order_by('timestamp')
-    if source:
+
+    if dataset_id:
+        bench_qs = bench_qs.filter(dataset_id=dataset_id)
+    elif location:
+        bench_qs = bench_qs.filter(location__iexact=location)
+    elif source:
         bench_qs = bench_qs.filter(source=source)
-    bench_qs = bench_qs.values('timestamp', 'source', metric)
+
+    bench_qs = bench_qs.values('timestamp', 'source', 'location', metric)
 
     aws_readings = [
-        {'timestamp': r['timestamp'], 'value': r[metric]}
+        {'timestamp': _format_csv_datetime(r['timestamp']), 'value': r[metric], '_dt': r['timestamp']}
         for r in aws_qs if r[metric] is not None
     ]
     benchmark_readings = [
-        {'timestamp': r['timestamp'], 'value': r[metric], 'source': r['source']}
+        {'timestamp': _format_csv_datetime(r['timestamp']), 'value': r[metric], 'source': r.get('source'), 'location': r.get('location'), '_dt': r['timestamp']}
         for r in bench_qs if r[metric] is not None
     ]
 
     aws_values = [r['value'] for r in aws_readings]
     benchmark_values = [r['value'] for r in benchmark_readings]
 
-    aws_points = [(r['timestamp'], r['value']) for r in aws_readings]
-    bench_points = [(r['timestamp'], r['value']) for r in benchmark_readings]
-    pairs = _nearest_pairs(aws_points, bench_points)
+    aws_points = [(r['_dt'], r['value']) for r in aws_readings]
+    bench_points = [(r['_dt'], r['value']) for r in benchmark_readings]
+    pairs = _nearest_pairs(aws_points, bench_points, max_delta=datetime.timedelta(hours=2))
 
     mae = (
         sum(abs(a - b) for a, b in pairs) / len(pairs)
@@ -1025,20 +1134,35 @@ def benchmark(request):
         if len(pairs) >= 2 else None
     )
 
+    aws_avg = round(sum(aws_values) / len(aws_values), 2) if aws_values else None
+    bench_avg = round(sum(benchmark_values) / len(benchmark_values), 2) if benchmark_values else None
+    bias = round(aws_avg - bench_avg, 2) if (aws_avg is not None and bench_avg is not None) else None
+
     stats = {
-        'aws_avg':             (sum(aws_values) / len(aws_values)) if aws_values else None,
+        'aws_avg':             aws_avg,
         'aws_min':             min(aws_values) if aws_values else None,
         'aws_max':             max(aws_values) if aws_values else None,
-        'benchmark_avg':       (sum(benchmark_values) / len(benchmark_values)) if benchmark_values else None,
+        'benchmark_avg':       bench_avg,
         'benchmark_min':       min(benchmark_values) if benchmark_values else None,
         'benchmark_max':       max(benchmark_values) if benchmark_values else None,
-        'mean_absolute_error': mae,
-        'correlation':         correlation,
+        'bias':                bias,
+        'mean_absolute_error': round(mae, 3) if mae is not None else None,
+        'correlation':         round(correlation, 3) if correlation is not None else None,
+        'pair_count':          len(pairs),
     }
+
+    # Clean up internal datetime object before returning
+    for r in aws_readings:
+        r.pop('_dt', None)
+    for r in benchmark_readings:
+        r.pop('_dt', None)
 
     return api_response(data={
         'station_id':          station_id,
-        'hours':               hours,
+        'dataset_id':          dataset_id,
+        'location':            location,
+        'date_from':           _format_csv_datetime(start_dt),
+        'date_to':             _format_csv_datetime(end_dt),
         'metric':              metric,
         'aws_readings':        aws_readings,
         'benchmark_readings':  benchmark_readings,
@@ -1050,8 +1174,6 @@ def benchmark(request):
 # API: Benchmark CSV import — admin only
 # ─────────────────────────────────────────────────────────
 
-# CSV columns (besides the first "time" column) that map directly
-# onto BenchmarkReading fields. Same as BenchmarkReadingAdmin.import_csv.
 BENCHMARK_CSV_FIELDS = [
     'temperature', 'humidity', 'pressure', 'wind_speed',
     'wind_direction', 'rain', 'solar_radiation', 'soil_moisture',
@@ -1063,8 +1185,7 @@ BENCHMARK_CSV_FIELDS = [
 def benchmark_import(request):
     """
     Imports UNMA (or other) benchmark readings from an uploaded CSV.
-    Admin only. Mirrors the parsing logic in BenchmarkReadingAdmin.import_csv
-    so the Django admin and React upload flow behave identically.
+    Admin only. Creates a BenchmarkDataset and bulk-creates associated readings.
     """
     if request.user.role != 'admin':
         return api_response(error='Admin access required', status_code=403)
@@ -1073,20 +1194,31 @@ def benchmark_import(request):
     if not csv_file:
         return api_response(error='file is required', status_code=400)
 
-    source = request.data.get('source') or 'UNMA'
-    location = request.data.get('location', '')
+    location = (request.data.get('location') or '').strip()
+    if not location:
+        return api_response(error='location is required', status_code=400)
 
+    source = (request.data.get('source') or 'UNMA').strip()
+    dataset_name = (request.data.get('name') or f"{source} - {location} ({csv_file.name})").strip()
+
+    dataset = BenchmarkDataset.objects.create(
+        name=dataset_name,
+        location=location,
+        source=source,
+        csv_file=csv_file,
+        uploaded_by=request.user if request.user.is_authenticated else None,
+    )
+
+    csv_file.seek(0)
     decoded = io.TextIOWrapper(csv_file.file, encoding='utf-8-sig')
     reader = csv.reader(decoded)
 
     try:
         header = next(reader)
     except StopIteration:
+        dataset.delete()
         return api_response(error='CSV file is empty', status_code=400)
 
-    # First column is the timestamp; remaining columns are matched by
-    # name against BENCHMARK_CSV_FIELDS. Unknown columns are ignored;
-    # known fields not present are skipped.
     field_columns = {}
     for idx, col_name in enumerate(header[1:], start=1):
         col_name = col_name.strip().lower()
@@ -1095,16 +1227,34 @@ def benchmark_import(request):
 
     readings = []
     skipped = 0
+    min_ts = None
+    max_ts = None
+    kampala_tz = timezone.get_current_timezone()
+
     for row in reader:
         if not row or not row[0].strip():
             continue
 
-        timestamp = parse_datetime(row[0].strip())
+        raw_ts = row[0].strip()
+        timestamp = parse_datetime(raw_ts)
+        if timestamp is None:
+            timestamp = parse_aware_datetime(raw_ts)
         if timestamp is None:
             skipped += 1
             continue
 
+        if timezone.is_naive(timestamp):
+            timestamp = timezone.make_aware(timestamp, kampala_tz)
+        else:
+            timestamp = timestamp.astimezone(kampala_tz)
+
+        if min_ts is None or timestamp < min_ts:
+            min_ts = timestamp
+        if max_ts is None or timestamp > max_ts:
+            max_ts = timestamp
+
         kwargs = {
+            'dataset': dataset,
             'source': source,
             'location': location,
             'timestamp': timestamp,
@@ -1122,9 +1272,15 @@ def benchmark_import(request):
 
         readings.append(BenchmarkReading(**kwargs))
 
-    BenchmarkReading.objects.bulk_create(readings, batch_size=500)
+    if readings:
+        BenchmarkReading.objects.bulk_create(readings, batch_size=500)
+        dataset.start_date = min_ts
+        dataset.end_date   = max_ts
+        dataset.row_count  = len(readings)
+        dataset.save(update_fields=['start_date', 'end_date', 'row_count'])
 
     return api_response(data={
+        'dataset':  BenchmarkDatasetSerializer(dataset).data,
         'imported': len(readings),
         'skipped':  skipped,
     })

@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Station, StationStatus, SensorReading, WeatherReading,
-    VoltageReading, CurrentReading, BenchmarkReading, WeatherMinute
+    VoltageReading, CurrentReading, BenchmarkReading, BenchmarkDataset, WeatherMinute
 )
 
 
@@ -237,4 +237,14 @@ class BenchmarkReadingSerializer(serializers.ModelSerializer):
         model = BenchmarkReading
         fields = ['timestamp', 'source', 'location', 'temperature', 'humidity',
                   'pressure', 'wind_speed', 'wind_direction', 'rain', 'solar_radiation', 'soil_moisture']
-        
+
+
+class BenchmarkDatasetSerializer(serializers.ModelSerializer):
+    uploaded_by_email = serializers.CharField(source='uploaded_by.email', read_only=True)
+
+    class Meta:
+        model = BenchmarkDataset
+        fields = [
+            'id', 'name', 'location', 'source', 'csv_file',
+            'uploaded_at', 'uploaded_by_email', 'start_date', 'end_date', 'row_count'
+        ]

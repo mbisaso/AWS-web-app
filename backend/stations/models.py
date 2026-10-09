@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 class Station(models.Model):
@@ -399,11 +400,47 @@ class CurrentReading(models.Model):
         return f"Current {self.station_code} @ {self.timestamp}"
 
 
+class BenchmarkDataset(models.Model):
+    """
+    Metadata and raw CSV file for an imported meteorological benchmark dataset
+    (e.g., from UNMA or another reference authority).
+    """
+    name        = models.CharField(max_length=200, blank=True)
+    location    = models.CharField(max_length=150, help_text="Benchmark station location, e.g. Entebbe")
+    source      = models.CharField(max_length=100, default='UNMA')
+    csv_file    = models.FileField(upload_to='benchmark_csvs/', null=True, blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='benchmark_datasets'
+    )
+    start_date  = models.DateTimeField(null=True, blank=True, help_text="Earliest timestamp in the CSV")
+    end_date    = models.DateTimeField(null=True, blank=True, help_text="Latest timestamp in the CSV")
+    row_count   = models.IntegerField(default=0)
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        title = self.name or f"{self.source} - {self.location}"
+        return f"{title} ({self.location}) [{self.row_count} rows]"
+
+
 class BenchmarkReading(models.Model):
     """
     Reference-data reading imported from an external meteorological
     authority (e.g. UNMA) — used to benchmark AWS station accuracy.
     """
+    dataset = models.ForeignKey(
+        BenchmarkDataset,
+        on_delete=models.CASCADE,
+        related_name="readings",
+        null=True,
+        blank=True
+    )
     source    = models.CharField(max_length=100, default='UNMA')
     location  = models.CharField(max_length=100, blank=True)
     timestamp = models.DateTimeField(db_index=True)
@@ -421,6 +458,8 @@ class BenchmarkReading(models.Model):
         ordering = ['-timestamp']
         indexes = [
             models.Index(fields=['source', 'timestamp'], name='idx_benchmark_source_time'),
+            models.Index(fields=['dataset', 'timestamp'], name='idx_bench_dataset_time'),
+            models.Index(fields=['location', 'timestamp'], name='idx_bench_location_time'),
         ]
 
     def __str__(self):

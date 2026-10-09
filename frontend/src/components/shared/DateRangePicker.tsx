@@ -5,12 +5,6 @@ function toISODate(date: Date): string {
   return date.toISOString().slice(0, 10)
 }
 
-function daysAgo(days: number): string {
-  const d = new Date()
-  d.setDate(d.getDate() - days)
-  return toISODate(d)
-}
-
 interface DateRangePickerProps {
   dateFrom: string
   dateTo: string
@@ -25,14 +19,46 @@ export function DateRangePicker({ dateFrom, dateTo, onChange }: DateRangePickerP
     (days: number) => {
       setActivePreset(days)
       setCustomMode(false)
-      onChange(daysAgo(days), toISODate(new Date()))
+      if (days === 0) {
+        const todayStr = toISODate(new Date())
+        onChange(todayStr, todayStr)
+      } else {
+        const baseEnd = dateTo ? new Date(dateTo) : new Date()
+        const validEnd = isNaN(baseEnd.getTime()) ? new Date() : baseEnd
+        const endStr = toISODate(validEnd)
+        const startD = new Date(validEnd.getTime() - days * 24 * 60 * 60 * 1000)
+        onChange(toISODate(startD), endStr)
+      }
     },
-    [onChange],
+    [dateTo, onChange],
   )
 
+  // Sync active preset when dateFrom or dateTo change externally
   useEffect(() => {
-    handlePreset(7)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!dateFrom || !dateTo) return
+    const diffDays = Math.round(
+      (new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / (24 * 60 * 60 * 1000),
+    )
+    if (diffDays === 0) {
+      setActivePreset(0)
+      setCustomMode(false)
+    } else if (diffDays === 7) {
+      setActivePreset(7)
+      setCustomMode(false)
+    } else if (diffDays >= 28 && diffDays <= 31) {
+      setActivePreset(30)
+      setCustomMode(false)
+    } else {
+      setActivePreset(null)
+      setCustomMode(true)
+    }
+  }, [dateFrom, dateTo])
+
+  useEffect(() => {
+    if (!dateFrom || !dateTo) {
+      handlePreset(7)
+    }
+  }, [dateFrom, dateTo, handlePreset])
 
   return (
     <div>

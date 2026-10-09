@@ -253,10 +253,29 @@ export interface BenchmarkStats {
   benchmark_max: number | null
   mean_absolute_error: number | null
   correlation: number | null
+  bias?: number | null
+  pair_count?: number
+}
+
+export interface BenchmarkDataset {
+  id: number
+  name: string
+  location: string
+  source: string
+  csv_file?: string | null
+  uploaded_at: string
+  uploaded_by_email?: string | null
+  start_date: string | null
+  end_date: string | null
+  row_count: number
 }
 
 export interface BenchmarkData {
   station_id: string
+  dataset_id?: number | string | null
+  location?: string | null
+  date_from?: string | null
+  date_to?: string | null
   hours: number
   metric: string
   aws_readings: AwsReading[]

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { SensorMetricKey, SensorReadingChart } from '../../types'
 import { SENSOR_METRIC_CONFIG } from '../../types'
-import { formatDecimal } from '../../utils/formatters'
+import { formatDecimal, formatCsvTimestamp } from '../../utils/formatters'
 
 type SortKey =
   | 'timestamp'
@@ -108,20 +108,21 @@ export function ReadingsTable({ readings, metricKey, stationName, isLoading }: R
     }
 
     const rows = sorted.map((r) => {
+      const formattedTime = formatCsvTimestamp(r.timestamp)
       if (isAtmospheric) {
-        return [r.timestamp, String(r.temperature ?? ''), String(r.humidity ?? '')]
+        return [formattedTime, String(r.temperature ?? ''), String(r.humidity ?? '')]
       }
       const val = r[metricKey] ?? ''
       if (isRain) {
         const tips = r.rain_tips ?? r.rain_tips_total ?? ''
-        return [r.timestamp, String(tips), String(val)]
+        return [formattedTime, String(tips), String(val)]
       }
       if (isWind) {
         const pulses = r.wind_pulses_total ?? ''
         const knots = r.wind_speed_knots ?? ''
-        return [r.timestamp, String(pulses), String(val), String(knots)]
+        return [formattedTime, String(pulses), String(val), String(knots)]
       }
-      return [r.timestamp, String(val)]
+      return [formattedTime, String(val)]
     })
     const csv = [headers, ...rows].map((row) => row.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
