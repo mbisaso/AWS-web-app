@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { apiClient } from '../api/client';
 
 export function LoginPage() {
   const [email, setEmail] = useState('')
@@ -220,8 +219,5 @@ export function LoginPage() {
       </div>
     </div>
   )
-}
-function elif(error: any) {
-  throw new Error('Function not implemented.')
 }
 

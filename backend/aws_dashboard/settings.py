@@ -200,6 +200,7 @@ EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'noreply@awsmonitor.ug')
 NOTIFICATION_EMAIL = os.environ.get('NOTIFICATION_EMAIL', 'admin@awsmonitor.ug')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
 
 # Bypass Django's MariaDB version check & feature flags for local XAMPP
 from django.db.backends.mysql.base import DatabaseWrapper
