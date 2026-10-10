@@ -154,7 +154,8 @@ def password_reset_request_api(request):
         uid = urlsafe_base64_encode(force_bytes(user.pk))
 
         # building a dynamic recovery link
-        reset_link = f"http://localhost:5173/reset-password?uid={uid}&token={token}"
+        frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+        reset_link = f"{frontend_url}/reset-password?uid={uid}&token={token}"
         
         send_mail(
             subject='Password Reset Recovery Link',
@@ -193,5 +194,5 @@ def password_reset_confirm_api(request):
             return Response({'success': True, 'message': 'Password has been reset successfully.'}, status=200)
         else:
             return Response({'success': False, 'error': 'The link is invalid or has expired.'}, status=400)
-    except (TypeError, ValueError, OverflowError, user.DoesNotExist):
-        return response({'success': False, 'error': 'invalid request parameters.'}, status=400)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        return Response({'success': False, 'error': 'Invalid request parameters.'}, status=400)

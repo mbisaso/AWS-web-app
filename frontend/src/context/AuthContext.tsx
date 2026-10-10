@@ -13,7 +13,7 @@ import {
   API_BASE_URL,
   setLogoutHandler,
 } from "../api/client";
-import type { ApiEnvelope, UserRole } from "../types";
+import type { UserRole } from "../types";
 
 const STORAGE_KEY = "auth";
 
