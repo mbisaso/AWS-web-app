@@ -37,7 +37,7 @@ DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = _csv_env(
     'DJANGO_ALLOWED_HOSTS',
-    'localhost,127.0.0.1,.ngrok-free.dev,.ngrok-free.app,.onrender.com,.trycloudflare.com,.lhr.life,.trycloudflare.com',
+    'api.wimea-ict.net,localhost,127.0.0.1,.ngrok-free.dev,.ngrok-free.app,.onrender.com,.trycloudflare.com,.lhr.life,.trycloudflare.com',
 )
 
 CSRF_TRUSTED_ORIGINS = _csv_env(
