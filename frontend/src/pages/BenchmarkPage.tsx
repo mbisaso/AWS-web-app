@@ -4,7 +4,6 @@ import type { AwsReading, BenchmarkData, BenchmarkDataset, BenchmarkReading, Ben
 import { SENSOR_METRIC_CONFIG } from '../types'
 import { deleteBenchmarkDataset, fetchBenchmarkDatasets, fetchStations, importBenchmarkCSV } from '../api/stations'
 import { useBenchmarkData } from '../hooks/useBenchmarkData'
-import { useAuth } from '../context/AuthContext'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { DateRangePicker } from '../components/shared/DateRangePicker'
 
@@ -619,12 +618,7 @@ function BenchmarkImportPanel({
   return (
     <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
       <div className="mb-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-midnight font-display">Import Reference Data</h3>
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700">
-            Admin only
-          </span>
-        </div>
+        <h3 className="text-sm font-semibold text-midnight font-display">Import Reference Data</h3>
         <p className="text-xs text-storm/40">Upload official UNMA or benchmark CSV files</p>
       </div>
 
@@ -960,7 +954,6 @@ function BenchmarkContent({
 /* ── Main Benchmark Page ── */
 
 export function BenchmarkPage() {
-  const { role } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [stations, setStations] = useState<Station[]>([])
@@ -1114,10 +1107,8 @@ export function BenchmarkPage() {
           </div>
         </div>
 
-        {/* ── Admin CSV Import Panel ── */}
-        {role === 'admin' && (
-          <BenchmarkImportPanel onImportSuccess={handleImportSuccess} />
-        )}
+        {/* ── Reference CSV Import Panel ── */}
+        <BenchmarkImportPanel onImportSuccess={handleImportSuccess} />
 
         {/* ── Controls Section ── */}
         <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
@@ -1269,7 +1260,7 @@ export function BenchmarkPage() {
               Please import a reference CSV to start the benchmarking.
             </p>
             <p className="mt-1 max-w-md text-xs text-storm/40">
-              No reference datasets have been imported yet. Use the upload panel below to import a UNMA CSV file.
+              No reference datasets have been imported yet. Use the upload panel above to import a UNMA CSV file.
             </p>
           </div>
         ) : !selectedDatasetId ? (

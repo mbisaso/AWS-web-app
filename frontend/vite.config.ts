@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://api.wimea-ict.net', 
+        target: 'https://aws.wimea-ict.net', 
         changeOrigin: true,
         secure: false,
       },

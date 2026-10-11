@@ -1016,15 +1016,19 @@ def benchmark_datasets_list(request):
 def benchmark_dataset_detail(request, dataset_id):
     """
     Deletes a BenchmarkDataset, its uploaded CSV file, and all associated readings (CASCADE).
-    Admin only.
+    Admin or dataset uploader.
     """
-    if getattr(request.user, 'role', None) != 'admin':
-        return api_response(error='Admin access required', status_code=403)
-
     try:
         dataset = BenchmarkDataset.objects.get(id=dataset_id)
     except BenchmarkDataset.DoesNotExist:
         return api_response(error='Dataset not found', status_code=404)
+
+    if (
+        getattr(request.user, 'role', None) != 'admin'
+        and dataset.uploaded_by is not None
+        and dataset.uploaded_by != request.user
+    ):
+        return api_response(error='Permission denied. Only admins or the uploader can delete this dataset.', status_code=403)
 
     if dataset.csv_file:
         try:
@@ -1185,11 +1189,8 @@ BENCHMARK_CSV_FIELDS = [
 def benchmark_import(request):
     """
     Imports UNMA (or other) benchmark readings from an uploaded CSV.
-    Admin only. Creates a BenchmarkDataset and bulk-creates associated readings.
+    Creates a BenchmarkDataset and bulk-creates associated readings.
     """
-    if request.user.role != 'admin':
-        return api_response(error='Admin access required', status_code=403)
-
     csv_file = request.FILES.get('file')
     if not csv_file:
         return api_response(error='file is required', status_code=400)
