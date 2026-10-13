@@ -3,11 +3,48 @@ import io
 
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.auth import get_user_model
 from django.shortcuts import render, redirect
 from django.urls import path, reverse
 from django.utils.dateparse import parse_datetime
 
-from .models import Station, StationStatus, SensorReading, BenchmarkReading, BenchmarkDataset
+from .models import (
+    Station,
+    StationStatus,
+    SensorReading,
+    BenchmarkReading,
+    BenchmarkDataset,
+    DailyPerformanceReportSettings,
+)
+
+
+@admin.register(DailyPerformanceReportSettings)
+class DailyPerformanceReportSettingsAdmin(admin.ModelAdmin):
+    list_display = ["enabled", "recipient_group", "send_time", "last_sent_on"]
+    list_display_links = ["recipient_group"]
+    fields = [
+        "enabled",
+        "recipient_group",
+        "selected_users",
+        "send_time",
+        "last_sent_on",
+        "updated_at",
+    ]
+    readonly_fields = ["last_sent_on", "updated_at"]
+    filter_horizontal = ["selected_users"]
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        if db_field.name == "selected_users":
+            kwargs["queryset"] = get_user_model().objects.filter(
+                is_active=True,
+            ).exclude(email="").order_by("email")
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
+
+    def has_add_permission(self, request):
+        return not DailyPerformanceReportSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(BenchmarkDataset)

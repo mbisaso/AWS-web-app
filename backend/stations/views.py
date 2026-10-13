@@ -6,12 +6,13 @@ import math
 import os
 
 from django.db import models, transaction
-from django.db.models import Q
+from django.db.models import Q, Avg, Min, Max, Count
 from django.contrib.auth.decorators import login_required
 from django.core.mail import send_mail
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
+from django.utils.text import slugify
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
@@ -44,6 +45,8 @@ from .serializers import (
     BenchmarkReadingSerializer,
     BenchmarkDatasetSerializer,
 )
+from .performance_reports import build_performance_report_data
+from .report_email import build_station_report_pdf
 
 
 def api_response(data=None, message=None, error=None, status_code=200):
@@ -1420,3 +1423,75 @@ def topup_sim_account(request, sim_id):
             'status': 'active' if is_active else 'inactive'
         }
     })
+
+
+# ─────────────────────────────────────────────────────────
+# API: Station Performance Report
+# ─────────────────────────────────────────────────────────
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def performance_report(request):
+    """
+    Computes performance and health metrics for a weather station over a given period.
+    Query params:
+      - station_id (required): station identifier/code (e.g. 'AWS-UG-001' or numeric ID)
+      - days (optional, default: 30): report timeframe in days
+    """
+    station_id = request.query_params.get('station_id')
+    if not station_id:
+        return api_response(error='station_id is required', status_code=400)
+
+    days_param = request.query_params.get('days', 30)
+    try:
+        days = int(days_param)
+        if days <= 0:
+            days = 30
+    except (ValueError, TypeError):
+        days = 30
+
+    station = None
+    if str(station_id).isdigit():
+        station = Station.objects.select_related('status').filter(id=int(station_id)).first()
+    if not station:
+        station = Station.objects.select_related('status').filter(station_id=station_id).first()
+
+    if not station:
+        return api_response(error=f'Station {station_id} not found', status_code=404)
+
+    period_end = timezone.now()
+    period_start = period_end - datetime.timedelta(days=days)
+    report_data = build_performance_report_data(station, period_start, period_end)
+    return api_response(data=report_data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def performance_report_pdf(request):
+    station_id = request.query_params.get('station_id')
+    if not station_id:
+        return api_response(error='station_id is required', status_code=400)
+
+    try:
+        days = int(request.query_params.get('days', 30))
+        if days <= 0:
+            days = 30
+    except (ValueError, TypeError):
+        days = 30
+
+    station = None
+    if str(station_id).isdigit():
+        station = Station.objects.select_related('status').filter(id=int(station_id)).first()
+    if not station:
+        station = Station.objects.select_related('status').filter(station_id=station_id).first()
+    if not station:
+        return api_response(error=f'Station {station_id} not found', status_code=404)
+
+    period_end = timezone.now()
+    period_start = period_end - datetime.timedelta(days=days)
+    report_data = build_performance_report_data(station, period_start, period_end)
+    pdf = build_station_report_pdf(report_data)
+    filename = slugify(station.station_id) or 'station'
+    response = HttpResponse(pdf, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="performance-report-{filename}-{days}d.pdf"'
+    return response
