@@ -2210,3 +2210,74 @@ export function getExportCsvUrl(config: ExportConfig): string {
   return `${API_BASE_URL}/api/export/?${params.toString()}`;
 }
 
+export interface PerformanceReportData {
+  station_name: string;
+  station_code: string;
+  period_start: string;
+  period_end: string;
+  generated_at: string;
+
+  data_availability: {
+    pct: number;
+    expected_readings: number;
+    actual_readings: number;
+  };
+
+  missing_data: {
+    total_gaps: number;
+    longest_gap_minutes: number;
+    total_missing_minutes: number;
+    gaps: Array<{
+      start: string;
+      end: string;
+      duration_minutes: number;
+      missed_readings: number;
+    }>;
+  };
+
+  transmission: {
+    success_pct: number;
+    avg_latency_seconds: number;
+  };
+
+  power: {
+    volt_batt_min: number | null;
+    volt_batt_max: number | null;
+    volt_batt_avg: number | null;
+    volt_solar_min: number | null;
+    volt_solar_max: number | null;
+    volt_solar_avg: number | null;
+    low_battery_events: number;
+  };
+
+  uptime: {
+    pct: number;
+    total_downtime_minutes: number;
+    downtime_incidents: number;
+  };
+
+  sensor_health: {
+    sensors: Record<string, {
+      total_readings: number;
+      null_readings: number;
+      completeness_pct: number;
+    }>;
+    active_faults: string[];
+  };
+}
+
+export async function fetchPerformanceReport(stationId: string, days: number = 30): Promise<PerformanceReportData> {
+  const response = await apiClient.get<ApiEnvelope<PerformanceReportData>>('/api/reports/performance/', {
+    params: { station_id: stationId, days }
+  });
+  return response.data.data;
+}
+
+export async function downloadPerformanceReportPdf(stationId: string, days: number): Promise<Blob> {
+  const response = await apiClient.get<Blob>('/api/reports/performance/download/', {
+    params: { station_id: stationId, days },
+    responseType: 'blob',
+  });
+  return response.data;
+}
+

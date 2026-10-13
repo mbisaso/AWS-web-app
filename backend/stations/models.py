@@ -1,3 +1,5 @@
+import datetime
+
 from django.conf import settings
 from django.db import models
 
@@ -80,6 +82,44 @@ class StationStatus(models.Model):
 
     def __str__(self):
         return f"{self.station.station_id} — {self.status}"
+
+
+class DailyPerformanceReportSettings(models.Model):
+    class RecipientGroup(models.TextChoices):
+        ADMINS = "admins", "Admins"
+        ALL_ACTIVE = "all_active", "All active users"
+        SELECTED = "selected", "Selected users"
+
+    recipient_group = models.CharField(
+        max_length=20,
+        choices=RecipientGroup.choices,
+        default=RecipientGroup.ADMINS,
+    )
+    selected_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="daily_performance_report_settings",
+        help_text="Used only when the recipient group is Selected users.",
+    )
+    send_time = models.TimeField(default=datetime.time(8, 0))
+    enabled = models.BooleanField(default=False)
+    last_sent_on = models.DateField(null=True, blank=True, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "daily performance report settings"
+        verbose_name_plural = "daily performance report settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise RuntimeError("Daily performance report settings cannot be deleted.")
+
+    def __str__(self):
+        state = "enabled" if self.enabled else "disabled"
+        return f"Daily performance email ({state})"
 
 
 class SensorReading(models.Model):

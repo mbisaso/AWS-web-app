@@ -108,6 +108,36 @@ npm run dev
 ```
 *Frontend runs at `http://localhost:5173`*
 
+### 5. Daily Performance Report Email (Local)
+
+The daily report covers the previous calendar day in `Africa/Kampala` time. It includes an overall summary and per-station details in the email and attached PDF. Delivery is disabled until configured.
+
+1. Apply migrations and create an admin account if you have not already:
+
+  ```powershell
+  cd backend
+  .\.venv\Scripts\python.exe manage.py migrate
+  .\.venv\Scripts\python.exe manage.py createsuperuser
+  ```
+
+2. Open `http://localhost:8000/admin/`, sign in, and configure **Daily performance report settings**. Choose **Admins**, **All active users**, or **Selected users**. For **Selected users**, move the desired active accounts with email addresses into the selected list. Set the send time, then enable delivery. Admins include accounts with the `admin` role, staff status, or superuser status. Recipients are BCC'd.
+
+3. Check the report without sending email:
+
+  ```powershell
+  .\.venv\Scripts\python.exe manage.py send_daily_performance_report --dry-run
+  ```
+
+4. To receive email outside the terminal, configure the existing `EMAIL_*` SMTP variables in `backend/.env`. Without SMTP settings, local development uses Django's console email backend and prints the message instead of sending it.
+
+5. To run delivery locally without keeping Django's development server open, create a Windows Task Scheduler task:
+  - Set a daily trigger at midnight and repeat it every 1 minute indefinitely.
+  - Set the action program to the full path to `backend\.venv\Scripts\python.exe`.
+  - Set arguments to `manage.py send_daily_performance_report`.
+  - Set **Start in** to the full path to the `backend` directory.
+
+The command checks the configured time and sends at most once per local day. The machine must be awake and the database reachable at delivery time. `--force` sends immediately for testing and bypasses the enabled/time checks.
+
 ---
 
 ## 🧪 Local ML Ingestion Testing

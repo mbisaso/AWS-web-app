@@ -22,3 +22,4 @@ scikit-learn
 joblib
 numpy
 scipy
+reportlab>=4.2,<5
