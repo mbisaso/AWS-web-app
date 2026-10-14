@@ -122,6 +122,57 @@ class DailyPerformanceReportSettings(models.Model):
         return f"Daily performance email ({state})"
 
 
+class MaintenanceLog(models.Model):
+    """
+    A maintenance visit, reset or other intervention on a station.
+    Listed in performance reports for the period it falls in.
+    """
+    class ActivityType(models.TextChoices):
+        INSPECTION    = "inspection",    "Inspection"
+        CLEANING      = "cleaning",      "Cleaning"
+        CALIBRATION   = "calibration",   "Calibration"
+        REPAIR        = "repair",        "Repair"
+        REPLACEMENT   = "replacement",   "Sensor or part replacement"
+        POWER         = "power",         "Battery or power work"
+        COMMUNICATION = "communication", "SIM or communication work"
+        FIRMWARE      = "firmware",      "Firmware or configuration change"
+        RESET         = "reset",         "Reset or restart"
+        OTHER         = "other",         "Other"
+
+    station       = models.ForeignKey(
+                      Station,
+                      related_name="maintenance_logs",
+                      on_delete=models.CASCADE
+                    )
+    activity_type = models.CharField(
+                      max_length=20,
+                      choices=ActivityType.choices,
+                      default=ActivityType.INSPECTION
+                    )
+    started_at    = models.DateTimeField(help_text="When the work started")
+    ended_at      = models.DateTimeField(
+                      null=True, blank=True,
+                      help_text="When the work finished; leave blank for a single moment"
+                    )
+    description   = models.TextField(help_text="What was done and why")
+    performed_by  = models.CharField(max_length=100, blank=True, help_text="Technician or team")
+    created_by    = models.ForeignKey(
+                      settings.AUTH_USER_MODEL,
+                      related_name="maintenance_logs",
+                      on_delete=models.SET_NULL,
+                      null=True, blank=True,
+                      editable=False
+                    )
+    created_at    = models.DateTimeField(auto_now_add=True)
+    updated_at    = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"{self.station.station_id} — {self.get_activity_type_display()} ({self.started_at:%Y-%m-%d})"
+
+
 class SensorReading(models.Model):
     """
     Stores one reading from the ESP32 AWS station received via GSM.

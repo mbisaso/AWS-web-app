@@ -2210,6 +2210,43 @@ export function getExportCsvUrl(config: ExportConfig): string {
   return `${API_BASE_URL}/api/export/?${params.toString()}`;
 }
 
+export interface PerformanceReportGap {
+  start: string;
+  end: string;
+  duration_minutes: number;
+  missed_readings: number;
+  cause: 'low_battery' | 'unknown';
+  during_maintenance: boolean;
+}
+
+export interface CommunicationEvent {
+  start: string;
+  end: string;
+  duration_minutes: number;
+  delayed_readings: number;
+}
+
+export type SensorFaultType = 'missing' | 'out_of_range' | 'stuck';
+
+export interface SensorFaultEvent {
+  sensor: string;
+  type: SensorFaultType;
+  start: string;
+  end: string;
+  duration_minutes: number;
+  readings: number;
+}
+
+export interface ReportMaintenanceEvent {
+  id: number;
+  activity_type: MaintenanceActivityType;
+  activity_label: string;
+  start: string;
+  end: string | null;
+  description: string;
+  performed_by: string;
+}
+
 export interface PerformanceReportData {
   station_name: string;
   station_code: string;
@@ -2227,17 +2264,22 @@ export interface PerformanceReportData {
     total_gaps: number;
     longest_gap_minutes: number;
     total_missing_minutes: number;
-    gaps: Array<{
-      start: string;
-      end: string;
-      duration_minutes: number;
-      missed_readings: number;
-    }>;
+    gaps: PerformanceReportGap[];
   };
 
   transmission: {
     success_pct: number;
     avg_latency_seconds: number;
+    on_time_readings: number;
+    on_time_intervals: number;
+    clock_ahead_readings: number;
+  };
+
+  communication: {
+    interruptions: number;
+    total_minutes: number;
+    longest_minutes: number;
+    events: CommunicationEvent[];
   };
 
   power: {
@@ -2247,13 +2289,23 @@ export interface PerformanceReportData {
     volt_solar_min: number | null;
     volt_solar_max: number | null;
     volt_solar_avg: number | null;
+    battery_temp_min: number | null;
+    battery_temp_max: number | null;
+    battery_temp_avg: number | null;
     low_battery_events: number;
+    charging_hours: number;
+    discharging_hours: number;
+    measured_hours: number;
+    charging_pct: number;
+    power_outages: number;
+    power_outage_minutes: number;
   };
 
   uptime: {
     pct: number;
     total_downtime_minutes: number;
     downtime_incidents: number;
+    covered_intervals: number;
   };
 
   sensor_health: {
@@ -2261,8 +2313,22 @@ export interface PerformanceReportData {
       total_readings: number;
       null_readings: number;
       completeness_pct: number;
+      fault_events: number;
+      fault_minutes: number;
+      faults_by_type: Record<SensorFaultType, number>;
     }>;
     active_faults: string[];
+    fault_events: SensorFaultEvent[];
+    total_fault_events: number;
+    logger_errors: {
+      clock_ahead_readings: number;
+      duplicate_readings: number;
+    };
+  };
+
+  maintenance: {
+    count: number;
+    events: ReportMaintenanceEvent[];
   };
 }
 
@@ -2281,3 +2347,81 @@ export async function downloadPerformanceReportPdf(stationId: string, days: numb
   return response.data;
 }
 
+/* ── Maintenance log ── */
+
+export type MaintenanceActivityType =
+  | 'inspection'
+  | 'cleaning'
+  | 'calibration'
+  | 'repair'
+  | 'replacement'
+  | 'power'
+  | 'communication'
+  | 'firmware'
+  | 'reset'
+  | 'other';
+
+export const MAINTENANCE_ACTIVITY_LABELS: Record<MaintenanceActivityType, string> = {
+  inspection: 'Inspection',
+  cleaning: 'Cleaning',
+  calibration: 'Calibration',
+  repair: 'Repair',
+  replacement: 'Sensor or part replacement',
+  power: 'Battery or power work',
+  communication: 'SIM or communication work',
+  firmware: 'Firmware or configuration change',
+  reset: 'Reset or restart',
+  other: 'Other',
+};
+
+export interface MaintenanceLogEntry {
+  id: number;
+  station_code: string;
+  station_name: string;
+  activity_type: MaintenanceActivityType;
+  activity_label: string;
+  started_at: string;
+  ended_at: string | null;
+  description: string;
+  performed_by: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MaintenanceLogInput {
+  station_code: string;
+  activity_type: MaintenanceActivityType;
+  started_at: string;
+  ended_at: string | null;
+  description: string;
+  performed_by: string;
+}
+
+export async function fetchMaintenanceLogs(params: {
+  stationId?: string;
+  start?: string;
+  end?: string;
+}): Promise<MaintenanceLogEntry[]> {
+  const response = await apiClient.get<ApiEnvelope<MaintenanceLogEntry[]>>('/api/maintenance/', {
+    params: { station_id: params.stationId, start: params.start, end: params.end },
+  });
+  return response.data.data;
+}
+
+export async function createMaintenanceLog(data: MaintenanceLogInput): Promise<MaintenanceLogEntry> {
+  const response = await apiClient.post<ApiEnvelope<MaintenanceLogEntry>>('/api/maintenance/', data);
+  return response.data.data;
+}
+
+export async function updateMaintenanceLog(
+  id: number,
+  data: Partial<MaintenanceLogInput>,
+): Promise<MaintenanceLogEntry> {
+  const response = await apiClient.patch<ApiEnvelope<MaintenanceLogEntry>>(`/api/maintenance/${id}/`, data);
+  return response.data.data;
+}
+
+export async function deleteMaintenanceLog(id: number): Promise<void> {
+  await apiClient.delete(`/api/maintenance/${id}/`);
+}

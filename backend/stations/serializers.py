@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from .models import (
     Station, StationStatus, SensorReading, WeatherReading,
-    VoltageReading, CurrentReading, BenchmarkReading, BenchmarkDataset, WeatherMinute
+    VoltageReading, CurrentReading, BenchmarkReading, BenchmarkDataset, WeatherMinute,
+    MaintenanceLog,
 )
 
 
@@ -248,3 +249,39 @@ class BenchmarkDatasetSerializer(serializers.ModelSerializer):
             'id', 'name', 'location', 'source', 'csv_file',
             'uploaded_at', 'uploaded_by_email', 'start_date', 'end_date', 'row_count'
         ]
+
+
+# ─────────────────────────────────────────────────────────
+# Maintenance Log
+# ─────────────────────────────────────────────────────────
+
+class MaintenanceLogSerializer(serializers.ModelSerializer):
+    station_code = serializers.SlugRelatedField(
+        source='station',
+        slug_field='station_id',
+        queryset=Station.objects.all(),
+    )
+    station_name = serializers.CharField(source='station.name', read_only=True)
+    activity_label = serializers.CharField(source='get_activity_type_display', read_only=True)
+    created_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MaintenanceLog
+        fields = [
+            'id', 'station_code', 'station_name', 'activity_type', 'activity_label',
+            'started_at', 'ended_at', 'description', 'performed_by',
+            'created_by', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_created_by(self, obj):
+        if obj.created_by is None:
+            return None
+        return obj.created_by.get_full_name() or obj.created_by.email or obj.created_by.username
+
+    def validate(self, attrs):
+        started_at = attrs.get('started_at', getattr(self.instance, 'started_at', None))
+        ended_at = attrs.get('ended_at', getattr(self.instance, 'ended_at', None))
+        if started_at and ended_at and ended_at < started_at:
+            raise serializers.ValidationError({'ended_at': 'End time must be after the start time.'})
+        return attrs

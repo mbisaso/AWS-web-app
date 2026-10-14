@@ -1,10 +1,17 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { useExportDataPreview } from '../hooks/useExportData'
 import { usePerformanceReport } from '../hooks/usePerformanceReport'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { PageHeader } from '../components/shared/PageHeader'
-import { downloadPerformanceReportPdf, exportDataCsv, type ExportConfig, type StationReading } from '../services/api'
+import { MaintenanceLogPanel } from '../components/reports/MaintenanceLogPanel'
+import {
+  downloadPerformanceReportPdf,
+  exportDataCsv,
+  type ExportConfig,
+  type SensorFaultType,
+  type StationReading,
+} from '../services/api'
 
 type ReportTab = 'export' | 'performance'
 
@@ -25,6 +32,96 @@ function getPercentColor(pct: number): string {
   if (pct >= 90) return 'text-emerald'
   if (pct >= 70) return 'text-amber-500'
   return 'text-rose-600'
+}
+
+const FAULT_TYPE_LABELS: Record<SensorFaultType, string> = {
+  missing: 'Missing',
+  out_of_range: 'Out of range',
+  stuck: 'Stuck',
+}
+
+function formatDuration(minutes: number): string {
+  const total = Math.round(minutes)
+  if (total < 60) return `${total} min`
+  const days = Math.floor(total / 1440)
+  const hours = Math.floor((total % 1440) / 60)
+  const mins = total % 60
+  if (days > 0) return `${days}d ${hours}h`
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+}
+
+function KpiCard({ label, value, valueClass, detail, icon }: {
+  label: string
+  value: string
+  valueClass: string
+  detail: string
+  icon: ReactNode
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wider text-storm/50">{label}</span>
+        <span className="text-sky-primary">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {icon}
+          </svg>
+        </span>
+      </div>
+      <p className={`mt-3 text-3xl font-extrabold font-display ${valueClass}`}>{value}</p>
+      <p className="mt-1 text-xs text-storm/60 font-medium">{detail}</p>
+    </div>
+  )
+}
+
+const EVENT_TABLE_PREVIEW = 10
+
+function EventTable<T>({ rows, columns, renderRow, noun }: {
+  rows: T[]
+  columns: string[]
+  renderRow: (row: T) => ReactNode[]
+  noun: string
+}) {
+  const [showAll, setShowAll] = useState(false)
+  const visible = showAll ? rows : rows.slice(0, EVENT_TABLE_PREVIEW)
+
+  return (
+    <div className="space-y-2">
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <table className="w-full text-left text-xs whitespace-nowrap">
+          <thead className="bg-slate-50 text-storm/70 font-semibold border-b border-slate-200">
+            <tr>
+              {columns.map((column, index) => (
+                <th key={column} className={`px-4 py-3 ${index === columns.length - 1 ? 'text-right' : ''}`}>{column}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {visible.map((row, rowIndex) => (
+              <tr key={rowIndex} className="hover:bg-slate-50/80 transition-colors">
+                {renderRow(row).map((cell, index) => (
+                  <td
+                    key={index}
+                    className={`px-4 py-2.5 ${index === 0 ? 'font-medium text-midnight' : 'text-storm/80'} ${index === columns.length - 1 ? 'text-right' : ''}`}
+                  >
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {rows.length > EVENT_TABLE_PREVIEW && (
+        <button
+          type="button"
+          onClick={() => setShowAll(!showAll)}
+          className="cursor-pointer text-xs font-semibold text-sky-primary hover:underline"
+        >
+          {showAll ? `Show the ${EVENT_TABLE_PREVIEW} longest` : `Show all ${rows.length} ${noun}`}
+        </button>
+      )}
+    </div>
+  )
 }
 
 export function ReportsPage() {
@@ -471,7 +568,7 @@ export function ReportsPage() {
                   </button>
 
                   <p className="mt-3 text-center text-[10px] text-storm/40">
-                    Aggregates telemetry, uptime, latency, and sensor completeness
+                    Covers uptime, transmission, communication, power, sensor faults and maintenance
                   </p>
                 </div>
 
@@ -574,97 +671,101 @@ export function ReportsPage() {
                     </div>
                   </div>
 
-                  {/* KPI Cards Row (Grid of 4) */}
+                  {/* KPI Cards (two rows of three) */}
                   {(() => {
                     const sensorsObj = performanceData.sensor_health?.sensors ?? {}
                     const totalSensors = Object.keys(sensorsObj).length
                     const activeFaults = performanceData.sensor_health?.active_faults ?? []
-                    const healthySensors = Math.max(0, totalSensors - activeFaults.length)
+                    const faultySensors = Object.entries(sensorsObj).filter(
+                      ([key, s]) => s.fault_events > 0 || activeFaults.includes(key),
+                    ).length
+                    const healthySensors = Math.max(0, totalSensors - faultySensors)
                     const sensorHealthPct = totalSensors > 0 ? (healthySensors / totalSensors) * 100 : 100
+                    const faultEvents = performanceData.sensor_health?.total_fault_events ?? 0
+                    const { communication, power } = performanceData
 
-                    const latencyDisplay = performanceData.transmission.avg_latency_seconds < 1
-                      ? `${Math.round(performanceData.transmission.avg_latency_seconds * 1000)}ms avg latency`
-                      : `${performanceData.transmission.avg_latency_seconds.toFixed(1)}s avg latency`
+                    const latencyDisplay = `${formatDuration(performanceData.transmission.avg_latency_seconds / 60)} avg latency`
 
                     return (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                        {/* 1. Data Availability */}
-                        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-storm/50">Data Availability</span>
-                            <span className="text-sky-primary">
-                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <ellipse cx="12" cy="5" rx="9" ry="3" />
-                                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-                                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-                              </svg>
-                            </span>
-                          </div>
-                          <p className={`mt-3 text-3xl font-extrabold font-display ${getPercentColor(performanceData.data_availability.pct)}`}>
-                            {performanceData.data_availability.pct.toFixed(1)}%
-                          </p>
-                          <p className="mt-1 text-xs text-storm/60 font-medium">
-                            {performanceData.data_availability.actual_readings.toLocaleString()} / {performanceData.data_availability.expected_readings.toLocaleString()} readings
-                          </p>
-                        </div>
-
-                        {/* 2. System Uptime */}
-                        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-storm/50">System Uptime</span>
-                            <span className="text-sky-primary">
-                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <circle cx="12" cy="12" r="10" />
-                                <polyline points="12 6 12 12 16 14" />
-                              </svg>
-                            </span>
-                          </div>
-                          <p className={`mt-3 text-3xl font-extrabold font-display ${getPercentColor(performanceData.uptime.pct)}`}>
-                            {performanceData.uptime.pct.toFixed(1)}%
-                          </p>
-                          <p className="mt-1 text-xs text-storm/60 font-medium">
-                            {performanceData.uptime.downtime_incidents} downtime incident{performanceData.uptime.downtime_incidents !== 1 ? 's' : ''}
-                          </p>
-                        </div>
-
-                        {/* 3. Transmission Success */}
-                        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-storm/50">Transmission</span>
-                            <span className="text-sky-primary">
-                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M4.93 4.93a10 10 0 0 1 14.14 0" />
-                                <path d="M7.76 7.76a6 6 0 0 1 8.48 0" />
-                                <circle cx="12" cy="12" r="2" />
-                                <path d="M12 14v8" />
-                              </svg>
-                            </span>
-                          </div>
-                          <p className={`mt-3 text-3xl font-extrabold font-display ${getPercentColor(performanceData.transmission.success_pct)}`}>
-                            {performanceData.transmission.success_pct.toFixed(1)}%
-                          </p>
-                          <p className="mt-1 text-xs text-storm/60 font-medium">
-                            {latencyDisplay}
-                          </p>
-                        </div>
-
-                        {/* 4. Sensor Health */}
-                        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold uppercase tracking-wider text-storm/50">Sensor Health</span>
-                            <span className="text-sky-primary">
-                              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                              </svg>
-                            </span>
-                          </div>
-                          <p className={`mt-3 text-3xl font-extrabold font-display ${getPercentColor(sensorHealthPct)}`}>
-                            {healthySensors} / {totalSensors}
-                          </p>
-                          <p className="mt-1 text-xs text-storm/60 font-medium">
-                            {activeFaults.length} active fault{activeFaults.length !== 1 ? 's' : ''}
-                          </p>
-                        </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <KpiCard
+                          label="Data Availability"
+                          value={`${performanceData.data_availability.pct.toFixed(1)}%`}
+                          valueClass={getPercentColor(performanceData.data_availability.pct)}
+                          detail={`${performanceData.data_availability.actual_readings.toLocaleString()} / ${performanceData.data_availability.expected_readings.toLocaleString()} readings`}
+                          icon={
+                            <>
+                              <ellipse cx="12" cy="5" rx="9" ry="3" />
+                              <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                              <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                            </>
+                          }
+                        />
+                        <KpiCard
+                          label="System Uptime"
+                          value={`${performanceData.uptime.pct.toFixed(1)}%`}
+                          valueClass={getPercentColor(performanceData.uptime.pct)}
+                          detail={`${performanceData.uptime.downtime_incidents} downtime incident${performanceData.uptime.downtime_incidents !== 1 ? 's' : ''}`}
+                          icon={
+                            <>
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </>
+                          }
+                        />
+                        <KpiCard
+                          label="Transmission"
+                          value={`${performanceData.transmission.success_pct.toFixed(1)}%`}
+                          valueClass={getPercentColor(performanceData.transmission.success_pct)}
+                          detail={`On time · ${latencyDisplay}`}
+                          icon={
+                            <>
+                              <path d="M4.93 4.93a10 10 0 0 1 14.14 0" />
+                              <path d="M7.76 7.76a6 6 0 0 1 8.48 0" />
+                              <circle cx="12" cy="12" r="2" />
+                              <path d="M12 14v8" />
+                            </>
+                          }
+                        />
+                        <KpiCard
+                          label="Comms Interruptions"
+                          value={communication.interruptions.toLocaleString()}
+                          valueClass={communication.interruptions === 0 ? 'text-emerald' : 'text-amber-500'}
+                          detail={
+                            communication.interruptions === 0
+                              ? 'All readings delivered on time'
+                              : `${formatDuration(communication.total_minutes)} total · longest ${formatDuration(communication.longest_minutes)}`
+                          }
+                          icon={
+                            <>
+                              <path d="M1 1l22 22" />
+                              <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                              <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                              <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                              <line x1="12" y1="20" x2="12.01" y2="20" />
+                            </>
+                          }
+                        />
+                        <KpiCard
+                          label="Sensor Health"
+                          value={`${healthySensors} / ${totalSensors}`}
+                          valueClass={getPercentColor(sensorHealthPct)}
+                          detail={`${faultEvents} fault event${faultEvents !== 1 ? 's' : ''} in period`}
+                          icon={<path d="M22 12h-4l-3 9L9 3l-3 9H2" />}
+                        />
+                        <KpiCard
+                          label="Battery Charging"
+                          value={`${power.charging_pct.toFixed(1)}%`}
+                          valueClass={power.power_outages > 0 ? 'text-rose-600' : 'text-midnight'}
+                          detail={`${power.charging_hours.toFixed(1)} h charging · ${power.power_outages} power outage${power.power_outages !== 1 ? 's' : ''}`}
+                          icon={
+                            <>
+                              <rect x="2" y="7" width="16" height="10" rx="2" />
+                              <line x1="22" y1="11" x2="22" y2="13" />
+                              <polyline points="11 9 8 12 11 12 8 15" />
+                            </>
+                          }
+                        />
                       </div>
                     )
                   })()}
@@ -693,6 +794,7 @@ export function ReportsPage() {
                                 <th className="px-4 py-3">Start Time</th>
                                 <th className="px-4 py-3">End Time</th>
                                 <th className="px-4 py-3">Duration</th>
+                                <th className="px-4 py-3">Likely Cause</th>
                                 <th className="px-4 py-3 text-right">Missed Readings</th>
                               </tr>
                             </thead>
@@ -706,9 +808,20 @@ export function ReportsPage() {
                                     {new Date(gap.end).toLocaleString()}
                                   </td>
                                   <td className="px-4 py-2.5 text-storm/80">
-                                    {gap.duration_minutes >= 60
-                                      ? `${Math.floor(gap.duration_minutes / 60)}h ${gap.duration_minutes % 60}m`
-                                      : `${gap.duration_minutes} min`}
+                                    {formatDuration(gap.duration_minutes)}
+                                  </td>
+                                  <td className="px-4 py-2.5">
+                                    <div className="flex flex-wrap gap-1">
+                                      {gap.during_maintenance && (
+                                        <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-sky-700">Maintenance</span>
+                                      )}
+                                      {gap.cause === 'low_battery' && (
+                                        <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-rose-700">Low battery</span>
+                                      )}
+                                      {!gap.during_maintenance && gap.cause !== 'low_battery' && (
+                                        <span className="text-storm/40">Unknown</span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="px-4 py-2.5 text-right font-semibold text-rose-600">
                                     {gap.missed_readings.toLocaleString()}
@@ -736,21 +849,50 @@ export function ReportsPage() {
                         <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-100 p-3.5">
                           <span className="text-xs font-semibold text-storm/60">Longest Gap</span>
                           <span className="text-sm font-bold text-midnight font-display">
-                            {performanceData.missing_data.longest_gap_minutes} min
+                            {formatDuration(performanceData.missing_data.longest_gap_minutes)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-100 p-3.5">
                           <span className="text-xs font-semibold text-storm/60">Total Missing Time</span>
                           <span className="text-sm font-bold text-midnight font-display">
-                            {performanceData.missing_data.total_missing_minutes} min
-                            {performanceData.missing_data.total_missing_minutes >= 60 && (
-                              <span className="ml-1 text-xs font-normal text-storm/50">
-                                ({(performanceData.missing_data.total_missing_minutes / 60).toFixed(1)} hrs)
-                              </span>
-                            )}
+                            {formatDuration(performanceData.missing_data.total_missing_minutes)}
                           </span>
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Communication Interruptions Section */}
+                  <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/50 px-6 py-4">
+                      <div className="flex items-center gap-2.5">
+                        <h3 className="text-base font-bold text-midnight font-display">Communication Interruptions</h3>
+                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                          performanceData.communication.interruptions > 0
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {performanceData.communication.interruptions}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-storm/50">Readings logged on schedule but delivered late</p>
+                    </div>
+                    <div className="p-6">
+                      {performanceData.communication.events.length > 0 ? (
+                        <EventTable
+                          rows={[...performanceData.communication.events].sort((a, b) => b.duration_minutes - a.duration_minutes)}
+                          columns={['Start Time', 'Network Back', 'Duration', 'Delayed Readings']}
+                          renderRow={(event) => [
+                            new Date(event.start).toLocaleString(),
+                            new Date(event.end).toLocaleString(),
+                            formatDuration(event.duration_minutes),
+                            event.delayed_readings.toLocaleString(),
+                          ]}
+                          noun="interruptions"
+                        />
+                      ) : (
+                        <p className="text-xs text-storm/60">Every reading reached the server within one reporting interval.</p>
+                      )}
                     </div>
                   </div>
 
@@ -844,13 +986,61 @@ export function ReportsPage() {
                         </p>
                       </div>
                     </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                      {[
+                        { label: 'Battery Temp Min', value: performanceData.power.battery_temp_min, unit: '°C' },
+                        { label: 'Battery Temp Avg', value: performanceData.power.battery_temp_avg, unit: '°C' },
+                        { label: 'Battery Temp Max', value: performanceData.power.battery_temp_max, unit: '°C' },
+                      ].map(tile => (
+                        <div key={tile.label} className="rounded-xl border border-slate-100 bg-rose-50/20 p-3.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-storm/50">{tile.label}</span>
+                            <span className="text-[10px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded">Temp</span>
+                          </div>
+                          <p className="mt-2 text-lg font-bold text-midnight font-display">
+                            {tile.value != null ? `${tile.value.toFixed(1)} ${tile.unit}` : '—'}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-100 p-3.5">
+                        <span className="text-xs font-semibold text-storm/60">Charging</span>
+                        <span className="text-sm font-bold text-midnight font-display">
+                          {performanceData.power.charging_hours.toFixed(1)} h
+                          <span className="ml-1 text-xs font-normal text-storm/50">({performanceData.power.charging_pct.toFixed(1)}%)</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-100 p-3.5">
+                        <span className="text-xs font-semibold text-storm/60">Discharging</span>
+                        <span className="text-sm font-bold text-midnight font-display">
+                          {performanceData.power.discharging_hours.toFixed(1)} h
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-100 p-3.5">
+                        <span className="text-xs font-semibold text-storm/60">Power Outages</span>
+                        <span className={`text-sm font-bold font-display ${performanceData.power.power_outages > 0 ? 'text-rose-600' : 'text-midnight'}`}>
+                          {performanceData.power.power_outages}
+                          {performanceData.power.power_outages > 0 && (
+                            <span className="ml-1 text-xs font-normal text-storm/50">
+                              ({formatDuration(performanceData.power.power_outage_minutes)})
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-storm/50">
+                      Charging time comes from the battery current; power outages are data gaps that began right after a low-battery reading.
+                    </p>
                   </div>
 
-                  {/* Sensor Completeness Section */}
+                  {/* Sensor Health Section */}
                   <div className="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
                     <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
                       <div className="flex items-center gap-2.5">
-                        <h3 className="text-base font-bold text-midnight font-display">Sensor Completeness</h3>
+                        <h3 className="text-base font-bold text-midnight font-display">Sensor Health</h3>
                         <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-storm/70">
                           {Object.keys(performanceData.sensor_health?.sensors ?? {}).length} Sensors
                         </span>
@@ -871,6 +1061,8 @@ export function ReportsPage() {
                             <th className="px-4 py-3.5">Total Readings</th>
                             <th className="px-4 py-3.5">Missing</th>
                             <th className="px-4 py-3.5">Completeness %</th>
+                            <th className="px-4 py-3.5">Faults</th>
+                            <th className="px-4 py-3.5">Fault Time</th>
                             <th className="px-6 py-3.5 text-right">Status</th>
                           </tr>
                         </thead>
@@ -924,8 +1116,26 @@ export function ReportsPage() {
                                     </div>
                                   </div>
                                 </td>
+                                <td className="px-4 py-3.5 text-storm/80">
+                                  {s.fault_events > 0 ? (
+                                    <span>
+                                      <span className="font-semibold text-midnight">{s.fault_events}</span>
+                                      <span className="ml-1.5 text-[11px] text-storm/50">
+                                        {(Object.entries(s.faults_by_type ?? {}) as [SensorFaultType, number][])
+                                          .filter(([, count]) => count > 0)
+                                          .map(([type, count]) => `${count} ${FAULT_TYPE_LABELS[type].toLowerCase()}`)
+                                          .join(', ')}
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span className="text-storm/40">None</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3.5 text-storm/80">
+                                  {s.fault_minutes > 0 ? formatDuration(s.fault_minutes) : '—'}
+                                </td>
                                 <td className="px-6 py-3.5 text-right">
-                                  {s.completeness_pct >= 95 ? (
+                                  {s.completeness_pct >= 95 && s.fault_events === 0 ? (
                                     <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald">
                                       <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                         <polyline points="20 6 9 17 4 12" />
@@ -957,7 +1167,37 @@ export function ReportsPage() {
                         </tbody>
                       </table>
                     </div>
+
+                    <div className="border-t border-slate-100 p-6 space-y-3">
+                      <h4 className="text-sm font-bold text-midnight font-display">Sensor Fault Events</h4>
+                      {(performanceData.sensor_health?.fault_events ?? []).length > 0 ? (
+                        <EventTable
+                          rows={[...performanceData.sensor_health.fault_events].sort((a, b) => b.duration_minutes - a.duration_minutes)}
+                          columns={['Sensor', 'Fault', 'Start Time', 'Duration', 'Readings']}
+                          renderRow={(event) => [
+                            SENSOR_DISPLAY_NAMES[event.sensor] || event.sensor,
+                            FAULT_TYPE_LABELS[event.type],
+                            new Date(event.start).toLocaleString(),
+                            formatDuration(event.duration_minutes),
+                            event.readings.toLocaleString(),
+                          ]}
+                          noun="fault events"
+                        />
+                      ) : (
+                        <p className="text-xs text-storm/60">No missing, out-of-range or stuck sensor values in this period.</p>
+                      )}
+                      <p className="text-[11px] text-storm/50">
+                        Logger errors: {performanceData.sensor_health?.logger_errors?.clock_ahead_readings ?? 0} reading(s) timestamped ahead of the server clock,{' '}
+                        {performanceData.sensor_health?.logger_errors?.duplicate_readings ?? 0} duplicate reading(s).
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Maintenance Log Section */}
+                  <MaintenanceLogPanel
+                    stationCode={performanceData.station_code}
+                    periodStart={performanceData.period_start}
+                  />
                 </div>
               ) : null}
             </div>

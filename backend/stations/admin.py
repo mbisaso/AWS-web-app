@@ -15,6 +15,7 @@ from .models import (
     BenchmarkReading,
     BenchmarkDataset,
     DailyPerformanceReportSettings,
+    MaintenanceLog,
 )
 
 
@@ -59,6 +60,19 @@ class BenchmarkDatasetAdmin(admin.ModelAdmin):
 class StationAdmin(admin.ModelAdmin):
     list_display  = ['station_id', 'name', 'location', 'expected_interval_minutes']
     search_fields = ['station_id', 'name']
+
+
+@admin.register(MaintenanceLog)
+class MaintenanceLogAdmin(admin.ModelAdmin):
+    list_display   = ['station', 'activity_type', 'started_at', 'ended_at', 'performed_by', 'created_by']
+    list_filter    = ['activity_type', 'station']
+    search_fields  = ['station__station_id', 'station__name', 'description', 'performed_by']
+    date_hierarchy = 'started_at'
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(StationStatus)
