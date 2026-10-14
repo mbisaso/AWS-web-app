@@ -14,11 +14,11 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 from .models import Station
 from .performance_reports import SENSOR_FIELDS, build_performance_report_data
 
-INK = colors.HexColor("#17283f")
-TEAL = colors.HexColor("#087e83")
-PALE = colors.HexColor("#edf5f4")
-LINE = colors.HexColor("#d7e1e5")
-MUTED = colors.HexColor("#627387")
+INK = colors.HexColor("#0047AB")
+TEAL = colors.HexColor("#1E6FD9")
+PALE = colors.HexColor("#E6F0FA")
+LINE = colors.HexColor("#a5c5d2")
+MUTED = colors.HexColor("#4A6A8A")
 
 FAULT_LABELS = {
     "missing": "missing",
