@@ -24,4 +24,6 @@ urlpatterns = [
     path('api/sims/<int:sim_id>/topup/',               views.topup_sim_account, name='topup_sim_account'),
     path('api/reports/performance/',                   views.performance_report, name='performance_report'),
     path('api/reports/performance/download/',           views.performance_report_pdf, name='performance_report_pdf'),
+    path('api/maintenance/',                           views.maintenance_logs, name='maintenance_logs'),
+    path('api/maintenance/<int:log_id>/',              views.maintenance_log_detail, name='maintenance_log_detail'),
 ]

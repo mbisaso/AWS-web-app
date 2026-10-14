@@ -22,7 +22,7 @@ from django.conf import settings
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, BasePermission, SAFE_METHODS
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 from .models import (
     Station, StationStatus, SensorReading, WeatherReading,
     VoltageReading, CurrentReading, BenchmarkReading, BenchmarkDataset, SimCard,
-    WeatherMinute
+    WeatherMinute, MaintenanceLog
 )
 from .ml_service import predict_station_window
 from .serializers import (
@@ -44,6 +44,7 @@ from .serializers import (
     CurrentReadingSerializer,
     BenchmarkReadingSerializer,
     BenchmarkDatasetSerializer,
+    MaintenanceLogSerializer,
 )
 from .performance_reports import build_performance_report_data
 from .report_email import build_station_report_pdf
@@ -1495,3 +1496,81 @@ def performance_report_pdf(request):
     response = HttpResponse(pdf, content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="performance-report-{filename}-{days}d.pdf"'
     return response
+
+
+# ─────────────────────────────────────────────────────────
+# API: Maintenance Log
+# ─────────────────────────────────────────────────────────
+
+MAINTENANCE_EDITOR_ROLES = {'admin', 'meteorologist'}
+
+
+class CanEditMaintenanceLog(BasePermission):
+    """Any signed-in user can read the log; admins and meteorologists can change it."""
+    message = 'Only admins and meteorologists can change the maintenance log.'
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if request.method in SAFE_METHODS:
+            return True
+        return (
+            user.is_staff
+            or user.is_superuser
+            or getattr(user, 'role', None) in MAINTENANCE_EDITOR_ROLES
+        )
+
+
+def _validation_error(errors):
+    messages = []
+    for field, problems in errors.items():
+        for problem in problems if isinstance(problems, list) else [problems]:
+            messages.append(str(problem) if field == 'non_field_errors' else f'{field}: {problem}')
+    return '; '.join(messages)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([CanEditMaintenanceLog])
+def maintenance_logs(request):
+    """
+    GET: list maintenance entries, newest first.
+      - station_id (optional): station code
+      - start, end (optional): ISO datetimes; entries that overlap the window
+    POST: create an entry.
+    """
+    if request.method == 'POST':
+        serializer = MaintenanceLogSerializer(data=request.data)
+        if not serializer.is_valid():
+            return api_response(error=_validation_error(serializer.errors), status_code=400)
+        entry = serializer.save(created_by=request.user)
+        return api_response(data=MaintenanceLogSerializer(entry).data, status_code=201)
+
+    entries = MaintenanceLog.objects.select_related('station', 'created_by')
+    station_id = request.query_params.get('station_id')
+    if station_id:
+        entries = entries.filter(station__station_id=station_id)
+    start = parse_datetime(request.query_params.get('start') or '')
+    end = parse_datetime(request.query_params.get('end') or '')
+    if start:
+        entries = entries.filter(Q(ended_at__gte=start) | Q(ended_at__isnull=True, started_at__gte=start))
+    if end:
+        entries = entries.filter(started_at__lt=end)
+    return api_response(data=MaintenanceLogSerializer(entries[:500], many=True).data)
+
+
+@api_view(['PATCH', 'DELETE'])
+@permission_classes([CanEditMaintenanceLog])
+def maintenance_log_detail(request, log_id):
+    entry = MaintenanceLog.objects.select_related('station', 'created_by').filter(id=log_id).first()
+    if not entry:
+        return api_response(error=f'Maintenance entry {log_id} not found', status_code=404)
+
+    if request.method == 'DELETE':
+        entry.delete()
+        return api_response(message='Maintenance entry deleted')
+
+    serializer = MaintenanceLogSerializer(entry, data=request.data, partial=True)
+    if not serializer.is_valid():
+        return api_response(error=_validation_error(serializer.errors), status_code=400)
+    return api_response(data=MaintenanceLogSerializer(serializer.save()).data)

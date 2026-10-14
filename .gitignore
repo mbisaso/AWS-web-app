@@ -14,8 +14,18 @@ db.sqlite3
 db.sqlite3-journal
 media/
 
+# Local SQLite databases (test copies, scratch data)
+*.sqlite3
+
+# Local data exports: CSVs downloaded from the Data Export page or dropped in
+# the repo root. CSVs under ml/ that are already tracked are unaffected.
+aws_export_*.csv
+/*.csv
+
 # Environment
 .env
+.env.local
+.env.*.local
 backend/.env
 .venv
 venv/
