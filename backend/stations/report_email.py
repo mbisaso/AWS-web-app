@@ -11,8 +11,15 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from . import report_charts
 from .models import Station
-from .performance_reports import SENSOR_FIELDS, build_performance_report_data
+from .performance_reports import (
+    CHARGING_CURRENT_AMPS,
+    LOW_BATTERY_VOLTS,
+    SENSOR_FIELDS,
+    STUCK_MIN_HOURS,
+    build_performance_report_data,
+)
 
 INK = colors.HexColor("#0047AB")
 TEAL = colors.HexColor("#1E6FD9")
@@ -50,12 +57,11 @@ def build_daily_report(report_date: date) -> dict:
 
 
 def build_station_report_pdf(report_data: dict) -> bytes:
-    period_start = datetime.fromisoformat(report_data["period_start"])
-    period_end = datetime.fromisoformat(report_data["period_end"])
     return build_report_pdf({
         "title": "Station Performance Report",
-        "period_label": f"Period: {period_start:%Y-%m-%d %H:%M} to {period_end:%Y-%m-%d %H:%M}",
-        "report_date": period_end.date(),
+        "period_start": report_data["period_start"],
+        "period_end": report_data["period_end"],
+        "report_date": datetime.fromisoformat(report_data["period_end"]).date(),
         "summary": summarize_reports([report_data]),
         "stations": [report_data],
     })
@@ -115,8 +121,10 @@ def summarize_reports(reports: list[dict]) -> dict:
         else 0.0
     )
 
+    intervals = {report.get("expected_interval_minutes") for report in reports}
     return {
         "station_count": len(reports),
+        "interval_minutes": intervals.pop() if len(intervals) == 1 else None,
         "data_availability_pct": round(min(100.0, actual / expected * 100), 2) if expected else 0.0,
         "actual_readings": actual,
         "expected_readings": expected,
@@ -144,95 +152,113 @@ def summarize_reports(reports: list[dict]) -> dict:
 
 def build_email_html(report: dict) -> str:
     summary = report["summary"]
+    formulas = _formulas(summary.get("interval_minutes"))
+    ink, muted, pale, line = INK.hexval()[2:], MUTED.hexval()[2:], PALE.hexval()[2:], LINE.hexval()[2:]
     tiles = (
-        ("Data availability", f'{summary["data_availability_pct"]}%'),
-        ("System uptime", f'{summary["uptime_pct"]}%'),
-        ("Transmission", f'{summary["transmission_success_pct"]}%'),
-        ("Missing-data gaps", str(summary["total_gaps"])),
-        ("Comms interruptions", str(summary["communication_interruptions"])),
-        ("Sensor faults", str(summary["sensor_fault_events"])),
-        ("Low-battery events", str(summary["low_battery_events"])),
+        ("Data availability", f'{summary["data_availability_pct"]}%', formulas["availability"]),
+        ("System uptime", f'{summary["uptime_pct"]}%', formulas["uptime"]),
+        ("Transmission", f'{summary["transmission_success_pct"]}%', formulas["transmission"]),
+        ("Missing-data gaps", str(summary["total_gaps"]), formulas["gaps"]),
+        ("Comms interruptions", str(summary["communication_interruptions"]), formulas["comms"]),
+        ("Sensor faults", str(summary["sensor_fault_events"]), formulas["faults"]),
+        ("Low-battery events", str(summary["low_battery_events"]), formulas["low_battery"]),
+        ("Maintenance entries", str(summary["maintenance_count"]), formulas["maintenance"]),
     )
-    tile_html = "".join(
-        "<td style='padding:12px;border:1px solid #d7e1e5;background:#edf5f4;'>"
-        f"<div style='font:12px Arial;color:#627387'>{html.escape(label)}</div>"
-        f"<strong style='font:22px Arial;color:#17283f'>{html.escape(value)}</strong></td>"
-        for label, value in tiles
+
+    def tile(label, value, formula):
+        return (
+            f"<td style='width:25%;padding:12px;border:1px solid #{line};background:#{pale};"
+            "vertical-align:top;text-align:center'>"
+            f"<div style='font:bold 12px Arial;color:#{muted}'>{html.escape(label)}</div>"
+            f"<div style='font:10px Arial;color:#{muted};margin-top:2px'>({html.escape(formula)})</div>"
+            f"<div style='font:bold 22px Arial;color:#{ink};margin-top:8px'>{html.escape(value)}</div></td>"
+        )
+
+    tile_rows = "".join(
+        "<tr>" + "".join(tile(*item) for item in tiles[start:start + 4]) + "</tr>"
+        for start in range(0, len(tiles), 4)
     )
+    cell = f"padding:8px;border-bottom:1px solid #{line}"
     rows = "".join(
         "<tr>"
-        f"<td style='padding:8px;border-bottom:1px solid #d7e1e5'>{html.escape(item['station_name'])} "
-        f"({html.escape(item['station_code'])})</td>"
-        f"<td style='padding:8px;border-bottom:1px solid #d7e1e5'>{item['data_availability_pct']}%</td>"
-        f"<td style='padding:8px;border-bottom:1px solid #d7e1e5'>{item['uptime_pct']}%</td>"
-        f"<td style='padding:8px;border-bottom:1px solid #d7e1e5'>{item['transmission_success_pct']}%</td>"
-        f"<td style='padding:8px;border-bottom:1px solid #d7e1e5'>{item['total_gaps']}</td>"
-        f"<td style='padding:8px;border-bottom:1px solid #d7e1e5'>{item['communication_interruptions']}</td>"
-        f"<td style='padding:8px;border-bottom:1px solid #d7e1e5'>{item['sensor_fault_events']}</td>"
-        f"<td style='padding:8px;border-bottom:1px solid #d7e1e5'>{item['low_battery_events']}</td>"
+        f"<td style='{cell}'>{html.escape(item['station_name'])} ({html.escape(item['station_code'])})</td>"
+        f"<td style='{cell}'>{item['data_availability_pct']}%</td>"
+        f"<td style='{cell}'>{item['uptime_pct']}%</td>"
+        f"<td style='{cell}'>{item['transmission_success_pct']}%</td>"
+        f"<td style='{cell}'>{item['total_gaps']}</td>"
+        f"<td style='{cell}'>{item['communication_interruptions']}</td>"
+        f"<td style='{cell}'>{item['sensor_fault_events']}</td>"
+        f"<td style='{cell}'>{item['low_battery_events']}</td>"
         "</tr>"
         for item in report["stations"]
     )
+
+    def header(label, formula=None):
+        note = f"<br><span style='font-weight:normal;font-size:10px;color:#{muted}'>({html.escape(formula)})</span>" if formula else ""
+        return f"<th style='padding:8px;text-align:left;vertical-align:bottom'>{html.escape(label)}{note}</th>"
+
     sensor_rows = "".join(
         "<tr>"
-        f"<td style='padding:6px;border-bottom:1px solid #d7e1e5'>{html.escape(sensor.replace('_', ' ').title())}</td>"
-        f"<td style='padding:6px;border-bottom:1px solid #d7e1e5'>{stats['completeness_pct']}%</td>"
-        f"<td style='padding:6px;border-bottom:1px solid #d7e1e5'>{stats['null_readings']}</td>"
-        f"<td style='padding:6px;border-bottom:1px solid #d7e1e5'>{stats['fault_events']}</td>"
+        f"<td style='{cell}'>{html.escape(sensor.replace('_', ' ').title())}</td>"
+        f"<td style='{cell}'>{stats['completeness_pct']}%</td>"
+        f"<td style='{cell}'>{stats['null_readings']}</td>"
+        f"<td style='{cell}'>{stats['fault_events']}</td>"
         "</tr>"
         for sensor, stats in summary["sensors"].items()
     )
     battery = summary["power"]
     return (
         "<!doctype html><html><body style='margin:0;padding:24px;background:#f5f8fa;'>"
-        "<main style='max-width:900px;margin:auto;font-family:Arial,sans-serif;color:#17283f;'>"
+        f"<main style='max-width:900px;margin:auto;font-family:Arial,sans-serif;color:#{ink};'>"
         "<h1 style='font-size:24px;margin-bottom:4px'>Daily Performance Report</h1>"
-        f"<p style='color:#627387;margin-top:0'>Previous calendar day: {report['report_date'].isoformat()}</p>"
-        f"<table role='presentation' style='width:100%;border-collapse:collapse'><tr>{tile_html}</tr></table>"
+        f"<p style='color:#{ink};margin-top:0;font-size:15px'>Period: <strong>{html.escape(_period_label(report))}</strong></p>"
+        f"<table role='presentation' style='width:100%;border-collapse:collapse'>{tile_rows}</table>"
         "<h2 style='font-size:18px;margin-top:28px'>Station overview</h2>"
         "<table style='width:100%;border-collapse:collapse;background:#fff'>"
-        "<thead><tr style='text-align:left;background:#edf5f4'>"
-        "<th style='padding:8px'>Station</th><th style='padding:8px'>Availability</th>"
-        "<th style='padding:8px'>Uptime</th><th style='padding:8px'>Transmission</th>"
-        "<th style='padding:8px'>Gaps</th><th style='padding:8px'>Comms interruptions</th>"
-        "<th style='padding:8px'>Sensor faults</th><th style='padding:8px'>Low battery</th></tr></thead>"
+        f"<thead><tr style='background:#{pale}'>"
+        + header("Station") + header("Availability") + header("Uptime") + header("Transmission")
+        + header("Gaps") + header("Comms interruptions") + header("Sensor faults") + header("Low battery")
+        + "</tr></thead>"
         f"<tbody>{rows or '<tr><td colspan=8 style=padding:8px>No stations are registered.</td></tr>'}</tbody>"
         "</table>"
         "<h2 style='font-size:18px;margin-top:28px'>Overall sensor health</h2>"
         "<table style='width:100%;border-collapse:collapse;background:#fff'>"
-        "<thead><tr style='text-align:left;background:#edf5f4'><th style='padding:6px'>Sensor</th>"
-        "<th style='padding:6px'>Completeness</th><th style='padding:6px'>Missing readings</th>"
-        "<th style='padding:6px'>Fault events</th></tr></thead>"
+        f"<thead><tr style='background:#{pale}'>"
+        + header("Sensor") + header("Completeness", formulas["completeness"])
+        + header("Missing readings", formulas["missing"]) + header("Fault events", formulas["fault_count"])
+        + "</tr></thead>"
         f"<tbody>{sensor_rows}</tbody></table>"
-        f"<p style='color:#627387;margin-top:24px'>Average transmission latency: {summary['avg_latency_seconds']} seconds. "
+        f"<p style='color:#{muted};margin-top:24px'>"
+        f"Average transmission delay: {_fmt_duration(summary['avg_latency_seconds'] / 60)}. "
         f"Battery voltage: {_fmt(battery['volt_batt_min'])} / {_fmt(battery['volt_batt_avg'])} / "
-        f"{_fmt(battery['volt_batt_max'])} V (min/avg/max). "
+        f"{_fmt(battery['volt_batt_max'])} V (min / avg / max). "
         f"Battery charging for {battery['charging_hours']} h ({battery['charging_pct']}% of measured time); "
         f"{battery['power_outages']} power-related outage(s). "
         f"Communication interruptions: {summary['communication_interruptions']} "
-        f"({summary['communication_interruption_minutes']} min). "
-        f"Maintenance entries logged: {summary['maintenance_count']}. "
-        "PDF attached with full station details.</p>"
+        f"({_fmt_duration(summary['communication_interruption_minutes'])}). "
+        f"Maintenance entries logged: {summary['maintenance_count']}.</p>"
+        f"<p style='color:#{muted}'>The attached PDF has the full details for each station, "
+        "including charts of data received, battery and solar voltage, and every sensor.</p>"
         "</main></body></html>"
     )
 
 
 def build_email_text(report: dict) -> str:
     summary = report["summary"]
+    formulas = _formulas(summary.get("interval_minutes"))
     lines = [
-        f"Daily Performance Report for {report['report_date'].isoformat()}",
+        "Daily Performance Report",
+        f"Period: {_period_label(report)}",
         f"Stations: {summary['station_count']}",
-        f"Data availability: {summary['data_availability_pct']}%",
-        f"System uptime: {summary['uptime_pct']}%",
-        f"Transmission success: {summary['transmission_success_pct']}%",
-        f"Missing-data gaps: {summary['total_gaps']}",
-        f"Communication interruptions: {summary['communication_interruptions']} "
-        f"({summary['communication_interruption_minutes']} min)",
-        f"Sensor fault events: {summary['sensor_fault_events']}",
-        f"Maintenance entries: {summary['maintenance_count']}",
-        f"Low-battery events: {summary['low_battery_events']}",
-        f"Battery charging time: {summary['power']['charging_hours']} h; "
-        f"power-related outages: {summary['power']['power_outages']}",
+        "",
+        f"Data availability: {summary['data_availability_pct']}% ({formulas['availability']})",
+        f"System uptime: {summary['uptime_pct']}% ({formulas['uptime']})",
+        f"Transmission success: {summary['transmission_success_pct']}% ({formulas['transmission']})",
+        f"Missing-data gaps: {summary['total_gaps']} ({formulas['gaps']})",
+        f"Communication interruptions: {summary['communication_interruptions']} ({formulas['comms']})",
+        f"Sensor fault events: {summary['sensor_fault_events']} ({formulas['faults']})",
+        f"Low-battery events: {summary['low_battery_events']} ({formulas['low_battery']})",
+        f"Maintenance entries: {summary['maintenance_count']} ({formulas['maintenance']})",
         "",
         "Station overview:",
     ]
@@ -245,6 +271,7 @@ def build_email_text(report: dict) -> str:
             f"sensor faults {item['sensor_fault_events']}, low battery {item['low_battery_events']}, "
             f"maintenance entries {item['maintenance_count']}"
         )
+    lines += ["", "The attached PDF has the full details and charts for each station."]
     return "\n".join(lines)
 
 
@@ -282,6 +309,23 @@ def build_report_pdf(report: dict) -> bytes:
         spaceAfter=2 * mm,
     ))
     styles.add(ParagraphStyle(
+        name="Period",
+        parent=styles["BodyText"],
+        fontSize=10,
+        leading=13,
+        textColor=INK,
+    ))
+    styles.add(ParagraphStyle(
+        name="SubHeading",
+        parent=styles["BodyText"],
+        fontName="Helvetica-Bold",
+        fontSize=10,
+        leading=13,
+        textColor=INK,
+        spaceBefore=4 * mm,
+        spaceAfter=1.5 * mm,
+    ))
+    styles.add(ParagraphStyle(
         name="SmallMuted",
         parent=styles["BodyText"],
         fontSize=8,
@@ -316,140 +360,167 @@ def build_report_pdf(report: dict) -> bytes:
         parent=styles["Cell"],
         textColor=colors.white,
     ))
+    styles.add(ParagraphStyle(
+        name="RowLabel",
+        parent=styles["Cell"],
+        leading=9.5,
+    ))
 
     summary = report["summary"]
-    period_label = report.get("period_label") or (
-        f"Previous calendar day: {report['report_date'].isoformat()}"
-    )
+    formulas = _formulas(summary.get("interval_minutes"))
+    single_station = len(report["stations"]) == 1
+    theme = {"ink": INK, "muted": MUTED}
+    content_width = landscape(A4)[0] - 28 * mm
+
     kpis = [
-        ("Data availability", f'{summary["data_availability_pct"]}%'),
-        ("System uptime", f'{summary["uptime_pct"]}%'),
-        ("Transmission", f'{summary["transmission_success_pct"]}%'),
-        ("Missing-data gaps", str(summary["total_gaps"])),
-        ("Comms interruptions", str(summary["communication_interruptions"])),
-        ("Sensor faults", str(summary["sensor_fault_events"])),
-        ("Low-battery events", str(summary["low_battery_events"])),
+        ("Data availability", f'{summary["data_availability_pct"]}%', formulas["availability"]),
+        ("System uptime", f'{summary["uptime_pct"]}%', formulas["uptime"]),
+        ("Transmission", f'{summary["transmission_success_pct"]}%', formulas["transmission"]),
+        ("Missing-data gaps", str(summary["total_gaps"]), formulas["gaps"]),
+        ("Comms interruptions", str(summary["communication_interruptions"]), formulas["comms"]),
+        ("Sensor faults", str(summary["sensor_fault_events"]), formulas["faults"]),
+        ("Low-battery events", str(summary["low_battery_events"]), formulas["low_battery"]),
+        ("Maintenance entries", str(summary["maintenance_count"]), formulas["maintenance"]),
     ]
+    stations_text = "1 station" if single_station else f"{summary['station_count']} stations"
     story = [
         Paragraph(escape(report.get("title", "Daily Performance Report")), styles["ReportTitle"]),
         Paragraph(
-            f"{escape(period_label)} "
-            f"| {summary['station_count']} station(s) "
-            f"| {summary['actual_readings']} of {summary['expected_readings']} expected readings",
-            styles["SmallMuted"],
+            f"Period: <b>{escape(_period_label(report))}</b>"
+            f"  |  {stations_text}"
+            f"  |  {summary['actual_readings']} of {summary['expected_readings']} expected readings",
+            styles["Period"],
         ),
-        Spacer(1, 5 * mm),
+        Spacer(1, 4 * mm),
     ]
+    kpi_rows = []
+    for start in range(0, len(kpis), 4):
+        row = kpis[start:start + 4]
+        kpi_rows.append([_heading_cell(label, formula, styles["KpiLabel"]) for label, _, formula in row])
+        kpi_rows.append([Paragraph(escape(value), styles["KpiValue"]) for _, value, _ in row])
     kpi_table = Table(
-        [[Paragraph(f"<b>{escape(label)}</b>", styles["KpiLabel"]) for label, _ in kpis],
-         [Paragraph(escape(value), styles["KpiValue"]) for _, value in kpis]],
-        colWidths=[(266 / len(kpis)) * mm] * len(kpis),
-        rowHeights=[9 * mm, 13 * mm],
+        kpi_rows,
+        colWidths=[content_width / 4] * 4,
+        rowHeights=[12 * mm, 11 * mm] * (len(kpi_rows) // 2),
     )
     kpi_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), PALE),
         ("BOX", (0, 0), (-1, -1), 0.6, LINE),
         ("INNERGRID", (0, 0), (-1, -1), 0.6, LINE),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
     ]))
-    story.extend([kpi_table, Paragraph("Station overview", styles["SectionHeading"])])
+    story.append(kpi_table)
 
-    header = [
-        "Station", "Availability", "Uptime", "Transmission", "Gaps", "Downtime",
-        "Comms interruptions", "Sensor faults", "Low battery", "Latency",
-    ]
-    overview_rows = [[Paragraph(f"<b>{label}</b>", styles["HeaderCell"]) for label in header]]
-    for item in report["stations"]:
-        overview_rows.append([
-            Paragraph(escape(f"{item['station_name']} ({item['station_code']})"), styles["Cell"]),
-            f"{item['data_availability_pct']}%",
-            f"{item['uptime_pct']}%",
-            f"{item['transmission_success_pct']}%",
-            str(item["total_gaps"]),
-            f"{item['total_downtime_minutes']} min",
-            str(item["communication_interruptions"]),
-            str(item["sensor_fault_events"]),
-            str(item["low_battery_events"]),
-            f"{item['avg_latency_seconds']} s",
+    # With several stations, compare them and show fleet totals. With one
+    # station these would repeat the station's own section, so they are left out.
+    if not single_station:
+        header = [
+            "Station", "Availability", "Uptime", "Transmission", "Gaps", "Downtime",
+            "Comms interruptions", "Sensor faults", "Low battery", "Latency",
+        ]
+        overview_rows = [[Paragraph(f"<b>{label}</b>", styles["HeaderCell"]) for label in header]]
+        for item in report["stations"]:
+            overview_rows.append([
+                Paragraph(escape(f"{item['station_name']} ({item['station_code']})"), styles["Cell"]),
+                f"{item['data_availability_pct']}%",
+                f"{item['uptime_pct']}%",
+                f"{item['transmission_success_pct']}%",
+                str(item["total_gaps"]),
+                _fmt_duration(item["total_downtime_minutes"]),
+                str(item["communication_interruptions"]),
+                str(item["sensor_fault_events"]),
+                str(item["low_battery_events"]),
+                f"{item['avg_latency_seconds']} s",
+            ])
+        overview = Table(
+            overview_rows,
+            repeatRows=1,
+            colWidths=[
+                58 * mm, 22 * mm, 17 * mm, 24 * mm, 13 * mm, 24 * mm,
+                26 * mm, 18 * mm, 20 * mm, 22 * mm,
+            ],
+            hAlign="LEFT",
+        )
+        overview.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), INK),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, PALE]),
+            ("GRID", (0, 0), (-1, -1), 0.4, LINE),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (1, 1), (-1, -1), "CENTER"),
+            ("FONTSIZE", (1, 1), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.extend([Paragraph("Station overview", styles["SectionHeading"]), overview])
+        story.extend([
+            Paragraph("Overall power performance", styles["SectionHeading"]),
+            _detail_table(_power_rows(summary["power"], formulas, styles), [62 * mm, 32 * mm, 32 * mm, 32 * mm]),
+            Paragraph("Overall sensor health", styles["SectionHeading"]),
+            _detail_table(_sensor_rows(summary["sensors"], formulas, styles), [34 * mm, 34 * mm, 26 * mm, 26 * mm, 30 * mm]),
+            Paragraph(
+                f"Logger errors: {summary['clock_ahead_readings']} reading(s) timestamped ahead "
+                f"of the server clock, {summary['duplicate_readings']} duplicate reading(s).",
+                styles["SmallMuted"],
+            ),
         ])
-    overview = Table(
-        overview_rows,
-        repeatRows=1,
-        colWidths=[
-            58 * mm, 22 * mm, 17 * mm, 24 * mm, 13 * mm, 24 * mm,
-            26 * mm, 18 * mm, 20 * mm, 22 * mm,
-        ],
-        hAlign="LEFT",
-    )
-    overview.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), INK),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, PALE]),
-        ("GRID", (0, 0), (-1, -1), 0.4, LINE),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("ALIGN", (1, 1), (-1, -1), "CENTER"),
-        ("FONTSIZE", (1, 1), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-    ]))
-    story.append(overview)
-
-    overall_power_table = Table(
-        _power_rows(summary["power"]),
-        colWidths=[55 * mm, 35 * mm, 35 * mm, 35 * mm],
-    )
-    overall_power_table.setStyle(_detail_table_style())
-    overall_sensor_table = Table(
-        _sensor_rows(summary["sensors"]),
-        colWidths=[38 * mm, 26 * mm, 26 * mm, 20 * mm, 24 * mm],
-    )
-    overall_sensor_table.setStyle(_detail_table_style())
-    story.extend([
-        Paragraph("Overall power performance", styles["SectionHeading"]),
-        overall_power_table,
-        Paragraph("Overall sensor health", styles["SectionHeading"]),
-        overall_sensor_table,
-        Paragraph(
-            f"Logger errors: {summary['clock_ahead_readings']} reading(s) timestamped ahead "
-            f"of the server clock, {summary['duplicate_readings']} duplicate reading(s).",
-            styles["SmallMuted"],
-        ),
-    ])
 
     for item in report["stations"]:
+        item_formulas = _formulas(item.get("expected_interval_minutes"))
+        interval = item.get("expected_interval_minutes")
+        interval_label = f"{interval:g}-minute period" if interval else "reporting interval"
         story.append(Paragraph(
             f"{escape(item['station_name'])} "
             f"<font color='{TEAL.hexval()}'>{escape(item['station_code'])}</font>",
             styles["SectionHeading"],
         ))
-        story.append(Paragraph(
-            f"Availability {item['data_availability_pct']}% "
-            f"({item['actual_readings']}/{item['expected_readings']} readings)  |  "
-            f"Uptime {item['uptime_pct']}%  |  "
-            f"Transmission {item['transmission_success_pct']}%  |  "
-            f"Average latency {item['avg_latency_seconds']} seconds  |  "
-            f"Comms interruptions {item['communication_interruptions']} "
-            f"({item['communication_interruption_minutes']} min)",
-            styles["SmallMuted"],
-        ))
-        power_table = Table(_power_rows(item["power"]), colWidths=[50 * mm, 28 * mm, 28 * mm, 28 * mm])
-        power_table.setStyle(_detail_table_style())
-        sensor_table = Table(
-            _sensor_rows(item["sensors"]),
-            colWidths=[30 * mm, 22 * mm, 20 * mm, 16 * mm, 20 * mm],
-        )
-        sensor_table.setStyle(_detail_table_style())
-        details = Table([[power_table, sensor_table]], colWidths=[145 * mm, 110 * mm])
-        details.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 0),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ]))
-        story.append(details)
+        has_charts = "chart_data" in item
+        if has_charts:
+            story.append(report_charts.timeline_chart(item, content_width, theme, interval_label))
+
+        if item["actual_readings"] == 0:
+            story.append(Paragraph("No readings were received from this station in this period.", styles["SmallMuted"]))
+        else:
+            if has_charts:
+                story.extend([Spacer(1, 3 * mm), report_charts.power_chart(item, content_width, theme)])
+            details = Table(
+                [[
+                    _detail_table(_power_rows(item["power"], item_formulas, styles), [52 * mm, 26 * mm, 26 * mm, 26 * mm]),
+                    _detail_table(_sensor_rows(item["sensors"], item_formulas, styles), [27 * mm, 31 * mm, 22 * mm, 22 * mm, 25 * mm]),
+                ]],
+                colWidths=[136 * mm, 133 * mm],
+            )
+            details.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]))
+            story.extend([Spacer(1, 3 * mm), details])
+
+            if has_charts:
+                chart_width = content_width / 3
+                charts = report_charts.sensor_charts(item, chart_width - 6, theme)
+                grid = Table(
+                    [charts[start:start + 3] for start in range(0, len(charts), 3)],
+                    colWidths=[chart_width] * 3,
+                )
+                grid.setStyle(TableStyle([
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]))
+                story.extend([
+                    Paragraph("Sensor readings", styles["SubHeading"]),
+                    grid,
+                ])
+                if len(item["chart_data"]["daily_uptime"]) >= 7:
+                    story.append(report_charts.daily_uptime_chart(item, content_width, theme))
+
         if item["active_faults"]:
             story.append(Paragraph(
                 f"Active sensor faults: {escape(', '.join(item['active_faults']))}",
@@ -462,7 +533,8 @@ def build_report_pdf(report: dict) -> bytes:
                 styles["SmallMuted"],
             ))
         _append_events(
-            story, styles, "Maintenance and interventions", item["maintenance_events"],
+            story, styles, "Maintenance and interventions", item_formulas["maintenance"],
+            item["maintenance_events"],
             lambda entry: (
                 f"{entry['activity_label']}"
                 + (f" by {entry['performed_by']}" if entry["performed_by"] else "")
@@ -470,27 +542,27 @@ def build_report_pdf(report: dict) -> bytes:
             ),
         )
         _append_events(
-            story, styles, "Missing-data gaps", item["gaps"],
+            story, styles, "Missing-data gaps", item_formulas["gaps"], item["gaps"],
             lambda gap: (
-                f"{gap['duration_minutes']} minutes ({gap['missed_readings']} expected readings missed)"
+                f"{_fmt_duration(gap['duration_minutes'])} ({gap['missed_readings']} expected readings missed)"
                 + ("; battery was low before the outage" if gap.get("cause") == "low_battery" else "")
                 + ("; during logged maintenance" if gap.get("during_maintenance") else "")
             ),
         )
         _append_events(
-            story, styles, "Communication interruptions (longest first)",
+            story, styles, "Communication interruptions, longest first", item_formulas["comms"],
             sorted(item["communication_events"], key=lambda event: -event["duration_minutes"]),
             lambda event: (
-                f"{event['duration_minutes']} minutes "
+                f"{_fmt_duration(event['duration_minutes'])} "
                 f"({event['delayed_readings']} reading(s) logged but delivered late)"
             ),
         )
         _append_events(
-            story, styles, "Sensor fault events (longest first)",
+            story, styles, "Sensor fault events, longest first", item_formulas["faults"],
             sorted(item["fault_events"], key=lambda event: -event["duration_minutes"]),
             lambda event: (
                 f"{event['sensor'].replace('_', ' ').title()} {FAULT_LABELS[event['type']]}: "
-                f"{event['duration_minutes']} minutes ({event['readings']} reading(s))"
+                f"{_fmt_duration(event['duration_minutes'])} ({event['readings']} reading(s))"
             ),
         )
 
@@ -503,24 +575,55 @@ def _fmt(value) -> str:
 
 
 def _fmt_time(value: str) -> str:
-    return f"{datetime.fromisoformat(value):%Y-%m-%d %H:%M}"
+    return f"{timezone.localtime(datetime.fromisoformat(value)):%d %b %Y, %H:%M}"
 
 
-def _power_rows(power: dict) -> list:
+def _fmt_duration(minutes: float) -> str:
+    """Readable length of time, e.g. 1 d 17 h 40 min."""
+    total = round(minutes)
+    if total < 60:
+        return f"{total} min"
+    days, rest = divmod(total, 1440)
+    hours, mins = divmod(rest, 60)
+    parts = [f"{days} d"] if days else []
+    parts += [f"{hours} h"] if hours else []
+    parts += [f"{mins} min"] if mins else []
+    return " ".join(parts)
+
+
+def _power_rows(power: dict, formulas: dict, styles) -> list:
+    def label(text, formula=None):
+        if not formula:
+            return text
+        return Paragraph(
+            f"{escape(text)}<br/><font size='6.5' color='{MUTED.hexval()}'>({escape(formula)})</font>",
+            styles["RowLabel"],
+        )
+
+    header = [Paragraph(f"<b>{text}</b>", styles["HeaderCell"]) for text in ("Power metric", "Minimum", "Average", "Maximum")]
     return [
-        ["Power metric", "Minimum", "Average", "Maximum"],
+        header,
         ["Battery voltage (V)", _fmt(power["volt_batt_min"]), _fmt(power["volt_batt_avg"]), _fmt(power["volt_batt_max"])],
         ["Solar voltage (V)", _fmt(power["volt_solar_min"]), _fmt(power["volt_solar_avg"]), _fmt(power["volt_solar_max"])],
-        ["Battery temperature (C)", _fmt(power["battery_temp_min"]), _fmt(power["battery_temp_avg"]), _fmt(power["battery_temp_max"])],
-        ["Charging time", f"{power['charging_hours']} h ({power['charging_pct']}%)", "", ""],
-        ["Discharging time", f"{power['discharging_hours']} h", "", ""],
-        ["Low-battery readings", str(power["low_battery_events"]), "", ""],
-        ["Power-related outages", f"{power['power_outages']} ({power['power_outage_minutes']} min)", "", ""],
+        ["Battery temperature (°C)", _fmt(power["battery_temp_min"]), _fmt(power["battery_temp_avg"]), _fmt(power["battery_temp_max"])],
+        [label("Charging time", formulas["charging"]), f"{power['charging_hours']} h ({power['charging_pct']}%)", "", ""],
+        [label("Discharging time", formulas["discharging"]), f"{power['discharging_hours']} h", "", ""],
+        [label("Low-battery readings", formulas["low_battery"]), str(power["low_battery_events"]), "", ""],
+        [label("Power-related outages", formulas["power_outages"]), f"{power['power_outages']} ({_fmt_duration(power['power_outage_minutes'])})" if power["power_outages"] else "0", "", ""],
     ]
 
 
-def _sensor_rows(sensors: dict) -> list:
-    rows = [["Sensor", "Completeness", "Missing", "Faults", "Fault time"]]
+def _sensor_rows(sensors: dict, formulas: dict, styles) -> list:
+    header = [Paragraph("<b>Sensor</b>", styles["HeaderCell"])] + [
+        _heading_cell(text, formulas[key], styles["HeaderCell"])
+        for text, key in (
+            ("Completeness", "completeness"),
+            ("Missing", "missing"),
+            ("Faults", "fault_count"),
+            ("Fault time", "fault_time"),
+        )
+    ]
+    rows = [header]
     for sensor in SENSOR_FIELDS:
         stats = sensors[sensor]
         rows.append([
@@ -528,15 +631,18 @@ def _sensor_rows(sensors: dict) -> list:
             f"{stats['completeness_pct']}%",
             str(stats["null_readings"]),
             str(stats["fault_events"]),
-            f"{stats['fault_minutes']} min",
+            _fmt_duration(stats["fault_minutes"]) if stats["fault_minutes"] else "-",
         ])
     return rows
 
 
-def _append_events(story, styles, title, events, describe, limit=10):
+def _append_events(story, styles, title, formula, events, describe, limit=10):
     if not events:
         return
-    story.append(Paragraph(title, styles["Heading3"]))
+    story.append(Paragraph(
+        f"{escape(title)} <font size='8' color='{MUTED.hexval()}'>({escape(formula)})</font>",
+        styles["SubHeading"],
+    ))
     for event in events[:limit]:
         when = _fmt_time(event["start"])
         if event.get("end"):
@@ -547,6 +653,62 @@ def _append_events(story, styles, title, events, describe, limit=10):
         ))
     if len(events) > limit:
         story.append(Paragraph(f"Showing {limit} of {len(events)}.", styles["SmallMuted"]))
+
+
+def _formulas(interval_minutes) -> dict:
+    """How each figure is calculated, worded for the station's reporting interval.
+
+    interval_minutes is None when the report covers stations with different
+    intervals, in which case the wording stays general.
+    """
+    if interval_minutes:
+        periods = f"{interval_minutes:g}-min periods"
+        on_time = f"{interval_minutes:g} min"
+        gap = f"{interval_minutes * 1.5:g} min"
+    else:
+        periods = "reporting intervals"
+        on_time = "one reporting interval"
+        gap = "1.5 reporting intervals"
+    return {
+        "availability": "readings received ÷ readings expected × 100",
+        "uptime": f"{periods} with data ÷ all {periods} × 100",
+        "transmission": f"{periods} with a reading received within {on_time} ÷ all {periods} × 100",
+        "gaps": f"times with no data for more than {gap}",
+        "comms": f"runs of readings that arrived more than {on_time} late",
+        "faults": f"runs of sensor values that were missing, out of range, or unchanged for {STUCK_MIN_HOURS} h or more",
+        "low_battery": f"readings with battery below {LOW_BATTERY_VOLTS:g} V",
+        "maintenance": "visits and resets recorded in the maintenance log",
+        "completeness": "readings with a value ÷ all readings × 100",
+        "missing": "readings with no value",
+        "fault_count": "runs of bad values",
+        "fault_time": "total length of those runs",
+        "charging": f"time with battery current below -{CHARGING_CURRENT_AMPS:g} A",
+        "discharging": f"time with battery current above {CHARGING_CURRENT_AMPS:g} A",
+        "power_outages": "gaps that began right after a low-battery reading",
+    }
+
+
+def _period_label(report: dict) -> str:
+    start = report["period_start"]
+    end = report["period_end"]
+    start = timezone.localtime(datetime.fromisoformat(start) if isinstance(start, str) else start)
+    end = timezone.localtime(datetime.fromisoformat(end) if isinstance(end, str) else end)
+    hours = (end - start).total_seconds() / 3600
+    length = f"{hours:g} hours" if hours < 72 else f"{hours / 24:g} days"
+    return f"{start:%d %b %Y, %H:%M} to {end:%d %b %Y, %H:%M} ({length})"
+
+
+def _heading_cell(label: str, formula: str, style) -> Paragraph:
+    return Paragraph(
+        f"<b>{escape(label)}</b><br/><font size='6.5'>({escape(formula)})</font>",
+        style,
+    )
+
+
+def _detail_table(rows: list, col_widths: list) -> Table:
+    table = Table(rows, colWidths=col_widths)
+    table.setStyle(_detail_table_style())
+    return table
 
 
 def _detail_table_style() -> TableStyle:
@@ -568,6 +730,6 @@ def _draw_page_footer(canvas, document):
     canvas.line(14 * mm, 10 * mm, landscape(A4)[0] - 14 * mm, 10 * mm)
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(MUTED)
-    canvas.drawString(14 * mm, 6 * mm, "AWS Monitor | Daily station performance")
+    canvas.drawString(14 * mm, 6 * mm, f"AWS Monitor | {document.title}")
     canvas.drawRightString(landscape(A4)[0] - 14 * mm, 6 * mm, f"Page {document.page}")
     canvas.restoreState()

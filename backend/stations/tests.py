@@ -5,6 +5,7 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.management import call_command
+from django.db import models
 from django.test import SimpleTestCase, TestCase
 from django.utils import timezone as django_timezone
 from rest_framework.test import APIClient
@@ -17,10 +18,13 @@ from stations.models import (
 	Station,
 	StationStatus,
 )
-from stations.performance_reports import SENSOR_FIELDS, build_performance_report_data
+from stations.performance_reports import SENSOR_FIELDS, _combine_step, build_performance_report_data
+from stations.report_charts import _segments
 from stations.report_email import (
+	_formulas,
 	build_daily_report,
 	build_email_html,
+	build_email_text,
 	build_report_pdf,
 	build_station_report_pdf,
 	summarize_reports,
@@ -118,6 +122,8 @@ class DailyPerformanceReportTests(SimpleTestCase):
 	def test_email_and_pdf_render_station_summary(self):
 		report = {
 			"report_date": date(2026, 10, 12),
+			"period_start": self.stations[0]["period_start"],
+			"period_end": self.stations[0]["period_end"],
 			"stations": self.stations,
 			"summary": summarize_reports(self.stations),
 		}
@@ -626,3 +632,84 @@ class MaintenanceLogTests(TestCase):
 		})
 
 		self.assertEqual([item["description"] for item in response.data["data"]], ["Replaced the battery"])
+
+
+class ReportChartAndWordingTests(TestCase):
+	def setUp(self):
+		self.station = Station.objects.create(name="Probe", station_id="AWS-PROBE", expected_interval_minutes=30)
+		self.start = local_day_start()
+		self.end = self.start + timedelta(days=1)
+
+	def build(self):
+		return build_performance_report_data(self.station, self.start, self.end)
+
+	def test_clock_drift_across_an_interval_boundary_is_not_downtime(self):
+		# Readings every 30 min 8 s drift past a boundary and skip one interval.
+		rows = [
+			SensorReading(station=self.station, station_code="AWS-PROBE",
+						  timestamp=self.start + timedelta(minutes=29, seconds=40) + timedelta(seconds=1808) * index,
+						  temperature=20.0 + index % 7)
+			for index in range(47)
+		]
+		SensorReading.objects.bulk_create(rows)
+		SensorReading.objects.update(received_at=models.F("timestamp") + timedelta(minutes=1))
+
+		report = self.build()
+
+		self.assertEqual(report["total_gaps"], 0)
+		self.assertEqual(report["uptime_pct"], 100.0)
+		self.assertEqual(report["transmission_success_pct"], 100.0)
+		self.assertNotIn("missing", [status for _, _, status in report["chart_data"]["timeline"]])
+
+	def test_chart_data_marks_late_and_missing_intervals(self):
+		add_readings(self.station, self.start, self.start + timedelta(hours=12), step_minutes=30)
+		SensorReading.objects.filter(timestamp__gte=self.start + timedelta(hours=6)).update(
+			received_at=self.start + timedelta(hours=13)
+		)
+
+		chart_data = self.build()["chart_data"]
+
+		self.assertEqual(chart_data["timeline"], [[0, 12, "on_time"], [12, 12, "late"], [24, 24, "missing"]])
+		temperatures = chart_data["series"]["temperature"]
+		self.assertEqual(len(temperatures), 48)
+		self.assertIsNotNone(temperatures[0])
+		self.assertIsNone(temperatures[-1])
+		self.assertEqual(chart_data["daily_uptime"], [{"date": REPORT_DAY.isoformat(), "uptime_pct": 50.0}])
+
+	def test_long_periods_are_combined_into_fewer_chart_steps(self):
+		add_readings(self.station, self.start, self.start + timedelta(days=2), step_minutes=30)
+
+		report = build_performance_report_data(self.station, self.start, self.start + timedelta(days=30))
+
+		self.assertLessEqual(len(report["chart_data"]["series"]["temperature"]), 240)
+		self.assertEqual(len(report["chart_data"]["daily_uptime"]), 30)
+
+	def test_wind_direction_steps_average_around_north(self):
+		self.assertEqual(_combine_step("wind_direction", [350.0, 10.0]), 0.0)
+		self.assertEqual(_combine_step("rain", [0.2, 0.4]), 0.6)
+
+	def test_wind_direction_line_breaks_where_it_crosses_north(self):
+		segments = list(_segments([350.0, 355.0, 5.0, 10.0, None, 20.0], lambda i: i, lambda v: v, wrap=360))
+
+		self.assertEqual(segments, [[(0, 350.0), (1, 355.0)], [(2, 5.0), (3, 10.0)], [(5, 20.0)]])
+
+	def test_formulas_name_the_station_interval(self):
+		self.assertIn("30-min periods with data", _formulas(30)["uptime"])
+		self.assertIn("more than 45 min", _formulas(30)["gaps"])
+		self.assertIn("10-min periods", _formulas(10)["uptime"])
+		self.assertIn("reporting intervals", _formulas(None)["uptime"])
+
+	def test_station_pdf_with_charts_and_email_wording(self):
+		add_readings(self.station, self.start, self.start + timedelta(hours=10), step_minutes=30,
+					 humidity=60.0, volt_solar=12.0, curr_batt=-0.2, rain=0.2)
+		report = self.build()
+
+		pdf = build_station_report_pdf(report)
+		daily = build_daily_report(REPORT_DAY)
+		email_html = build_email_html(daily)
+
+		self.assertTrue(pdf.startswith(b"%PDF-"))
+		self.assertTrue(build_report_pdf(daily).startswith(b"%PDF-"))
+		self.assertIn("<strong>", email_html)
+		self.assertIn("30-min periods with data", email_html)
+		self.assertIn("charts", build_email_text(daily))
