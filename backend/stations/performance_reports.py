@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timedelta
 
 from django.db.models import Avg, Count, Max, Min, Q
@@ -40,6 +41,11 @@ LOW_BATTERY_VOLTS = 11.5
 # discharges; currents smaller than this are treated as idle noise.
 CHARGING_CURRENT_AMPS = 0.01
 
+# Charts show the battery, the solar panel and every sensor, combined into at
+# most this many time steps so long periods stay readable.
+CHART_FIELDS = ("volt_batt", "volt_solar", *SENSOR_FIELDS)
+CHART_MAX_POINTS = 240
+
 
 def build_performance_report_data(station: Station, period_start, period_end) -> dict:
     """Calculate report metrics for a station in a half-open time window."""
@@ -68,6 +74,7 @@ def build_performance_report_data(station: Station, period_start, period_end) ->
             "timestamp",
             "received_at",
             "volt_batt",
+            "volt_solar",
             "curr_batt",
             *SENSOR_FIELDS,
         )
@@ -184,13 +191,31 @@ def build_performance_report_data(station: Station, period_start, period_end) ->
     ]
     valid_latencies = [latency for latency in latencies if latency is not None and latency >= 0]
     clock_ahead_readings = sum(1 for latency in latencies if latency is not None and latency < 0)
-    on_time_indexes = [
-        interval_index(record["timestamp"])
-        for record, latency in zip(records, latencies)
-        if latency is not None and latency <= interval.total_seconds()
-    ]
-    on_time_readings = len(on_time_indexes)
-    on_time_intervals = len({index for index in on_time_indexes if index < expected_readings})
+    on_time_limit = interval.total_seconds()
+    on_time_readings = sum(
+        1 for latency in latencies if latency is not None and latency <= on_time_limit
+    )
+
+    # Each reporting interval takes the readings taken inside it: None when it
+    # has none, else whether one of them arrived on time. Station clocks drift,
+    # so a reading can fall just past an interval boundary and leave an interval
+    # empty although no reading was missed. An empty interval between two
+    # readings that are no further apart than the gap threshold therefore takes
+    # the reading before it; only intervals inside a real gap stay empty.
+    interval_on_time = [None] * expected_readings
+    for record, latency in zip(records, latencies):
+        index = interval_index(record["timestamp"])
+        if index < expected_readings:
+            arrived_on_time = latency is not None and latency <= on_time_limit
+            interval_on_time[index] = bool(interval_on_time[index]) or arrived_on_time
+    for previous, latency, current in zip(records, latencies, records[1:]):
+        if current["timestamp"] - previous["timestamp"] <= gap_threshold:
+            arrived_on_time = latency is not None and latency <= on_time_limit
+            last = min(interval_index(current["timestamp"]), expected_readings)
+            for index in range(interval_index(previous["timestamp"]) + 1, last):
+                if interval_on_time[index] is None:
+                    interval_on_time[index] = arrived_on_time
+    on_time_intervals = sum(1 for arrived_on_time in interval_on_time if arrived_on_time)
     transmission_success_pct = (
         round(on_time_intervals / expected_readings * 100, 2)
         if expected_readings > 0
@@ -281,14 +306,10 @@ def build_performance_report_data(station: Station, period_start, period_end) ->
         "power_outage_minutes": round(sum(gap["duration_minutes"] for gap in power_gaps), 2),
     })
 
-    # The period is split into reporting intervals. An interval is up when at
-    # least one reading was taken inside it, even if not exactly on schedule.
+    # The period is split into reporting intervals. An interval is up when it
+    # has a reading (see interval_on_time above, which allows for clock drift).
     # Each run of consecutive empty intervals is one downtime incident.
-    covered = [False] * expected_readings
-    for timestamp in timestamps:
-        index = interval_index(timestamp)
-        if index < expected_readings:
-            covered[index] = True
+    covered = [arrived_on_time is not None for arrived_on_time in interval_on_time]
     covered_intervals = sum(covered)
     total_downtime_minutes = round(
         min(
@@ -307,6 +328,61 @@ def build_performance_report_data(station: Station, period_start, period_end) ->
         if expected_readings > 0
         else 0.0
     )
+
+    # Chart data. The timeline marks every reporting interval as on time,
+    # late (a reading exists but arrived late) or missing, stored as runs of
+    # [first interval, interval count, status] to stay small for long periods.
+    timeline = []
+    for index, arrived_on_time in enumerate(interval_on_time):
+        status = "missing" if arrived_on_time is None else "on_time" if arrived_on_time else "late"
+        if timeline and timeline[-1][2] == status:
+            timeline[-1][1] += 1
+        else:
+            timeline.append([index, 1, status])
+
+    # Series are combined into at most CHART_MAX_POINTS time steps; a step with
+    # no reading stays None so charts show a break instead of joining the gap.
+    step = interval * max(1, math.ceil(expected_readings / CHART_MAX_POINTS))
+    step_count = max(1, math.ceil((period_end - period_start) / step))
+    step_values = {field: [[] for _ in range(step_count)] for field in CHART_FIELDS}
+    for record in records:
+        index = int((record["timestamp"] - period_start) / step)
+        if index < step_count:
+            for field in CHART_FIELDS:
+                if record[field] is not None:
+                    step_values[field][index].append(record[field])
+    series = {
+        field: [_combine_step(field, values) for values in buckets]
+        for field, buckets in step_values.items()
+    }
+    # A step left empty only by clock drift (its reporting intervals count as
+    # up) is bridged with the average of its neighbours so lines do not break.
+    intervals_per_step = round(step / interval)
+    for index in range(1, step_count - 1):
+        first = index * intervals_per_step
+        if not any(covered[first:first + intervals_per_step]):
+            continue
+        for field, values in series.items():
+            if field != "rain" and values[index] is None and None not in (values[index - 1], values[index + 1]):
+                values[index] = round((values[index - 1] + values[index + 1]) / 2, 2)
+
+    daily_counts = {}
+    for index, is_up in enumerate(covered):
+        day = timezone.localtime(period_start + interval * index).date().isoformat()
+        total, up = daily_counts.get(day, (0, 0))
+        daily_counts[day] = (total + 1, up + is_up)
+    daily_uptime = [
+        {"date": day, "uptime_pct": round(up / total * 100, 2)}
+        for day, (total, up) in daily_counts.items()
+    ]
+
+    chart_data = {
+        "interval_minutes": expected_interval_minutes,
+        "step_minutes": round(step.total_seconds() / 60, 2),
+        "timeline": timeline,
+        "series": series,
+        "daily_uptime": daily_uptime,
+    }
 
     sensors = {}
     fault_events = []
@@ -409,6 +485,7 @@ def build_performance_report_data(station: Station, period_start, period_end) ->
         "transmission": transmission,
         "communication": communication,
         "maintenance": maintenance,
+        "chart_data": chart_data,
         "power": power,
         "power_performance": power,
         "uptime": uptime,
@@ -418,6 +495,7 @@ def build_performance_report_data(station: Station, period_start, period_end) ->
         "data_availability_pct": availability_pct,
         "expected_readings": expected_readings,
         "actual_readings": actual_readings,
+        "expected_interval_minutes": expected_interval_minutes,
         "total_gaps": total_gaps,
         "longest_gap_minutes": longest_gap_minutes,
         "total_missing_minutes": total_missing_minutes,
@@ -443,6 +521,20 @@ def build_performance_report_data(station: Station, period_start, period_end) ->
         "sensor_fault_events": len(fault_events),
         "fault_events": fault_events,
     }
+
+
+def _combine_step(field, values):
+    """Combine the readings in one chart time step into a single value."""
+    if not values:
+        return None
+    if field == "rain":
+        return round(sum(values), 2)
+    if field == "wind_direction":
+        # Average angles as vectors so 350 and 10 degrees give 0, not 180.
+        sin_sum = sum(math.sin(math.radians(value)) for value in values)
+        cos_sum = sum(math.cos(math.radians(value)) for value in values)
+        return round(math.degrees(math.atan2(sin_sum, cos_sum)), 1) % 360
+    return round(sum(values) / len(values), 2)
 
 
 def _sensor_states(records, field, max_step):
