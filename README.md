@@ -10,23 +10,25 @@ This replaces a previous ThingSpeak-based pipeline with a fully in-house Django 
 
 ## 🚦 Project Status (Updated)
 
-- **Backend Architecture:** Production-ready Django application designed for single-package **cPanel shared hosting** (Phusion Passenger / WSGI).
+- **Backend Architecture:** Production-ready Django application designed for single-package **cPanel shared hosting** (Phusion Passenger / WSGI) or Ubuntu VPS (Gunicorn + Nginx).
 - **Embedded ML Engine:** Anomaly detection is **100% embedded inside Django**. There is **no separate FastAPI/Uvicorn microservice** to maintain or run. Predictions execute in memory (~10–20ms) when data hits `/api/ingest/weather/`.
 - **Split Channel Ingestion:** Ingestion endpoints mirror 3 ThingSpeak channels:
   - `/api/ingest/weather/` — Channel 1 (Weather metrics + ML anomaly scoring)
   - `/api/ingest/voltage/` — Channel 2 (Power rail voltages)
   - `/api/ingest/current/` — Channel 3 (Solar & battery currents)
   - `/api/ingest/` — Raw ESP32 string legacy fallback.
+- **Reporting & Maintenance Module:** Automated daily performance reporting with ReportLab PDF generation, custom recipient targeting via Django Admin, and station maintenance logs.
 
 ---
 
 ## 🛠️ Tech Stack
 
 **Backend**
-- Python 3.11+ / 3.14
+- Python 3.10+ / 3.14
 - Django 5.2.3 + Django REST Framework
 - djangorestframework-simplejwt (JWT Authentication)
 - scikit-learn + pandas + joblib + numpy (In-memory ML Inference)
+- reportlab (PDF Generation for Daily Reports)
 - MySQL / MariaDB / PostgreSQL
 
 **Frontend**
@@ -38,12 +40,10 @@ This replaces a previous ThingSpeak-based pipeline with a fully in-house Django 
 ---
 
 ## 📁 Project Structure
-
-```
 AWS-web-app/
-├── backend/                            Django project root (Package for cPanel)
+├── backend/                            Django project root (Package for cPanel/VPS)
 │   ├── manage.py
-│   ├── requirements.txt                Backend dependencies (Django + scikit-learn + pandas)
+│   ├── requirements.txt                Backend dependencies (Django + scikit-learn + reportlab)
 │   ├── test_ingest_weather.py          Local test script for live ML ingestion
 │   ├── ml/                             Embedded ML module & model bundle
 │   │   ├── aws_anomaly.py              Feature extraction & Isolation Forest scoring logic
@@ -55,16 +55,19 @@ AWS-web-app/
 │   │   ├── wsgi.py
 │   │   └── asgi.py
 │   ├── accounts/                       User management & JWT auth app
-│   └── stations/                       Core data, ingestion & status app
-│       ├── models.py                   Station, StationStatus, SensorReading, WeatherReading
-│       ├── ml_service.py               In-memory model loader & predictor (predict_station_window)
+│   └── stations/                       Core data, ingestion, reports & status app
+│       ├── models.py                   Station, StationStatus, SensorReading, MaintenanceLog, etc.
+│       ├── ml_service.py               In-memory model loader & predictor
+│       ├── performance_reports.py      Core performance metrics aggregation
+│       ├── report_charts.py            ReportLab canvas & chart utilities
+│       ├── report_email.py             PDF compilation & SMTP email dispatch logic
+│       ├── management/commands/
+│       │   └── send_daily_performance_report.py  Cron/CLI command for daily reports
 │       ├── views.py                    API endpoints (/api/ingest/weather/, etc.)
 │       ├── serializers.py
 │       └── urls.py
 ├── frontend/                           React + Vite dashboard app
-└── ml/                                 ML training notebooks & datasets (offline development)
-```
-
+└── docs/                               Deployment guides & documentation
 ---
 
 ## ⚙️ Quick Start (Local Development)
@@ -82,7 +85,6 @@ python -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
-```
 
 ### 2. Run Database Migrations
 
@@ -184,11 +186,55 @@ Simulates weather ingestion for Makerere (`AWS-001`), KYA (`AWS-002`), and Masak
 
 ---
 
-## 🚀 cPanel Deployment Notes
+🚀 Production Deployment Workflow & Steps (Ubuntu VPS / Gunicorn / Cron)
+# Step 1: Backup Current Production State
+Before deploying updates, always back up your current production database and application files:
 
-Refer to [DEPLOYMENT.md](file:///F:/IoT-ra/AWS-web-app/DEPLOYMENT.md) for full deployment instructions.
+# Backup backend codebase
+sudo cp -r /var/www/wimea-ict.net/aws_backend /var/www/wimea-ict.net/aws_backend_backup_$(date +%F)
 
-1. **Package Backend:** Zip the contents of `backend/` (including `backend/ml/` and `backend/stations/ml_service.py`). **Do NOT include `.venv` or local `.env`**.
-2. **Upload to cPanel:** Upload and extract via cPanel File Manager.
-3. **Install Requirements:** Run `pip install -r requirements.txt` in the cPanel Python Application setup.
-4. **Restart App:** Click **Restart** in cPanel Setup Python App.
+# Backup MySQL database (if using mysqldump)
+mysqldump -u aws_user -p aws-db > /home/hivemonitor/db_backup_$(date +%F).sql
+
+# Step 2: Fetch Latest Code from GitHub
+Navigate to your repository source directory, fetch updates, and checkout the target deployment branch or from the main:
+cd ~/deploy-src && git fetch && git checkout marvin && git pull origin marvin
+git log --oneline -3
+
+# Step 3: Dry-Run Backend File Sync (Preview Changes)
+Run an rsync dry-run (-n) to preview file copying and verify that migrations (0011, 0012, 0013), reportlab, and settings configurations are correct:
+
+rsync -avn --exclude='.env' --exclude='venv/' --exclude='staticfiles/' --exclude='__pycache__/' --exclude='*.pyc' \
+  ~/deploy-src/backend/ /var/www/wimea-ict.net/aws_backend/
+
+ # Step 4: Perform Actual Backend Sync & Dependency Installation
+Run the sync command without the -n (dry-run) flag, install Python requirements, apply migrations, and collect static assets:
+rsync -av --exclude='.env' --exclude='venv/' --exclude='staticfiles/' --exclude='__pycache__/' --exclude='*.pyc' \
+  ~/deploy-src/backend/ /var/www/wimea-ict.net/aws_backend/
+
+cd /var/www/wimea-ict.net/aws_backend && source venv/bin/activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py collectstatic --noinput
+
+# Step 5: Test Management Command (Dry-Run)
+Verify that the daily performance report command executes successfully and detects recipients/stations:
+python manage.py send_daily_performance_report --dry-run
+
+# Step 6: Restart Backend Service
+Restart Gunicorn to load the new code and configurations:
+sudo systemctl restart aws-backend.service
+sudo systemctl status aws-backend.service --no-pager | head -n 6
+
+# Step 7: Build & Deploy Frontend (Local to Server)
+On your local machine (PowerShell), build the frontend bundle:
+npm run build
+
+Upload the built files to the server via SSH/SCP:
+ssh hivemonitor@196.43.168.57 "rm -rf ~/dist-upload && mkdir -p ~/dist-upload"
+scp -r .\dist\* hivemonitor@196.43.168.57:~/dist-upload/
+
+On the server, copy the bundle into the public web root (/var/www/wimea-ict.net/public_html/aws.wimea-ict.net):
+DOCROOT=/var/www/wimea-ict.net/public_html/aws.wimea-ict.net
+cp $DOCROOT/.htaccess ~/htaccess.bak
+sudo rsync -rltv --no-owner --no-group --chmod=D755,F644 --exclude='.htaccess' ~/dist-upload/ $DOCROOT/
