@@ -44,7 +44,7 @@ warnings.filterwarnings("ignore")
 
 # ---------------------------------------------------------------- configuration
 ROLL = "6h"            # rolling-variance window (project doc: 6 hours)
-STEP_MAX_GAP = 20      # minutes; a step across a bigger gap is not comparable
+STEP_MAX_GAP = 65      # minutes; allows 15-min & 30-min cadence with jitter/1 missed packet
 CONTAM = 0.01          # operating point: ~1% of clean training data flagged
 MIN_TRAIN = 500        # skip a station-sensor with too little clean data
 TRAIN_FRAC = 0.7       # fraction of blocks assigned to train
