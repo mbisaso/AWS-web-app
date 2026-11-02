@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { SimManagementData } from '../../services/api'
 import { updateSimAccount } from '../../services/api'
+import { SimUsageBar } from './SimUsageBar'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 
@@ -225,11 +226,12 @@ export function SimTable({ sims, isLoading, activeFilter, selectedSimId, onSelec
 
       {/* ── Table ── */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-xs">
-        <table className="w-full min-w-[700px] text-sm" role="table">
+        <table className="w-full min-w-[900px] text-sm" role="table">
           <thead>
             <tr className="border-b border-slate-100 bg-slate-50/50">
               <Th>Station</Th>
               <Th>Phone</Th>
+              <Th>Data left</Th>
               <Th sortable onClick={() => toggleSort('date_loaded')}>
                 <SortArrow column="date_loaded" />Date Loaded
               </Th>
@@ -276,6 +278,15 @@ export function SimTable({ sims, isLoading, activeFilter, selectedSimId, onSelec
                     <span className="text-xs text-storm/60">
                       {entry.sim.phone_number || <span className="text-storm/30 italic">—</span>}
                     </span>
+                  </td>
+                  <td
+                    className="cursor-pointer px-4 py-3 min-w-[200px]"
+                    onClick={() => onSelect(entry)}
+                  >
+                    <SimUsageBar used={entry.sim.usage_mb} total={entry.sim.bundle_size_mb} />
+                    <p className="mt-1 text-[10px] text-storm/40">
+                      ≈ {entry.avg_daily_usage_mb.toFixed(2)} MB/day {entry.usage_basis === 'expected' ? '(expected)' : ''}
+                    </p>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3">
                     {isEditingThis && inlineEdit.field === 'date_loaded' ? (
@@ -387,7 +398,15 @@ export function SimTable({ sims, isLoading, activeFilter, selectedSimId, onSelec
                       {cfg.label}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="whitespace-nowrap px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onSelect(entry) }}
+                      aria-expanded={isSelected}
+                      className="mr-2 cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-midnight transition-colors hover:border-sky-primary hover:text-sky-deep"
+                    >
+                      {isSelected ? 'Viewing' : 'Details'}
+                    </button>
                     {entry.sim.status === 'active' && (
                       <button
                         type="button"

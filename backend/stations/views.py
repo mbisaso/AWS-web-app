@@ -13,7 +13,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.utils.text import slugify
-from django.utils.dateparse import parse_datetime
+from django.utils.dateparse import parse_date, parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -32,6 +32,7 @@ from .models import (
     VoltageReading, CurrentReading, BenchmarkReading, BenchmarkDataset, SimCard,
     WeatherMinute, MaintenanceLog
 )
+from . import sim_usage
 from .ml_service import predict_station_window
 from .serializers import (
     SensorReadingSerializer,
@@ -409,7 +410,7 @@ def dashboard_overview(request):
                 expired_count += 1
             elif sim.expiry_date <= soon_threshold:
                 expiring_soon_count += 1
-        rem = sim.data_limit_mb - sim.data_used_mb
+        rem = sim_usage.remaining_mb(sim)
         if rem > 0:
             total_remaining_mb += rem
 
@@ -1290,145 +1291,208 @@ def benchmark_import(request):
         'skipped':  skipped,
     })
 # ── SIM Management APIs ──
+# Usage is estimated on the server from ingest traffic — see stations/sim_usage.py.
+
+def _sim_account(sim, usage):
+    is_expired = sim.expiry_date and sim.expiry_date < timezone.localdate()
+    return {
+        'id': sim.id,
+        'iccid': sim.iccid or '',
+        'carrier': 'MTN',
+        'phone_number': sim.phone_number,
+        'bundle_size_mb': sim.data_limit_mb or 0.0,
+        'usage_mb': usage['usage_mb'],
+        'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
+        'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
+        'status': 'inactive' if is_expired else 'active',
+        'station_id': sim.station.id if sim.station else None,
+    }
+
+
+def _sim_management_entry(sim):
+    usage = sim_usage.sim_usage_summary(sim)
+    return {
+        'sim': _sim_account(sim, usage),
+        'station_name': sim.station.name if sim.station else 'Unknown',
+        'station_id': sim.station.id if sim.station else None,
+        'estimated_days_remaining': usage['estimated_days_remaining'],
+        'projected_expiry_date': usage['projected_expiry_date'],
+        'limited_by': usage['limited_by'],
+        'forecast_confidence_note': usage['forecast_confidence_note'],
+        'remaining_mb': usage['remaining_mb'],
+        'avg_daily_usage_mb': usage['avg_daily_usage_mb'],
+        'usage_basis': usage['usage_basis'],
+        'calibration_factor': usage['calibration_factor'],
+        'last_balance_check': usage['last_balance_check'],
+        'daily_usage': usage['daily_usage'],
+        'top_up_history': [
+            {
+                'id': top_up.id,
+                'sim_id': sim.id,
+                'amount_mb': top_up.amount_mb,
+                'added_by': top_up.added_by.get_username() if top_up.added_by else '',
+                'note': top_up.note,
+                'created_at': top_up.created_at.isoformat(),
+                'new_total_mb': top_up.new_total_mb,
+            }
+            for top_up in sim.top_ups.select_related('added_by')
+        ],
+    }
+
+
+def _parse_mb(value):
+    """A finite MB amount of 0 or more, else None."""
+    try:
+        amount = float(value)
+    except (TypeError, ValueError):
+        return None
+    return amount if math.isfinite(amount) and amount >= 0 else None
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def sim_management_data(request):
     sims = SimCard.objects.select_related('station').all()
-    
-    total_active = 0
-    expired_count = 0
-    expiring_soon_count = 0
-    total_remaining_mb = 0
-    
-    today = timezone.now().date()
+    today = timezone.localdate()
     soon_threshold = today + datetime.timedelta(days=30)
-    
-    sims_data = []
-    
-    for sim in sims:
-        is_expired = sim.expiry_date and sim.expiry_date < today
-        is_active = not is_expired
-        
-        if is_active:
-            total_active += 1
-        else:
-            expired_count += 1
-            
-        if sim.expiry_date and today <= sim.expiry_date <= soon_threshold:
-            expiring_soon_count += 1
-            
-        usage = sim.data_used_mb or 0
-        bundle = sim.data_limit_mb or 1024.0
-        rem = max(0, bundle - usage)
-        if is_active:
-            total_remaining_mb += rem
-            
-        est_days = None
-        if sim.expiry_date:
-            diff = (sim.expiry_date - today).days
-            est_days = max(0, diff)
-            
-        sims_data.append({
-            'sim': {
-                'id': sim.id,
-                'iccid': sim.iccid or '',
-                'carrier': 'MTN',
-                'phone_number': sim.phone_number,
-                'bundle_size_mb': bundle,
-                'usage_mb': usage,
-                'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
-                'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
-                'status': 'active' if is_active else 'inactive'
-            },
-            'station_name': sim.station.name if sim.station else 'Unknown',
-            'station_id': sim.station.id if sim.station else None,
-            'estimated_days_remaining': est_days,
-            'projected_expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
-            'forecast_confidence_note': 'Based on linear projection.' if est_days else 'Not enough data for projection.',
-            'daily_usage': [],
-            'top_up_history': []
-        })
-        
+
+    sims_data = [_sim_management_entry(sim) for sim in sims]
+    active = [entry for entry in sims_data if entry['sim']['status'] == 'active']
+
     return Response({
         'status': 'success',
         'data': {
             'sims': sims_data,
             'summary': {
-                'total_active': total_active,
-                'expired_count': expired_count,
-                'expiring_soon_count': expiring_soon_count,
-                'total_remaining_mb': total_remaining_mb,
+                'total_active': len(active),
+                'expired_count': len(sims_data) - len(active),
+                'expiring_soon_count': sum(
+                    1 for sim in sims if sim.expiry_date and today <= sim.expiry_date <= soon_threshold
+                ),
+                'total_remaining_mb': round(sum(entry['remaining_mb'] for entry in active), 3),
                 'expiring_soon_threshold_days': 30
             }
         }
     })
 
+
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
 def update_sim_account(request, sim_id):
     from django.shortcuts import get_object_or_404
-    sim = get_object_or_404(SimCard, id=sim_id)
-    
+    sim = get_object_or_404(SimCard.objects.select_related('station'), id=sim_id)
+
+    cycle_changed = False
     if 'date_loaded' in request.data:
         d = request.data['date_loaded']
-        sim.date_loaded = d if d else None
+        sim.date_loaded = parse_date(d) if d else None
+        cycle_changed = True
     if 'expiry_date' in request.data:
         e = request.data['expiry_date']
-        sim.expiry_date = e if e else None
-        
+        sim.expiry_date = parse_date(e) if e else None
+    if 'bundle_size_mb' in request.data:
+        bundle = _parse_mb(request.data['bundle_size_mb'])
+        if not bundle:
+            return api_response(error='bundle_size_mb must be a positive number', status_code=400)
+        sim.data_limit_mb = bundle
+        cycle_changed = True
+    if cycle_changed:
+        sim_usage.reset_cycle(sim)
+
     sim.save()
-    
-    is_expired = sim.expiry_date and sim.expiry_date < timezone.now().date()
-    is_active = not is_expired
-    
-    return Response({
-        'status': 'success',
-        'data': {
-            'id': sim.id,
-            'iccid': sim.iccid or '',
-            'carrier': 'MTN',
-            'phone_number': sim.phone_number,
-            'bundle_size_mb': sim.data_limit_mb or 1024.0,
-            'usage_mb': sim.data_used_mb or 0,
-            'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
-            'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
-            'status': 'active' if is_active else 'inactive'
-        }
-    })
+    return api_response(data=_sim_account(sim, sim_usage.sim_usage_summary(sim)))
+
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def topup_sim_account(request, sim_id):
     from django.shortcuts import get_object_or_404
-    sim = get_object_or_404(SimCard, id=sim_id)
-    amount_mb = request.data.get('amount_mb', 0)
-    
-    sim.data_limit_mb += float(amount_mb)
-    sim.save()
-    
-    is_expired = sim.expiry_date and sim.expiry_date < timezone.now().date()
-    is_active = not is_expired
-    
-    return Response({
-        'status': 'success',
-        'data': {
-            'id': sim.id,
-            'iccid': sim.iccid or '',
-            'carrier': 'MTN',
-            'phone_number': sim.phone_number,
-            'bundle_size_mb': sim.data_limit_mb or 1024.0,
-            'usage_mb': sim.data_used_mb or 0,
-            'date_loaded': sim.date_loaded.isoformat() if sim.date_loaded else None,
-            'expiry_date': sim.expiry_date.isoformat() if sim.expiry_date else None,
-            'status': 'active' if is_active else 'inactive'
-        }
-    })
+    sim = get_object_or_404(SimCard.objects.select_related('station'), id=sim_id)
+
+    amount_mb = _parse_mb(request.data.get('amount_mb'))
+    if not amount_mb:
+        return api_response(error='amount_mb must be a positive number', status_code=400)
+    expiry = request.data.get('expiry_date')
+    expiry_date = parse_date(expiry) if expiry else None
+    if expiry and not expiry_date:
+        return api_response(error='expiry_date must be YYYY-MM-DD', status_code=400)
+
+    sim_usage.apply_top_up(
+        sim, amount_mb, expiry_date=expiry_date,
+        note=str(request.data.get('note') or ''), user=request.user,
+    )
+    return api_response(data=_sim_account(sim, sim_usage.sim_usage_summary(sim)))
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def record_sim_balance(request, sim_id):
+    """
+    Records the balance read from MTN (USSD or the MyMTN app).
+    Body: remaining_mb (required), checked_at (optional ISO datetime, default now).
+    """
+    from django.shortcuts import get_object_or_404
+    sim = get_object_or_404(SimCard.objects.select_related('station'), id=sim_id)
+
+    actual_mb = _parse_mb(request.data.get('remaining_mb'))
+    if actual_mb is None:
+        return api_response(error='remaining_mb must be a number of MB, 0 or more', status_code=400)
+    checked_at = None
+    if request.data.get('checked_at'):
+        checked_at = parse_datetime(str(request.data['checked_at']))
+        if not checked_at:
+            return api_response(error='checked_at must be an ISO datetime', status_code=400)
+        if timezone.is_naive(checked_at):
+            checked_at = timezone.make_aware(checked_at)
+        if checked_at > timezone.now():
+            return api_response(error='checked_at cannot be in the future', status_code=400)
+
+    sim_usage.record_balance_check(sim, actual_mb, checked_at=checked_at, user=request.user)
+    return api_response(data=_sim_management_entry(sim))
 
 
 # ─────────────────────────────────────────────────────────
 # API: Station Performance Report
 # ─────────────────────────────────────────────────────────
+
+MAX_REPORT_PERIOD = datetime.timedelta(days=366)
+
+
+def _report_period(params):
+    """
+    Resolves the reporting window from query params: an explicit start/end pair,
+    else `hours`, else `days` (default 30), the latter two ending now.
+    Returns (period_start, period_end, error).
+    """
+    now = timezone.now()
+    start_param, end_param = params.get('start'), params.get('end')
+    if start_param or end_param:
+        start = parse_datetime(start_param or '')
+        end = parse_datetime(end_param or '') if end_param else now
+        if not start or not end:
+            return None, None, 'start and end must be ISO datetimes'
+        if timezone.is_naive(start):
+            start = timezone.make_aware(start)
+        if timezone.is_naive(end):
+            end = timezone.make_aware(end)
+        end = min(end, now)
+        if start >= end:
+            return None, None, 'start must be before end (and in the past)'
+        if end - start > MAX_REPORT_PERIOD:
+            return None, None, 'Reporting period cannot exceed 366 days'
+        return start, end, None
+
+    try:
+        if params.get('hours'):
+            duration = datetime.timedelta(hours=int(params['hours']))
+        else:
+            duration = datetime.timedelta(days=int(params.get('days', 30)))
+    except (ValueError, TypeError):
+        duration = datetime.timedelta(days=30)
+    if duration <= datetime.timedelta(0):
+        duration = datetime.timedelta(days=30)
+    return now - min(duration, MAX_REPORT_PERIOD), now, None
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -1437,19 +1501,17 @@ def performance_report(request):
     Computes performance and health metrics for a weather station over a given period.
     Query params:
       - station_id (required): station identifier/code (e.g. 'AWS-UG-001' or numeric ID)
-      - days (optional, default: 30): report timeframe in days
+      - start, end (optional): ISO datetimes for an explicit reporting window
+      - hours (optional): report timeframe in hours, ending now
+      - days (optional, default: 30): report timeframe in days, ending now
     """
     station_id = request.query_params.get('station_id')
     if not station_id:
         return api_response(error='station_id is required', status_code=400)
 
-    days_param = request.query_params.get('days', 30)
-    try:
-        days = int(days_param)
-        if days <= 0:
-            days = 30
-    except (ValueError, TypeError):
-        days = 30
+    period_start, period_end, error = _report_period(request.query_params)
+    if error:
+        return api_response(error=error, status_code=400)
 
     station = None
     if str(station_id).isdigit():
@@ -1460,8 +1522,6 @@ def performance_report(request):
     if not station:
         return api_response(error=f'Station {station_id} not found', status_code=404)
 
-    period_end = timezone.now()
-    period_start = period_end - datetime.timedelta(days=days)
     report_data = build_performance_report_data(station, period_start, period_end)
     return api_response(data=report_data)
 
@@ -1473,12 +1533,9 @@ def performance_report_pdf(request):
     if not station_id:
         return api_response(error='station_id is required', status_code=400)
 
-    try:
-        days = int(request.query_params.get('days', 30))
-        if days <= 0:
-            days = 30
-    except (ValueError, TypeError):
-        days = 30
+    period_start, period_end, error = _report_period(request.query_params)
+    if error:
+        return api_response(error=error, status_code=400)
 
     station = None
     if str(station_id).isdigit():
@@ -1488,13 +1545,12 @@ def performance_report_pdf(request):
     if not station:
         return api_response(error=f'Station {station_id} not found', status_code=404)
 
-    period_end = timezone.now()
-    period_start = period_end - datetime.timedelta(days=days)
     report_data = build_performance_report_data(station, period_start, period_end)
     pdf = build_station_report_pdf(report_data)
     filename = slugify(station.station_id) or 'station'
+    period = f"{timezone.localtime(period_start):%Y%m%d-%H%M}_{timezone.localtime(period_end):%Y%m%d-%H%M}"
     response = HttpResponse(pdf, content_type='application/pdf')
-    response['Content-Disposition'] = f'attachment; filename="performance-report-{filename}-{days}d.pdf"'
+    response['Content-Disposition'] = f'attachment; filename="performance-report-{filename}-{period}.pdf"'
     return response
 
 

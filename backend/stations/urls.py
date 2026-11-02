@@ -22,6 +22,7 @@ urlpatterns = [
     path('api/sims/management/',                       views.sim_management_data, name='sim_management_data'),
     path('api/sims/<int:sim_id>/',                     views.update_sim_account, name='update_sim_account'),
     path('api/sims/<int:sim_id>/topup/',               views.topup_sim_account, name='topup_sim_account'),
+    path('api/sims/<int:sim_id>/balance/',             views.record_sim_balance, name='record_sim_balance'),
     path('api/reports/performance/',                   views.performance_report, name='performance_report'),
     path('api/reports/performance/download/',           views.performance_report_pdf, name='performance_report_pdf'),
     path('api/maintenance/',                           views.maintenance_logs, name='maintenance_logs'),

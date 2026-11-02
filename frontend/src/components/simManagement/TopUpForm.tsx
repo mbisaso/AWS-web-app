@@ -2,13 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface TopUpFormProps {
   open: boolean
-  onConfirm: (amountMb: number, note: string) => Promise<void>
+  onConfirm: (amountMb: number, note: string, expiryDate?: string) => Promise<void>
   onCancel: () => void
 }
 
 export function TopUpForm({ open, onConfirm, onCancel }: TopUpFormProps) {
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
+  const [expiryDate, setExpiryDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const firstInputRef = useRef<HTMLInputElement>(null)
@@ -17,6 +18,7 @@ export function TopUpForm({ open, onConfirm, onCancel }: TopUpFormProps) {
     if (open) {
       setAmount('')
       setNote('')
+      setExpiryDate('')
       setError(null)
       setSaving(false)
       setTimeout(() => firstInputRef.current?.focus(), 50)
@@ -48,7 +50,7 @@ export function TopUpForm({ open, onConfirm, onCancel }: TopUpFormProps) {
     setSaving(true)
     setError(null)
     try {
-      await onConfirm(Number(amount), note.trim())
+      await onConfirm(Number(amount), note.trim(), expiryDate || undefined)
     } catch {
       setError('Top-up failed. Please try again.')
     } finally {
@@ -103,6 +105,22 @@ export function TopUpForm({ open, onConfirm, onCancel }: TopUpFormProps) {
               autoComplete="off"
             />
             {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+          </div>
+
+          <div>
+            <label htmlFor="topup-expiry" className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-storm/40">
+              New expiry date (optional)
+            </label>
+            <input
+              id="topup-expiry"
+              type="date"
+              value={expiryDate}
+              onChange={(e) => setExpiryDate(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-midnight focus:outline-2 focus:outline-offset-2 focus:outline-sky-primary"
+            />
+            <p className="mt-1 text-[11px] text-storm/50">
+              Added to the current bundle while it is active; starts a new bundle if it has expired or run out.
+            </p>
           </div>
 
           <div>

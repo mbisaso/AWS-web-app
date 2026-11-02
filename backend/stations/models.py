@@ -51,9 +51,57 @@ class SimCard(models.Model):
     data_used_mb = models.FloatField(default=0.0)
     date_loaded = models.DateField(null=True, blank=True)
     expiry_date = models.DateField(null=True, blank=True)
-    
+
+    # The device cannot report its own balance, so usage is estimated on the
+    # server from the ingest traffic it receives (see stations/sim_usage.py).
+    # The anchor is the last point where the remaining balance was known —
+    # a bundle load, a top-up or a balance the user read from MTN.
+    balance_anchor_at = models.DateTimeField(null=True, blank=True)
+    balance_anchor_mb = models.FloatField(null=True, blank=True)
+    # Ratio of MTN-billed bytes to the server's estimate, learned from balance checks.
+    calibration_factor = models.FloatField(default=1.0)
+
     def __str__(self):
         return f"SIM {self.phone_number} for {self.station.station_id}"
+
+
+class SimUsageHour(models.Model):
+    """Estimated bytes a station's SIM spent on ingest traffic, bucketed per hour (UTC)."""
+    sim      = models.ForeignKey(SimCard, related_name='usage_hours', on_delete=models.CASCADE)
+    hour     = models.DateTimeField()
+    requests = models.IntegerField(default=0)
+    bytes    = models.BigIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['sim', 'hour'], name='uniq_sim_usage_hour')]
+        ordering = ['hour']
+
+
+class SimTopUp(models.Model):
+    sim          = models.ForeignKey(SimCard, related_name='top_ups', on_delete=models.CASCADE)
+    amount_mb    = models.FloatField()
+    new_total_mb = models.FloatField()
+    expiry_date  = models.DateField(null=True, blank=True)
+    note         = models.CharField(max_length=255, blank=True)
+    added_by     = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    created_at   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class SimBalanceCheck(models.Model):
+    """A balance read from MTN (USSD / MyMTN app), used to correct the estimate."""
+    sim              = models.ForeignKey(SimCard, related_name='balance_checks', on_delete=models.CASCADE)
+    checked_at       = models.DateTimeField()
+    actual_mb        = models.FloatField()
+    estimated_mb     = models.FloatField(help_text='What the server estimated at checked_at')
+    factor_after     = models.FloatField()
+    recorded_by      = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    created_at       = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-checked_at']
 
 
 class StationStatus(models.Model):
@@ -120,6 +168,69 @@ class DailyPerformanceReportSettings(models.Model):
     def __str__(self):
         state = "enabled" if self.enabled else "disabled"
         return f"Daily performance email ({state})"
+
+
+class SimAlertSettings(models.Model):
+    """Who is emailed when a SIM bundle is about to expire or run out (single row)."""
+    RecipientGroup = DailyPerformanceReportSettings.RecipientGroup
+
+    enabled = models.BooleanField(default=True)
+    recipient_group = models.CharField(
+        max_length=20,
+        choices=RecipientGroup.choices,
+        default=RecipientGroup.ADMINS,
+    )
+    selected_users = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="sim_alert_settings",
+        help_text="Used only when the recipient group is Selected users.",
+    )
+    warning_days = models.CharField(
+        max_length=50,
+        default="7,3,1",
+        help_text="Days before a bundle expires or runs out to send a warning, comma-separated.",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "SIM alert settings"
+        verbose_name_plural = "SIM alert settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise RuntimeError("SIM alert settings cannot be deleted.")
+
+    def __str__(self):
+        return f"SIM alert emails ({'enabled' if self.enabled else 'disabled'})"
+
+    def warning_day_list(self):
+        days = {int(part) for part in self.warning_days.split(",") if part.strip().isdigit()}
+        return sorted(days, reverse=True) or [7, 3, 1]
+
+
+class SimAlertNotification(models.Model):
+    """One warning sent for one bundle, so each threshold is emailed only once per bundle."""
+    class Kind(models.TextChoices):
+        EXPIRY = "expiry", "Bundle expiring"
+        DATA = "data", "Data running out"
+
+    sim = models.ForeignKey("SimCard", related_name="alert_notifications", on_delete=models.CASCADE)
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    threshold_days = models.IntegerField()
+    # Identifies the bundle: a new expiry date or top-up gives a new key, so warnings start over.
+    bundle_key = models.CharField(max_length=100)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["sim", "kind", "threshold_days", "bundle_key"], name="uniq_sim_alert_notification",
+            ),
+        ]
 
 
 class MaintenanceLog(models.Model):

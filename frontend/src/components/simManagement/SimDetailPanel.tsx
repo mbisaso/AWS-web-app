@@ -3,6 +3,7 @@ import type { SimManagementData, DailyUsage } from '../../services/api'
 import { updateSimAccount } from '../../services/api'
 import { TopUpHistoryTable } from './TopUpHistoryTable'
 import { DataUsageCurve } from './DataUsageCurve'
+import { SimBalanceCard } from './SimBalanceCard'
 
 interface SimDetailPanelProps {
   data: SimManagementData | null
@@ -230,7 +231,7 @@ export function SimDetailPanel({ data, isLoading, onTopUp, onClose }: SimDetailP
               <p className="mt-0.5 text-xs text-storm/60">{data.forecast_confidence_note}</p>
               {data.projected_expiry_date && (
                 <p className="mt-1 text-xs font-medium text-amber-600">
-                  Estimated depletion: {new Date(data.projected_expiry_date).toLocaleDateString()}
+                  {data.limited_by === 'expiry' ? 'Bundle expires' : 'Estimated depletion'}: {new Date(data.projected_expiry_date).toLocaleDateString()}
                   {data.estimated_days_remaining !== null && ` (${data.estimated_days_remaining} day${data.estimated_days_remaining !== 1 ? 's' : ''})`}
                 </p>
               )}
@@ -238,6 +239,9 @@ export function SimDetailPanel({ data, isLoading, onTopUp, onClose }: SimDetailP
           </div>
         </div>
       )}
+
+      {/* ── Usage tracking & MTN balance calibration ── */}
+      <SimBalanceCard key={data.sim.id} data={data} />
 
       {/* ── Alert integration strip ── */}
       {v(data) && (

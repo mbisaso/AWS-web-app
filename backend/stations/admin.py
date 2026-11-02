@@ -16,6 +16,8 @@ from .models import (
     BenchmarkDataset,
     DailyPerformanceReportSettings,
     MaintenanceLog,
+    SimAlertNotification,
+    SimAlertSettings,
 )
 
 
@@ -46,6 +48,34 @@ class DailyPerformanceReportSettingsAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(SimAlertSettings)
+class SimAlertSettingsAdmin(admin.ModelAdmin):
+    list_display = ["enabled", "recipient_group", "warning_days"]
+    list_display_links = ["recipient_group"]
+    fields = ["enabled", "recipient_group", "selected_users", "warning_days", "updated_at"]
+    readonly_fields = ["updated_at"]
+    filter_horizontal = ["selected_users"]
+
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
+        if db_field.name == "selected_users":
+            kwargs["queryset"] = get_user_model().objects.filter(
+                is_active=True,
+            ).exclude(email="").order_by("email")
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
+
+    def has_add_permission(self, request):
+        return not SimAlertSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SimAlertNotification)
+class SimAlertNotificationAdmin(admin.ModelAdmin):
+    list_display = ["sim", "kind", "threshold_days", "bundle_key", "sent_at"]
+    list_filter = ["kind"]
 
 
 @admin.register(BenchmarkDataset)

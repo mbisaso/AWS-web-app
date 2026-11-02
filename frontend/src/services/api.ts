@@ -1170,13 +1170,27 @@ export interface DailyUsage {
   usage_mb: number;
 }
 
+export interface SimBalanceCheck {
+  checked_at: string;
+  actual_mb: number;
+  estimated_mb: number;
+}
+
 export interface SimManagementData {
   sim: SimAccount;
   station_name: string | null;
   station_id: number | null;
+  /** Days until the data runs out or the bundle expires, whichever is first. */
   estimated_days_remaining: number | null;
   projected_expiry_date: string | null;
+  limited_by: "data" | "expiry" | null;
   forecast_confidence_note: string;
+  /** Usage is estimated on the server from the station's ingest traffic. */
+  remaining_mb: number;
+  avg_daily_usage_mb: number;
+  usage_basis: "measured" | "expected";
+  calibration_factor: number;
+  last_balance_check: SimBalanceCheck | null;
   daily_usage: DailyUsage[];
   top_up_history: TopUpRecord[];
 }
@@ -1229,6 +1243,19 @@ export async function unassignSimFromStation(simId: number): Promise<void> {
   });
 }
 
+/** Records the balance read from MTN (USSD or MyMTN app) to re-anchor and calibrate the estimate. */
+export async function recordSimBalance(
+  simId: number,
+  remainingMb: number,
+  checkedAt?: string,
+): Promise<SimManagementData> {
+  const response = await apiClient.post<ApiEnvelope<SimManagementData>>(
+    `/api/sims/${simId}/balance/`,
+    { remaining_mb: remainingMb, checked_at: checkedAt || undefined },
+  );
+  return response.data.data;
+}
+
 export async function fetchSimManagementData(): Promise<{
   sims: SimManagementData[];
   summary: SimFleetSummary;
@@ -1243,10 +1270,11 @@ export async function topUpSim(
   simId: number,
   amountMb: number,
   note: string,
+  expiryDate?: string,
 ): Promise<SimManagementData> {
   await apiClient.post<ApiEnvelope<SimAccount>>(
     `/api/sims/${simId}/topup/`,
-    { amount_mb: amountMb, note },
+    { amount_mb: amountMb, note, expiry_date: expiryDate || undefined },
   );
   // After top-up, re-fetch the full management data to get updated projections
   const all = await fetchSimManagementData();
@@ -2332,16 +2360,27 @@ export interface PerformanceReportData {
   };
 }
 
-export async function fetchPerformanceReport(stationId: string, days: number = 30): Promise<PerformanceReportData> {
+/** A rolling window ending now, or an explicit start/end range (ISO datetimes). */
+export type ReportPeriod =
+  | { kind: 'rolling'; hours: number }
+  | { kind: 'range'; start: string; end: string };
+
+function reportPeriodParams(period: ReportPeriod): Record<string, string | number> {
+  return period.kind === 'rolling'
+    ? { hours: period.hours }
+    : { start: period.start, end: period.end };
+}
+
+export async function fetchPerformanceReport(stationId: string, period: ReportPeriod): Promise<PerformanceReportData> {
   const response = await apiClient.get<ApiEnvelope<PerformanceReportData>>('/api/reports/performance/', {
-    params: { station_id: stationId, days }
+    params: { station_id: stationId, ...reportPeriodParams(period) }
   });
   return response.data.data;
 }
 
-export async function downloadPerformanceReportPdf(stationId: string, days: number): Promise<Blob> {
+export async function downloadPerformanceReportPdf(stationId: string, period: ReportPeriod): Promise<Blob> {
   const response = await apiClient.get<Blob>('/api/reports/performance/download/', {
-    params: { station_id: stationId, days },
+    params: { station_id: stationId, ...reportPeriodParams(period) },
     responseType: 'blob',
   });
   return response.data;

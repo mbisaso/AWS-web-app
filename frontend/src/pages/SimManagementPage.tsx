@@ -114,9 +114,9 @@ export function SimManagementPage() {
   const [topUpTarget, setTopUpTarget] = useState<SimManagementData | null>(null)
   const [topUpResult, setTopUpResult] = useState<{ simId: number; newRemaining: number } | null>(null)
 
-  const handleTopUp = useCallback(async (amountMb: number, note: string) => {
+  const handleTopUp = useCallback(async (amountMb: number, note: string, expiryDate?: string) => {
     if (!topUpTarget) return
-    const updated = await topUpSim(topUpTarget.sim.id, amountMb, note)
+    const updated = await topUpSim(topUpTarget.sim.id, amountMb, note, expiryDate)
     setTopUpResult({ simId: updated.sim.id, newRemaining: updated.sim.bundle_size_mb - updated.sim.usage_mb })
     setTopUpTarget(null)
     /* Update URL param if it was the one topped up */

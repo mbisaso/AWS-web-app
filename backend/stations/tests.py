@@ -15,9 +15,14 @@ from stations.models import (
 	DailyPerformanceReportSettings,
 	MaintenanceLog,
 	SensorReading,
+	SimAlertNotification,
+	SimCard,
+	SimTopUp,
+	SimUsageHour,
 	Station,
 	StationStatus,
 )
+from stations import sim_alerts, sim_usage
 from stations.performance_reports import SENSOR_FIELDS, _combine_step, build_performance_report_data
 from stations.report_charts import _segments
 from stations.report_email import (
@@ -713,3 +718,131 @@ class ReportChartAndWordingTests(TestCase):
 		self.assertIn("<strong>", email_html)
 		self.assertIn("30-min periods with data", email_html)
 		self.assertIn("charts", build_email_text(daily))
+
+
+class SimUsageTests(TestCase):
+	def setUp(self):
+		self.station = Station.objects.create(name="Kampala", station_id="AWS-UG-001", phone_number="256770000000")
+		self.sim = SimCard.objects.get(station=self.station)
+		self.sim.data_limit_mb = 100
+		self.sim.date_loaded = django_timezone.localdate() - timedelta(days=10)
+		self.sim.expiry_date = django_timezone.localdate() + timedelta(days=20)
+		self.sim.save()
+		self.client = APIClient()
+		self.client.force_authenticate(get_user_model().objects.create_user("ops", password="pw"))
+
+	def post_weather(self, station_id="AWS-UG-001"):
+		return self.client.post(
+			"/api/ingest/weather/",
+			{"station_id": station_id, "timestamp": "2026-10-19T10:00:00+03:00", "temperature": 24.1},
+			format="json",
+		)
+
+	def test_ingest_posts_are_charged_to_the_station_sim(self):
+		self.assertEqual(self.post_weather().status_code, 201)
+		self.post_weather()
+		bucket = SimUsageHour.objects.get(sim=self.sim)
+		self.assertEqual(bucket.requests, 2)
+		self.assertGreater(bucket.bytes, 2 * sim_usage.CONNECTION_OVERHEAD_BYTES)
+
+	def test_rejected_posts_still_count_and_unknown_stations_are_ignored(self):
+		self.client.post("/api/ingest/weather/", {"station_id": "AWS-UG-001"}, format="json")
+		self.post_weather(station_id="NOPE")
+		self.assertEqual(SimUsageHour.objects.get(sim=self.sim).requests, 1)
+
+	def test_remaining_and_projection_from_measured_traffic(self):
+		now = django_timezone.now().replace(minute=0, second=0, microsecond=0)
+		for day in range(1, 8):
+			sim_usage.add_usage(self.sim.id, 2 * sim_usage.BYTES_PER_MB, at=now - timedelta(days=day))
+		summary = sim_usage.sim_usage_summary(self.sim, now=now)
+		self.assertAlmostEqual(summary["remaining_mb"], 86, places=3)
+		self.assertEqual(summary["usage_basis"], "measured")
+		self.assertAlmostEqual(summary["avg_daily_usage_mb"], 2, places=3)
+		self.assertEqual(summary["estimated_days_remaining"], 20)  # expiry (20 d) comes before 43 d of data
+		self.assertEqual(summary["limited_by"], "expiry")
+
+	def test_balance_check_reanchors_and_calibrates(self):
+		now = django_timezone.now()
+		sim_usage.add_usage(self.sim.id, 10 * sim_usage.BYTES_PER_MB, at=now - timedelta(days=2))
+		sim_usage.record_balance_check(self.sim, 80, checked_at=now - timedelta(days=1))
+		self.sim.refresh_from_db()
+		self.assertAlmostEqual(self.sim.calibration_factor, 2.0)  # MTN billed 20 MB for 10 MB measured
+		sim_usage.add_usage(self.sim.id, 1 * sim_usage.BYTES_PER_MB, at=now)
+		self.assertAlmostEqual(sim_usage.remaining_mb(self.sim), 78, places=3)
+
+	def test_top_up_stacks_on_active_bundle_and_restarts_expired_one(self):
+		sim_usage.add_usage(self.sim.id, 40 * sim_usage.BYTES_PER_MB, at=django_timezone.now() - timedelta(days=1))
+		sim_usage.apply_top_up(self.sim, 50)
+		self.assertEqual(self.sim.data_limit_mb, 150)
+		self.assertAlmostEqual(sim_usage.remaining_mb(self.sim), 110, places=3)
+
+		self.sim.expiry_date = django_timezone.localdate() - timedelta(days=1)
+		sim_usage.apply_top_up(self.sim, 200, expiry_date=django_timezone.localdate() + timedelta(days=30))
+		self.assertEqual(self.sim.data_limit_mb, 200)
+		self.assertEqual(self.sim.date_loaded, django_timezone.localdate())
+		self.assertEqual(SimTopUp.objects.filter(sim=self.sim).count(), 2)
+
+	def test_management_api_returns_estimates(self):
+		sim_usage.add_usage(self.sim.id, 5 * sim_usage.BYTES_PER_MB, at=django_timezone.now() - timedelta(days=1))
+		response = self.client.get("/api/sims/management/")
+		entry = response.json()["data"]["sims"][0]
+		self.assertAlmostEqual(entry["sim"]["usage_mb"], 5, places=3)
+		self.assertTrue(any(day["usage_mb"] > 0 for day in entry["daily_usage"]))
+
+		response = self.client.post(f"/api/sims/{self.sim.id}/balance/", {"remaining_mb": 90}, format="json")
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.json()["data"]["last_balance_check"]["actual_mb"], 90)
+
+
+class SimAlertEmailTests(TestCase):
+	def setUp(self):
+		self.today = django_timezone.localdate()
+		station = Station.objects.create(name="Gulu", station_id="AWS-UG-002", phone_number="256770000001")
+		self.sim = SimCard.objects.get(station=station)
+		self.sim.data_limit_mb = 1000
+		self.sim.date_loaded = self.today - timedelta(days=20)
+		self.sim.expiry_date = self.today + timedelta(days=3)
+		self.sim.save()
+		get_user_model().objects.create_user("admin", email="admin@example.com", password="pw", is_staff=True)
+
+	def run_command(self, *args):
+		out = StringIO()
+		call_command("send_sim_alerts", *args, stdout=out)
+		return out.getvalue()
+
+	def test_expiry_warning_is_emailed_once_per_threshold(self):
+		self.run_command()
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn("expires in 3 days", mail.outbox[0].body)
+		self.assertEqual(mail.outbox[0].bcc, ["admin@example.com"])
+
+		self.run_command()
+		self.assertEqual(len(mail.outbox), 1)  # 3-day warning already sent
+
+		self.sim.expiry_date = self.today + timedelta(days=1)
+		self.sim.save()
+		self.run_command()
+		self.assertEqual(len(mail.outbox), 2)  # new expiry date = new bundle, new warning
+
+	def test_no_warning_when_expiry_is_far_off(self):
+		self.sim.expiry_date = self.today + timedelta(days=30)
+		self.sim.save()
+		self.assertIn("No SIM bundles need a warning", self.run_command())
+		self.assertEqual(len(mail.outbox), 0)
+
+	def test_data_running_out_before_expiry_is_warned(self):
+		self.sim.expiry_date = self.today + timedelta(days=30)
+		self.sim.save()
+		sim_usage.record_balance_check(self.sim, 2)  # ~2 MB left at the expected rate of ~1.8 MB/day
+		self.run_command()
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn("data runs out in about 1 day", mail.outbox[0].body)
+
+	def test_dry_run_and_disabled_send_nothing(self):
+		self.assertIn("Dry run", self.run_command("--dry-run"))
+		settings_row = sim_alerts.get_alert_settings()
+		settings_row.enabled = False
+		settings_row.save()
+		self.assertIn("disabled", self.run_command())
+		self.assertEqual(len(mail.outbox), 0)
+		self.assertFalse(SimAlertNotification.objects.exists())

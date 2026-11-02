@@ -5,10 +5,13 @@ import { usePerformanceReport } from '../hooks/usePerformanceReport'
 import { DashboardSidebar } from '../components/dashboard/DashboardSidebar'
 import { PageHeader } from '../components/shared/PageHeader'
 import { MaintenanceLogPanel } from '../components/reports/MaintenanceLogPanel'
+import { ReportPeriodPicker } from '../components/reports/ReportPeriodPicker'
+import { isSameReportPeriod, reportPeriodFileSuffix } from '../utils/reportPeriod'
 import {
   downloadPerformanceReportPdf,
   exportDataCsv,
   type ExportConfig,
+  type ReportPeriod,
   type SensorFaultType,
   type StationReading,
 } from '../services/api'
@@ -170,8 +173,8 @@ export function ReportsPage() {
 
   // --- Performance Report State ---
   const [reportStationId, setReportStationId] = useState<string>('')
-  const [reportDays, setReportDays] = useState<number>(30)
-  const [submittedReportParams, setSubmittedReportParams] = useState<{ stationId: string; days: number } | null>(null)
+  const [reportPeriod, setReportPeriod] = useState<ReportPeriod | null>({ kind: 'rolling', hours: 720 })
+  const [submittedReportParams, setSubmittedReportParams] = useState<{ stationId: string; period: ReportPeriod } | null>(null)
   const [isReportDownloading, setIsReportDownloading] = useState<boolean>(false)
   const [reportDownloadError, setReportDownloadError] = useState<string | null>(null)
 
@@ -183,15 +186,15 @@ export function ReportsPage() {
     refetch: refetchReport,
   } = usePerformanceReport(
     submittedReportParams?.stationId ?? '',
-    submittedReportParams?.days ?? 30
+    submittedReportParams?.period ?? null,
   )
 
   const handleGenerateReport = () => {
-    if (!reportStationId) return
-    if (submittedReportParams?.stationId === reportStationId && submittedReportParams?.days === reportDays) {
+    if (!reportStationId || !reportPeriod) return
+    if (submittedReportParams?.stationId === reportStationId && isSameReportPeriod(submittedReportParams.period, reportPeriod)) {
       refetchReport()
     } else {
-      setSubmittedReportParams({ stationId: reportStationId, days: reportDays })
+      setSubmittedReportParams({ stationId: reportStationId, period: reportPeriod })
     }
   }
 
@@ -203,13 +206,13 @@ export function ReportsPage() {
       setReportDownloadError(null)
       const blob = await downloadPerformanceReportPdf(
         submittedReportParams.stationId,
-        submittedReportParams.days,
+        submittedReportParams.period,
       )
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       const safeStationCode = performanceData.station_code.replace(/[^a-z0-9_-]/gi, '_')
       link.href = url
-      link.download = `performance_report_${safeStationCode}_${submittedReportParams.days}d.pdf`
+      link.download = `performance_report_${safeStationCode}_${reportPeriodFileSuffix(submittedReportParams.period)}.pdf`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -512,32 +515,7 @@ export function ReportsPage() {
                 {/* Period Selector */}
                 <div className="space-y-3 mb-8">
                   <label className="text-sm font-semibold text-midnight">Reporting Period</label>
-                  <div className="flex flex-wrap gap-2">
-                    {[7, 30, 90].map(d => (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() => setReportDays(d)}
-                        className={`rounded-full px-4 py-2 text-xs font-semibold transition-all cursor-pointer ${
-                          reportDays === d
-                            ? 'bg-sky-primary text-white shadow-sm'
-                            : 'bg-slate-100 text-storm/70 hover:bg-slate-200'
-                        }`}
-                      >
-                        {d} Days
-                      </button>
-                    ))}
-                    <div className="flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5 border border-slate-200">
-                      <input
-                        type="number"
-                        min={1}
-                        value={reportDays}
-                        onChange={e => setReportDays(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-12 bg-transparent text-xs font-semibold text-midnight focus:outline-none text-center"
-                      />
-                      <span className="text-[10px] uppercase font-bold text-storm/40">DAYS</span>
-                    </div>
-                  </div>
+                  <ReportPeriodPicker value={reportPeriod} onChange={setReportPeriod} />
                 </div>
 
                 {/* Generate Report Button */}
@@ -545,7 +523,7 @@ export function ReportsPage() {
                   <button
                     type="button"
                     onClick={handleGenerateReport}
-                    disabled={!reportStationId || isReportFetching}
+                    disabled={!reportStationId || !reportPeriod || isReportFetching}
                     className="group relative flex w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl bg-midnight px-4 py-3.5 text-sm font-bold text-white transition-all hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isReportFetching ? (
@@ -636,7 +614,7 @@ export function ReportsPage() {
                         <h2 className="text-xl font-bold font-display text-midnight">{performanceData.station_name}</h2>
                       </div>
                       <p className="mt-1.5 text-xs text-storm/60">
-                        Period: {new Date(performanceData.period_start).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} – {new Date(performanceData.period_end).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                        Period: {new Date(performanceData.period_start).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} – {new Date(performanceData.period_end).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                     <div className="flex flex-col items-start gap-3 sm:items-end">
