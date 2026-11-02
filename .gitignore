@@ -43,6 +43,7 @@ ml/data/
 # Trained model artifacts are tracked, but not intermediate caches
 ml/**/__pycache__/
 *.joblib.tmp
+battery-degradation-model (1).ipynb
 
 # Deployment archives
 *.zip
